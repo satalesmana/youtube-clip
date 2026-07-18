@@ -44,6 +44,7 @@ const envSchema = z.object({
   TRANSCRIPTS_DIR: z.string().min(1).default('transcripts'),
   OUTPUTS_DIR: z.string().min(1).default('outputs'),
   TEMP_DIR: z.string().min(1).default('temp'),
+  TEMPLATES_DIR: z.string().min(1).default('templates'),
 
   CHUNK_MAX_TOKENS: z.coerce.number().int().positive().default(2500),
   CHUNK_OVERLAP_SECONDS: z.coerce.number().int().min(0).default(18),

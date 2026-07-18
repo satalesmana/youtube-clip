@@ -12,6 +12,8 @@ export interface RenderedClipMetadata {
   video: string;
   subtitle: string;
   thumbnail: string;
+  /** Which template composed this clip (e.g. "sports"). */
+  template: string;
 }
 
 export type RenderErrorCode =
@@ -23,7 +25,9 @@ export type RenderErrorCode =
   | 'FFMPEG_FAILED'
   | 'OUTPUT_WRITE_FAILED'
   | 'THUMBNAIL_FAILED'
-  | 'CORRUPTED_OUTPUT';
+  | 'CORRUPTED_OUTPUT'
+  | 'TEMPLATE_BINDING_ERROR'
+  | 'TEMPLATE_RENDER_FAILED';
 
 /** Per-clip render failure; other clips still render independently. */
 export interface RenderError {

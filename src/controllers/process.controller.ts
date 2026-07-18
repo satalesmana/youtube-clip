@@ -7,6 +7,7 @@ import type { IHighlightService } from '../services/highlight.service.js';
 import type { IRendererService } from '../services/renderer.service.js';
 import type { HighlightClip, ProcessResult } from '../types/highlight.js';
 import type { TranscriptChunk, TranscriptDocument } from '../types/transcript.js';
+import type { RenderContext } from '../types/template.js';
 
 export interface ProcessControllerDeps {
   youtubeService: IYoutubeService;
@@ -29,7 +30,7 @@ export class ProcessController {
   constructor(private readonly deps: ProcessControllerDeps) {}
 
   /** Runs the full highlight-extraction and clip-rendering pipeline for a single YouTube URL. */
-  async process(url: string): Promise<ProcessResult> {
+  async process(url: string, template?: string, channel?: RenderContext['channel']): Promise<ProcessResult> {
     const {
       youtubeService,
       transcriptService,
@@ -63,6 +64,8 @@ export class ProcessController {
       download.videoPath,
       highlights,
       transcriptResult,
+      template,
+      channel,
     );
 
     logger.info(

@@ -18,6 +18,17 @@ import { ThumbnailService } from '../services/thumbnail.service.js';
 import { RendererService } from '../services/renderer.service.js';
 import { ProcessController } from '../controllers/process.controller.js';
 import { parseShellArgs } from '../utils/shell-args.js';
+import { ManifestService } from '../template/manifest.service.js';
+import { TemplateLoaderService } from '../template/template-loader.service.js';
+import { ValidationService } from '../template/validation.service.js';
+import { BindingService } from '../template/binding.service.js';
+import { LayoutService } from '../template/layout.service.js';
+import { LayerRegistry } from '../template/layer-registry.js';
+import { registerDefaultLayers } from '../template/register-default-layers.js';
+import { TemplateAssService } from '../template/ass.service.js';
+import { FiltergraphService } from '../template/filtergraph.service.js';
+import { TemplateService } from '../template/template.service.js';
+import { TemplateRendererService } from '../template/renderer.service.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 
 /**
@@ -37,6 +48,7 @@ const paths = {
   subtitles: resolve(rootDir, env.OUTPUTS_DIR, 'subtitles'),
   thumbnails: resolve(rootDir, env.OUTPUTS_DIR, 'thumbnails'),
   clipMetadata: resolve(rootDir, env.OUTPUTS_DIR, 'metadata'),
+  templates: resolve(rootDir, env.TEMPLATES_DIR),
 };
 
 const youtubeService = new YoutubeService(
@@ -176,6 +188,38 @@ const assStyle: AssStyleConfig = {
   animationStyle: env.ASS_ANIMATION_STYLE,
 };
 
+/**
+ * Template engine: discovers/loads/validates `templates/*`, resolves
+ * bindings, computes layout, and builds the FFmpeg filter graph. Renderer
+ * services above never know which template they're composing.
+ */
+const manifestService = new ManifestService({ templatesDir: paths.templates });
+const templateLoaderService = new TemplateLoaderService(manifestService);
+const bindingService = new BindingService();
+const layoutService = new LayoutService();
+
+const layerRegistry = new LayerRegistry();
+registerDefaultLayers(layerRegistry, { reframeService });
+
+const validationService = new ValidationService(layerRegistry);
+const templateAssService = new TemplateAssService(assService, { fallbackStyle: assStyle });
+const filtergraphService = new FiltergraphService(layerRegistry, { frameRate: env.RENDER_FRAME_RATE });
+
+const templateService = new TemplateService(templateLoaderService, validationService, bindingService);
+
+const templateRendererService = new TemplateRendererService(
+  {
+    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+    preset: env.RENDER_PRESET,
+    crf: env.RENDER_CRF,
+    audioBitrateKbps: env.RENDER_AUDIO_BITRATE_KBPS,
+    maxRetries: env.CLIP_MAX_RETRIES,
+  },
+  layoutService,
+  templateAssService,
+  filtergraphService,
+);
+
 const rendererService = new RendererService(
   {
     ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
@@ -187,17 +231,11 @@ const rendererService = new RendererService(
     maxDurationSeconds: env.CLIP_MAX_SECONDS,
     maxConcurrency: env.CLIP_MAX_CONCURRENCY,
     maxRetries: env.CLIP_MAX_RETRIES,
-    outputWidth: env.RENDER_OUTPUT_WIDTH,
-    outputHeight: env.RENDER_OUTPUT_HEIGHT,
-    frameRate: env.RENDER_FRAME_RATE,
-    preset: env.RENDER_PRESET,
-    crf: env.RENDER_CRF,
-    audioBitrateKbps: env.RENDER_AUDIO_BITRATE_KBPS,
-    assStyle,
   },
   clipRefinementService,
   subtitleService,
-  assService,
+  templateService,
+  templateRendererService,
   reframeService,
   thumbnailService,
   createLogger('renderer.service'),
@@ -228,6 +266,16 @@ export const container = {
   faceDetectionService,
   reframeService,
   thumbnailService,
+  manifestService,
+  templateLoaderService,
+  validationService,
+  bindingService,
+  layoutService,
+  layerRegistry,
+  templateAssService,
+  filtergraphService,
+  templateService,
+  templateRendererService,
   rendererService,
   processController,
 };

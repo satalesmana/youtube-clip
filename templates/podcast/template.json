@@ -1,0 +1,81 @@
+{
+  "id": "podcast",
+  "canvas": { "width": 1080, "height": 1920 },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "style": {
+        "position": { "mode": "absolute", "x": 0, "y": 0, "width": "100%", "height": "100%" },
+        "color": "#14141C",
+        "zIndex": 0
+      }
+    },
+    {
+      "id": "title",
+      "type": "title",
+      "binding": "{{clip.title}}",
+      "style": {
+        "position": { "mode": "relative", "region": "top", "heightFraction": 0.12 },
+        "align": "center",
+        "verticalAlign": "center",
+        "font": "Arial",
+        "fontSize": 58,
+        "color": "#FFFFFF",
+        "outlineColor": "#000000",
+        "outlineWidth": 2,
+        "padding": 24,
+        "zIndex": 21
+      }
+    },
+    {
+      "id": "channel-name",
+      "type": "text",
+      "binding": "{{channel.name}}",
+      "optional": true,
+      "style": {
+        "position": { "mode": "relative", "region": "top", "heightFraction": 0.02 },
+        "align": "center",
+        "verticalAlign": "center",
+        "font": "Arial",
+        "fontSize": 28,
+        "color": "#9CA3AF",
+        "zIndex": 22
+      }
+    },
+    {
+      "id": "video",
+      "type": "video",
+      "binding": "{{video.path}}",
+      "style": {
+        "position": { "mode": "relative", "region": "middle", "heightFraction": 0.58 },
+        "fit": "blur-background",
+        "zIndex": 10
+      }
+    },
+    {
+      "id": "subtitle",
+      "type": "subtitle",
+      "binding": "{{subtitle.ass}}",
+      "style": {
+        "position": { "mode": "relative", "region": "bottom", "heightFraction": 0.28 },
+        "font": "Arial",
+        "fontSize": 92,
+        "color": "#FFFFFF",
+        "outlineColor": "#000000",
+        "outlineWidth": 4,
+        "zIndex": 30
+      }
+    },
+    {
+      "id": "logo",
+      "type": "logo",
+      "binding": "{{channel.logo}}",
+      "optional": true,
+      "style": {
+        "position": { "mode": "absolute", "x": "78%", "y": "3%", "width": 140, "height": 140 },
+        "zIndex": 16
+      }
+    }
+  ]
+}

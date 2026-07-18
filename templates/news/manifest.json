@@ -1,0 +1,7 @@
+{
+  "id": "news",
+  "name": "News",
+  "version": "1.0.0",
+  "description": "A static \"BREAKING NEWS\" banner over a full-frame (never-cropped) video and a ticker-style caption band — tuned for breaking news, politics, business, technology, and finance.",
+  "aspectRatio": "9:16"
+}
