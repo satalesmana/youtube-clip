@@ -2,6 +2,8 @@ import { resolve } from 'node:path';
 import { env } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
 import { OllamaProvider } from '../providers/ollama.provider.js';
+import { RouterProvider } from '../providers/router.provider.js';
+import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import { YoutubeService } from '../services/youtube.service.js';
 import { TranscriptService } from '../services/transcript.service.js';
 import { WhisperService } from '../services/whisper.service.js';
@@ -71,15 +73,49 @@ const whisperService = new WhisperService(
   createLogger('whisper.service'),
 );
 
-const ollamaProvider = new OllamaProvider(env.OLLAMA_BASE_URL, createLogger('ollama.provider'));
+/**
+ * `AI_PROVIDER` selects which AI agent backs highlight analysis: the local
+ * Ollama server, or an OpenAI-compatible AI router (e.g. 9Router).
+ */
+function resolveAiProvider(): {
+  provider: IOllamaProvider;
+  model: string;
+  temperature: number;
+  timeoutMs: number;
+  maxRetries: number;
+} {
+  if (env.AI_PROVIDER === 'router') {
+    return {
+      provider: new RouterProvider(
+        env.ROUTER_BASE_URL!,
+        env.ROUTER_API_KEY!,
+        createLogger('router.provider'),
+      ),
+      model: env.ROUTER_MODEL,
+      temperature: env.ROUTER_TEMPERATURE,
+      timeoutMs: env.ROUTER_TIMEOUT_MS,
+      maxRetries: env.ROUTER_MAX_RETRIES,
+    };
+  }
 
-const ollamaService = new OllamaService(
-  ollamaProvider,
-  {
+  return {
+    provider: new OllamaProvider(env.OLLAMA_BASE_URL, createLogger('ollama.provider')),
     model: env.OLLAMA_MODEL,
     temperature: env.OLLAMA_TEMPERATURE,
     timeoutMs: env.OLLAMA_TIMEOUT_MS,
     maxRetries: env.OLLAMA_MAX_RETRIES,
+  };
+}
+
+const aiProvider = resolveAiProvider();
+
+const ollamaService = new OllamaService(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
   },
   createLogger('ollama.service'),
 );
@@ -183,7 +219,7 @@ export const container = {
   youtubeService,
   transcriptService,
   whisperService,
-  ollamaProvider,
+  aiProvider: aiProvider.provider,
   ollamaService,
   highlightService,
   clipRefinementService,

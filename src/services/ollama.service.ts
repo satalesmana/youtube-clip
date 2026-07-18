@@ -55,7 +55,7 @@ export class OllamaService implements IOllamaService {
         const result = highlightChunkResponseSchema.safeParse(parsed);
 
         if (!result.success) {
-          throw AppError.ollamaInvalidResponse(
+          throw AppError.llmInvalidResponse(
             `Ollama returned an invalid highlight response for chunk ${chunk.index}: ${result.error.message}`,
           );
         }
@@ -90,6 +90,6 @@ function parseJsonLoosely(text: string): unknown {
         // Fall through to the error below.
       }
     }
-    throw AppError.ollamaInvalidResponse('Ollama response was not valid JSON.');
+    throw AppError.llmInvalidResponse('Ollama response was not valid JSON.');
   }
 }

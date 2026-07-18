@@ -5,8 +5,8 @@ export type ErrorCode =
   | 'DOWNLOAD_FAILED'
   | 'FFMPEG_FAILED'
   | 'WHISPER_FAILED'
-  | 'OLLAMA_TIMEOUT'
-  | 'OLLAMA_INVALID_RESPONSE'
+  | 'LLM_TIMEOUT'
+  | 'LLM_INVALID_RESPONSE'
   | 'NETWORK_ERROR'
   | 'FILE_PERMISSION_ERROR'
   | 'MISSING_SOURCE_VIDEO'
@@ -56,12 +56,12 @@ export class AppError extends Error {
     return new AppError({ code: 'WHISPER_FAILED', message, statusCode: 500, cause });
   }
 
-  static ollamaTimeout(message = 'Ollama request timed out.', cause?: unknown): AppError {
-    return new AppError({ code: 'OLLAMA_TIMEOUT', message, statusCode: 504, cause });
+  static llmTimeout(message = 'LLM request timed out.', cause?: unknown): AppError {
+    return new AppError({ code: 'LLM_TIMEOUT', message, statusCode: 504, cause });
   }
 
-  static ollamaInvalidResponse(message: string, cause?: unknown): AppError {
-    return new AppError({ code: 'OLLAMA_INVALID_RESPONSE', message, statusCode: 502, cause });
+  static llmInvalidResponse(message: string, cause?: unknown): AppError {
+    return new AppError({ code: 'LLM_INVALID_RESPONSE', message, statusCode: 502, cause });
   }
 
   static networkError(message: string, cause?: unknown): AppError {

@@ -63,7 +63,7 @@ export class OllamaProvider implements IOllamaProvider {
       if (error instanceof AppError) throw error;
 
       if (error instanceof Error && error.name === 'AbortError') {
-        throw AppError.ollamaTimeout(`Ollama request timed out after ${timeoutMs}ms.`, error);
+        throw AppError.llmTimeout(`Ollama request timed out after ${timeoutMs}ms.`, error);
       }
 
       throw AppError.networkError('Failed to reach the Ollama server.', error);

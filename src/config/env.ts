@@ -10,11 +10,22 @@ config();
  * Validated once at process start so the rest of the app can trust `env`.
  */
 const envSchema = z.object({
+  // Selects which AI agent provider handles highlight analysis.
+  AI_PROVIDER: z.enum(['ollama', 'router']).default('ollama'),
+
   OLLAMA_BASE_URL: z.url().default('http://127.0.0.1:11434'),
   OLLAMA_MODEL: z.string().min(1).default('qwen3:14b'),
   OLLAMA_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   OLLAMA_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   OLLAMA_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
+
+  // AI router (e.g. 9Router), an OpenAI-compatible `/v1/chat/completions` gateway.
+  ROUTER_BASE_URL: z.url().optional(),
+  ROUTER_API_KEY: z.string().min(1).optional(),
+  ROUTER_MODEL: z.string().min(1).default('FreeModel'),
+  ROUTER_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
+  ROUTER_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  ROUTER_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
 
   WHISPER_PROVIDER: z.enum(['faster-whisper', 'whisper-cpp']).default('faster-whisper'),
   WHISPER_BINARY_PATH: z.string().min(1).default('whisper'),
@@ -80,6 +91,23 @@ const envSchema = z.object({
 
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().min(1).default('0.0.0.0'),
+}).superRefine((data, ctx) => {
+  if (data.AI_PROVIDER === 'router') {
+    if (!data.ROUTER_BASE_URL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ROUTER_BASE_URL'],
+        message: 'ROUTER_BASE_URL is required when AI_PROVIDER=router',
+      });
+    }
+    if (!data.ROUTER_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ROUTER_API_KEY'],
+        message: 'ROUTER_API_KEY is required when AI_PROVIDER=router',
+      });
+    }
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
