@@ -27,15 +27,15 @@ export class RouterProvider implements IOllamaProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({
           model: options.model,
           stream: false,
-          temperature: options.temperature ?? 0.2,
+          // temperature: options.temperature ?? 0.2,
           messages: [
-            ...(options.system ? [{ role: 'system', content: options.system }] : []),
-            { role: 'user', content: options.prompt },
+            // ...(options.system ? [{ role: 'system', content: options.system }] : []),
+            { role: 'user', content: `${options.system} ${options.prompt}` },
           ],
         }),
         signal: controller.signal,
