@@ -2,8 +2,9 @@ import { retry } from '../utils/retry.js';
 import { AppError } from '../utils/errors.js';
 import { highlightChunkResponseSchema } from '../schemas/highlight.schema.js';
 import {
-  buildViralHighlightSystemPrompt,
+  // buildViralHighlightSystemPrompt,
   buildViralHighlightUserPrompt,
+  buildGoalHighlightSystemPrompt,
 } from '../prompts/viral-highlight.prompt.js';
 import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
@@ -35,7 +36,8 @@ export class OllamaService implements IOllamaService {
 
   /** Analyzes one transcript chunk and returns its candidate viral clips. */
   async analyzeChunk(chunk: TranscriptChunk): Promise<HighlightClip[]> {
-    const systemPrompt = buildViralHighlightSystemPrompt();
+    // const systemPrompt = buildViralHighlightSystemPrompt();
+    const systemPrompt = buildGoalHighlightSystemPrompt();
     const userPrompt = buildViralHighlightUserPrompt(chunk);
 
     return retry(
