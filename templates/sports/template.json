@@ -59,7 +59,7 @@
       "binding": "{{video.path}}",
       "style": {
         "position": { "mode": "relative", "region": "middle", "heightFraction": 0.62 },
-        "fit": "cover",
+        "fit": "contain",
         "zIndex": 10
       }
     },
