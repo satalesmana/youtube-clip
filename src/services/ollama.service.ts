@@ -2,9 +2,10 @@ import { retry } from '../utils/retry.js';
 import { AppError } from '../utils/errors.js';
 import { highlightChunkResponseSchema } from '../schemas/highlight.schema.js';
 import {
-  // buildViralHighlightSystemPrompt,
+  buildViralHighlightSystemPrompt,
   buildViralHighlightUserPrompt,
   buildGoalHighlightSystemPrompt,
+  buildMotoGpSystemPrompt,
 } from '../prompts/viral-highlight.prompt.js';
 import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
@@ -20,7 +21,7 @@ export interface OllamaServiceOptions {
 
 /** Analyzes transcript chunks with an LLM to find candidate viral clips. */
 export interface IOllamaService {
-  analyzeChunk(chunk: TranscriptChunk): Promise<HighlightClip[]>;
+  analyzeChunk(chunk: TranscriptChunk, actingAs?: string): Promise<HighlightClip[]>;
 }
 
 /**
@@ -35,9 +36,8 @@ export class OllamaService implements IOllamaService {
   ) {}
 
   /** Analyzes one transcript chunk and returns its candidate viral clips. */
-  async analyzeChunk(chunk: TranscriptChunk): Promise<HighlightClip[]> {
-    // const systemPrompt = buildViralHighlightSystemPrompt();
-    const systemPrompt = buildGoalHighlightSystemPrompt();
+  async analyzeChunk(chunk: TranscriptChunk, actingAs?: string): Promise<HighlightClip[]> {
+    const systemPrompt = resolveSystemPrompt(actingAs);
     const userPrompt = buildViralHighlightUserPrompt(chunk);
 
     return retry(
@@ -78,6 +78,26 @@ export class OllamaService implements IOllamaService {
 }
 
 /** Parses `text` as JSON, falling back to extracting the first `{...}` block. */
+function resolveSystemPrompt(actingAs?: string): string {
+  const normalized = actingAs?.trim().toLowerCase();
+
+  switch (normalized) {
+    case 'goal':
+    case 'football':
+      return buildGoalHighlightSystemPrompt();
+    case 'motogp':
+    case 'moto':
+    case 'moto-gp':
+    case 'moto_gp':
+      return buildMotoGpSystemPrompt();
+    case 'viral':
+    case '':
+    case undefined:
+    default:
+      return buildViralHighlightSystemPrompt();
+  }
+}
+
 function parseJsonLoosely(text: string): unknown {
   const trimmed = text.trim();
 

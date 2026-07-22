@@ -7,7 +7,7 @@ import { AppError } from '../../src/utils/errors.js';
 /**
  * `POST /api/process`
  *
- * Body: `{ "url": "...", "template"?: "sports"|"news"|"podcast", "channel"?: { "name"?, "logo"? } }`
+ * Body: `{ "url": "...", "template"?: "sports"|"news"|"podcast", "channel"?: { "name"?, "logo"? }, "acting_as"?: "viral"|"goal"|"motogp" }`
  * Response: `{ "success": true, "video", "transcript", "clips", "clipErrors" }`
  */
 export default defineEventHandler(async (event) => {
@@ -20,7 +20,12 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const result = await processController.process(parsed.data.url, parsed.data.template, parsed.data.channel);
+    const result = await processController.process(
+      parsed.data.url,
+      parsed.data.template,
+      parsed.data.channel,
+      parsed.data.acting_as,
+    );
     return { success: true, ...result };
   } catch (error) {
     throw createError(toHttpError(error));

@@ -30,7 +30,12 @@ export class ProcessController {
   constructor(private readonly deps: ProcessControllerDeps) {}
 
   /** Runs the full highlight-extraction and clip-rendering pipeline for a single YouTube URL. */
-  async process(url: string, template?: string, channel?: RenderContext['channel']): Promise<ProcessResult> {
+  async process(
+    url: string,
+    template?: string,
+    channel?: RenderContext['channel'],
+    actingAs?: string,
+  ): Promise<ProcessResult> {
     const {
       youtubeService,
       transcriptService,
@@ -56,7 +61,7 @@ export class ProcessController {
     const transcriptPath = await transcriptService.saveTranscript(transcriptDocument);
 
     const chunks = transcriptService.chunkTranscript(transcriptResult);
-    const clipGroups = await this.analyzeChunksConcurrently(chunks, ollamaService, logger);
+    const clipGroups = await this.analyzeChunksConcurrently(chunks, ollamaService, logger, actingAs);
 
     const highlights = highlightService.mergeAndRank(clipGroups);
 
@@ -90,8 +95,9 @@ export class ProcessController {
     chunks: TranscriptChunk[],
     ollamaService: IOllamaService,
     logger: Logger,
+    actingAs?: string,
   ): Promise<HighlightClip[][]> {
-    const settled = await Promise.allSettled(chunks.map((chunk) => ollamaService.analyzeChunk(chunk)));
+    const settled = await Promise.allSettled(chunks.map((chunk) => ollamaService.analyzeChunk(chunk, actingAs)));
 
     return settled.flatMap((outcome, index) => {
       if (outcome.status === 'fulfilled') return [outcome.value];

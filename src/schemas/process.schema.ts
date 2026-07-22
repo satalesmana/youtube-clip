@@ -23,6 +23,7 @@ export const processRequestSchema = z.object({
       logo: z.string().trim().min(1).optional(),
     })
     .optional(),
+  acting_as: z.string().trim().min(1).optional(),
 });
 
 export type ProcessRequest = z.infer<typeof processRequestSchema>;
