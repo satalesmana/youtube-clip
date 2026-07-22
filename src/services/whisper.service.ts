@@ -137,6 +137,7 @@ export class WhisperService implements IWhisperService {
     const args = ['-m', model, '-f', audioPath, '-oj', '-ojf', '-of', outputPrefix];
     if (language && language !== 'auto') args.push('-l', language);
 
+    this.logger.info({ binaryPath, args }, 'transcribeWithWhisperCpp');
     await runCommand(binaryPath, args, { logger: this.logger });
 
     const raw = JSON.parse(await readFile(`${outputPrefix}.json`, 'utf-8')) as WhisperCppJson;
