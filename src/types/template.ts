@@ -53,10 +53,16 @@ export interface LayerStyle {
   zIndex?: number;
   color?: string;
   backgroundColor?: string;
+  /** `title`/`header`/`text` only: `'block'` (default) fills the whole layer rect once; `'line'` draws a snug box behind each wrapped line instead. */
+  backgroundFit?: 'block' | 'line';
+  /** `title`/`header`/`text` only: horizontal padding around each line's snug background box, in `backgroundFit: 'line'` mode. */
+  backgroundPadding?: number;
   opacity?: number;
   gradient?: { from: string; to: string; direction?: 'vertical' | 'horizontal' };
   font?: string;
   fontSize?: number;
+  /** `title`/`header`/`text` only: floor `fontSize` won't shrink below when auto-fitting wrapped text to the layer rect. Defaults to half of `fontSize`. */
+  minFontSize?: number;
   bold?: boolean;
   outlineColor?: string;
   outlineWidth?: number;

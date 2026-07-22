@@ -31,12 +31,15 @@ const layerStyleSchema = z
     zIndex: z.number().optional(),
     color: z.string().optional(),
     backgroundColor: z.string().optional(),
+    backgroundFit: z.enum(['block', 'line']).optional(),
+    backgroundPadding: z.number().min(0).optional(),
     opacity: z.number().min(0).max(1).optional(),
     gradient: z
       .object({ from: z.string(), to: z.string(), direction: z.enum(['vertical', 'horizontal']).optional() })
       .optional(),
     font: z.string().optional(),
     fontSize: z.number().positive().optional(),
+    minFontSize: z.number().positive().optional(),
     bold: z.boolean().optional(),
     outlineColor: z.string().optional(),
     outlineWidth: z.number().min(0).optional(),
