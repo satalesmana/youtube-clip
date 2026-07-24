@@ -16,14 +16,16 @@
       "type": "title",
       "binding": "{{clip.title}}",
       "style": {
-        "position": { "mode": "relative", "region": "top", "heightFraction": 0.12 },
+        "position": { "mode": "relative", "region": "top", "heightFraction": 0.22 },
         "align": "center",
         "verticalAlign": "center",
         "font": "Arial",
-        "fontSize": 58,
-        "color": "#FFFFFF",
-        "outlineColor": "#000000",
-        "outlineWidth": 2,
+        "fontSize": 60,
+        "minFontSize": 32,
+        "bold": true,
+        "color": "#000000",
+        "backgroundColor": "#edcb07",
+        "backgroundFit": "line",
         "padding": 24,
         "zIndex": 21
       }

@@ -24,7 +24,7 @@
         "minFontSize": 32,
         "bold": true,
         "color": "#000000",
-        "backgroundColor": "#FFFFFF",
+        "backgroundColor": "#edcb07",
         "backgroundFit": "line",
         "padding": 24,
         "zIndex": 21
@@ -61,7 +61,7 @@
       "binding": "{{video.path}}",
       "style": {
         "position": { "mode": "relative", "region": "middle", "heightFraction": 0.56 },
-        "fit": "center",
+        "fit": "cover",
         "zIndex": 10
       }
     },

@@ -39,6 +39,9 @@ export function runCommand(
 ): Promise<RunCommandResult> {
   const { cwd, logger, onLine } = options;
 
+  const argsLog = args.join(' ')
+  logger?.info({ command, argsLog }, 'runCommand');
+
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd });
 
