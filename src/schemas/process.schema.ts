@@ -24,6 +24,7 @@ export const processRequestSchema = z.object({
     })
     .optional(),
   acting_as: z.string().trim().min(1).optional(),
+  custom_prompt: z.string().trim().min(1).optional(),
 });
 
 export type ProcessRequest = z.infer<typeof processRequestSchema>;

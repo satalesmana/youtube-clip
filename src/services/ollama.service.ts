@@ -21,7 +21,7 @@ export interface OllamaServiceOptions {
 
 /** Analyzes transcript chunks with an LLM to find candidate viral clips. */
 export interface IOllamaService {
-  analyzeChunk(chunk: TranscriptChunk, actingAs?: string): Promise<HighlightClip[]>;
+  analyzeChunk(chunk: TranscriptChunk, actingAs?: string, customPrompt?: string): Promise<HighlightClip[]>;
 }
 
 /**
@@ -36,8 +36,12 @@ export class OllamaService implements IOllamaService {
   ) {}
 
   /** Analyzes one transcript chunk and returns its candidate viral clips. */
-  async analyzeChunk(chunk: TranscriptChunk, actingAs?: string): Promise<HighlightClip[]> {
-    const systemPrompt = resolveSystemPrompt(actingAs);
+  async analyzeChunk(chunk: TranscriptChunk, actingAs?: string, customPrompt?: string): Promise<HighlightClip[]> {
+    let systemPrompt = resolveSystemPrompt(actingAs, customPrompt);
+    systemPrompt +=`Return ONLY valid JSON matching this schema, with no other text: `
+    systemPrompt +=`{ "clips": [ {"start": 0, "end": 0, "score": 95, "title": "", "reason": "", "hook": ""} ]} `
+    systemPrompt +=`Never return Markdown. Never explain. Return JSON only. `
+
     const userPrompt = buildViralHighlightUserPrompt(chunk);
 
     return retry(
@@ -77,8 +81,10 @@ export class OllamaService implements IOllamaService {
   }
 }
 
-/** Parses `text` as JSON, falling back to extracting the first `{...}` block. */
-function resolveSystemPrompt(actingAs?: string): string {
+/** Resolves the system prompt: an explicit `customPrompt` wins over `actingAs`. */
+function resolveSystemPrompt(actingAs?: string, customPrompt?: string): string {
+  if (customPrompt?.trim()) return customPrompt.trim();
+
   const normalized = actingAs?.trim().toLowerCase();
 
   switch (normalized) {
@@ -98,6 +104,7 @@ function resolveSystemPrompt(actingAs?: string): string {
   }
 }
 
+/** Parses `text` as JSON, falling back to extracting the first `{...}` block. */
 function parseJsonLoosely(text: string): unknown {
   const trimmed = text.trim();
 

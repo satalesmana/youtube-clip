@@ -7,7 +7,8 @@ import { AppError } from '../../src/utils/errors.js';
 /**
  * `POST /api/process`
  *
- * Body: `{ "url": "...", "template"?: "sports"|"news"|"podcast", "channel"?: { "name"?, "logo"? }, "acting_as"?: "viral"|"goal"|"motogp" }`
+ * Body: `{ "url": "...", "template"?: "sports"|"news"|"podcast", "channel"?: { "name"?, "logo"? }, "acting_as"?: "viral"|"goal"|"motogp", "custom_prompt"?: string }`
+ * `custom_prompt`, when provided, replaces the system prompt entirely and takes precedence over `acting_as`.
  * Response: `{ "success": true, "video", "transcript", "clips", "clipErrors" }`
  */
 export default defineEventHandler(async (event) => {
@@ -25,6 +26,7 @@ export default defineEventHandler(async (event) => {
       parsed.data.template,
       parsed.data.channel,
       parsed.data.acting_as,
+      parsed.data.custom_prompt,
     );
     return { success: true, ...result };
   } catch (error) {

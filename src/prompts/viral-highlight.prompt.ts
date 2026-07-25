@@ -22,26 +22,7 @@ A viral clip should:
 - Quotable one-liners or powerful statements
 
 IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video).
-Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.
-
-
-Return ONLY valid JSON matching this schema, with no other text:
-{
-  "clips": [
-    {
-      "start": 0,
-      "end": 0,
-      "score": 95,
-      "title": "",
-      "reason": "",
-      "hook": ""
-    }
-  ]
-}
-
-Never return Markdown.
-Never explain.
-Return JSON only.`;
+Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.`;
 
 const FOOTBALL_PROMPT =`You are an expert football video analyst.
 
@@ -102,51 +83,30 @@ Do NOT detect:
 - Crowd cheering unrelated to a goal.
 
 IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video).
-Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.
-
-
-Return ONLY valid JSON matching this schema, with no other text:
-{
-  "clips": [
-    {
-      "start": 0,
-      "end": 0,
-      "score": 95,
-      "title": "",
-      "reason": "",
-      "hook": ""
-    }
-  ]
-}
-
-Never return Markdown.
-Never explain.
-Return JSON only.`;
+Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.`;
 
 const MOTOGP_PROMT = `
 You are an expert Moto3 race video analyst.
 
 Analyze the video and identify the most exciting and important moments involving Veda Ega Pratama.
-
 Veda Ega Pratama is the PRIMARY SUBJECT.
-
 Prioritize moments where Veda Ega Pratama:
 
-Overtakes another rider.
-Is overtaken during an important battle.
-Fights closely with other riders.
-Rides side-by-side.
-Makes a dramatic save.
-Crashes or has a major incident.
-Recovers from a difficult race position.
-Gains or loses multiple positions.
-Fights for the top 10, top 5, podium, or victory.
-Makes a last-lap or final-corner move.
-Experiences a mechanical problem.
-Receives a penalty.
-Is involved in a controversial incident.
-Crosses the finish line in a significant position.
-Celebrates a victory, podium, or important result.
+- Overtakes another rider.
+- Is overtaken during an important battle.
+- Fights closely with other riders.
+- Rides side-by-side.
+- Makes a dramatic save.
+- Crashes or has a major incident.
+- Recovers from a difficult race position.
+- Gains or loses multiple positions.
+- Fights for the top 10, top 5, podium, or victory.
+- Makes a last-lap or final-corner move.
+- Experiences a mechanical problem.
+- Receives a penalty.
+- Is involved in a controversial incident.
+- Crosses the finish line in a significant position.
+- Celebrates a victory, podium, or important result.
 
 Do not classify normal riding or insignificant position changes as highlights.
 
@@ -214,11 +174,8 @@ Race direction or penalty graphics appear.
 CLIP TIMING
 
 Use these timing rules:
-
 Overtake
-
 Start 8-15 seconds before the overtake.
-
 End 5-10 seconds after the overtake.
 
 Crash
@@ -290,26 +247,7 @@ The primary rider should be:
 
 "Veda Ega Pratama"
 
-Use "unknown" when another rider cannot be identified.
-
-
-Return ONLY valid JSON matching this schema, with no other text:
-{
-  "clips": [
-    {
-      "start": 0,
-      "end": 0,
-      "score": 95,
-      "title": "",
-      "reason": "",
-      "hook": ""
-    }
-  ]
-}
-
-Never return Markdown.
-Never explain.
-Return JSON only.`
+Use "unknown" when another rider cannot be identified.`
 
 /** Builds the system prompt sent to Ollama for every transcript chunk. */
 export function buildViralHighlightSystemPrompt(): string {
