@@ -4,6 +4,8 @@ import { highlightChunkResponseSchema } from '../schemas/highlight.schema.js';
 import {
   buildViralHighlightSystemPrompt,
   buildViralHighlightUserPrompt,
+  buildGoalHighlightSystemPrompt,
+  buildMotoGpSystemPrompt,
 } from '../prompts/viral-highlight.prompt.js';
 import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
@@ -19,7 +21,7 @@ export interface OllamaServiceOptions {
 
 /** Analyzes transcript chunks with an LLM to find candidate viral clips. */
 export interface IOllamaService {
-  analyzeChunk(chunk: TranscriptChunk): Promise<HighlightClip[]>;
+  analyzeChunk(chunk: TranscriptChunk, actingAs?: string, customPrompt?: string): Promise<HighlightClip[]>;
 }
 
 /**
@@ -34,8 +36,12 @@ export class OllamaService implements IOllamaService {
   ) {}
 
   /** Analyzes one transcript chunk and returns its candidate viral clips. */
-  async analyzeChunk(chunk: TranscriptChunk): Promise<HighlightClip[]> {
-    const systemPrompt = buildViralHighlightSystemPrompt();
+  async analyzeChunk(chunk: TranscriptChunk, actingAs?: string, customPrompt?: string): Promise<HighlightClip[]> {
+    let systemPrompt = resolveSystemPrompt(actingAs, customPrompt);
+    systemPrompt +=`Return ONLY valid JSON matching this schema, with no other text: `
+    systemPrompt +=`{ "clips": [ {"start": 0, "end": 0, "score": 95, "title": "", "reason": "", "hook": ""} ]} `
+    systemPrompt +=`Never return Markdown. Never explain. Return JSON only. `
+
     const userPrompt = buildViralHighlightUserPrompt(chunk);
 
     return retry(
@@ -55,7 +61,7 @@ export class OllamaService implements IOllamaService {
         const result = highlightChunkResponseSchema.safeParse(parsed);
 
         if (!result.success) {
-          throw AppError.ollamaInvalidResponse(
+          throw AppError.llmInvalidResponse(
             `Ollama returned an invalid highlight response for chunk ${chunk.index}: ${result.error.message}`,
           );
         }
@@ -75,6 +81,29 @@ export class OllamaService implements IOllamaService {
   }
 }
 
+/** Resolves the system prompt: an explicit `customPrompt` wins over `actingAs`. */
+function resolveSystemPrompt(actingAs?: string, customPrompt?: string): string {
+  if (customPrompt?.trim()) return customPrompt.trim();
+
+  const normalized = actingAs?.trim().toLowerCase();
+
+  switch (normalized) {
+    case 'goal':
+    case 'football':
+      return buildGoalHighlightSystemPrompt();
+    case 'motogp':
+    case 'moto':
+    case 'moto-gp':
+    case 'moto_gp':
+      return buildMotoGpSystemPrompt();
+    case 'viral':
+    case '':
+    case undefined:
+    default:
+      return buildViralHighlightSystemPrompt();
+  }
+}
+
 /** Parses `text` as JSON, falling back to extracting the first `{...}` block. */
 function parseJsonLoosely(text: string): unknown {
   const trimmed = text.trim();
@@ -90,6 +119,6 @@ function parseJsonLoosely(text: string): unknown {
         // Fall through to the error below.
       }
     }
-    throw AppError.ollamaInvalidResponse('Ollama response was not valid JSON.');
+    throw AppError.llmInvalidResponse('Ollama response was not valid JSON.');
   }
 }

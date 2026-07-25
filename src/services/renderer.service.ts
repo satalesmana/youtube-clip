@@ -1,28 +1,27 @@
 import { join } from 'node:path';
 import { access, stat, writeFile } from 'node:fs/promises';
-import { runCommand, CommandError } from '../utils/exec.js';
 import {
   detectSilences,
-  escapeFfmpegFilterPath,
   probeDurationSeconds,
   probeResolution,
   type SilenceInterval,
   type VideoResolution,
 } from '../utils/ffmpeg.js';
 import { ensureDir } from '../utils/fs.js';
-import { retry } from '../utils/retry.js';
 import { mapWithConcurrency } from '../utils/concurrency.js';
 import { AppError } from '../utils/errors.js';
 import type { Logger } from '../utils/logger.js';
 import type { IClipRefinementService } from './clip-refinement.service.js';
 import type { ISubtitleService } from './subtitle.service.js';
-import type { IAssService } from './ass.service.js';
 import type { IReframeService } from './reframe.service.js';
 import type { IThumbnailService } from './thumbnail.service.js';
+import type { ITemplateService } from '../template/template.service.js';
+import type { ITemplateRendererService } from '../template/renderer.service.js';
+import { TemplateRenderError } from '../template/renderer.service.js';
+import { TemplateError } from '../template/template-error.js';
 import type { HighlightClip } from '../types/highlight.js';
 import type { TranscriptResult } from '../types/transcript.js';
-import type { AssStyleConfig } from '../types/subtitle.js';
-import type { CropRegion } from '../types/reframe.js';
+import type { RenderContext } from '../types/template.js';
 import type { RefinedRange, RenderedClipMetadata, RenderError, RenderErrorCode, RenderSummary } from '../types/render.js';
 
 export interface RendererServiceOptions {
@@ -35,18 +34,23 @@ export interface RendererServiceOptions {
   maxDurationSeconds: number;
   maxConcurrency: number;
   maxRetries: number;
-  outputWidth: number;
-  outputHeight: number;
-  frameRate: number;
-  preset: string;
-  crf: number;
-  audioBitrateKbps: number;
-  assStyle: AssStyleConfig;
 }
 
-/** Renders every highlight into an upload-ready 9:16 short in a single FFmpeg pass. */
+/**
+ * Renders every highlight into an upload-ready 9:16 short in a single
+ * FFmpeg pass. 100% data-driven: this service never knows whether it's
+ * composing a Sports, News, or Podcast layout — it only orchestrates the
+ * upstream steps (refine, caption, reframe, thumbnail) that build the
+ * template-agnostic `RenderContext`, then hands off to the template engine.
+ */
 export interface IRendererService {
-  renderAll(videoPath: string, clips: HighlightClip[], transcript: TranscriptResult): Promise<RenderSummary>;
+  renderAll(
+    videoPath: string,
+    clips: HighlightClip[],
+    transcript: TranscriptResult,
+    templateId?: string,
+    channel?: RenderContext['channel'],
+  ): Promise<RenderSummary>;
 }
 
 /** Raised for a single clip's render failure; carries enough detail to build a `RenderError`. */
@@ -63,35 +67,13 @@ class RenderFailure extends Error {
   }
 }
 
-function classifyFfmpegError(stderr: string | undefined): RenderErrorCode {
-  const text = (stderr ?? '').toLowerCase();
-  if (text.includes('no space left on device') || text.includes('permission denied')) {
-    return 'OUTPUT_WRITE_FAILED';
-  }
-  if (
-    text.includes('unsupported codec') ||
-    text.includes('could not find codec parameters') ||
-    text.includes('invalid data found when processing input')
-  ) {
-    return 'UNSUPPORTED_CODEC';
-  }
-  return 'FFMPEG_FAILED';
-}
-
-/**
- * Orchestrates the whole "clip refinement → subtitles → reframe → burn →
- * thumbnail" pipeline for every highlight, rendering up to `maxConcurrency`
- * clips at once and continuing past individual failures.
- */
 export class RendererService implements IRendererService {
-  private fontChecked = false;
-  private fontAvailable = true;
-
   constructor(
     private readonly options: RendererServiceOptions,
     private readonly clipRefinementService: IClipRefinementService,
     private readonly subtitleService: ISubtitleService,
-    private readonly assService: IAssService,
+    private readonly templateService: ITemplateService,
+    private readonly templateRendererService: ITemplateRendererService,
     private readonly reframeService: IReframeService,
     private readonly thumbnailService: IThumbnailService,
     private readonly logger: Logger,
@@ -101,6 +83,8 @@ export class RendererService implements IRendererService {
     videoPath: string,
     clips: HighlightClip[],
     transcript: TranscriptResult,
+    templateId?: string,
+    channel?: RenderContext['channel'],
   ): Promise<RenderSummary> {
     const { clipsDir, subtitlesDir, thumbnailsDir, metadataDir, ffmpegBinaryPath, maxConcurrency } = this.options;
 
@@ -122,10 +106,16 @@ export class RendererService implements IRendererService {
     this.logger.info({ videoPath }, 'Detecting silence intervals');
     const silences = await detectSilences({ binaryPath: ffmpegBinaryPath, inputPath: videoPath });
 
+    // Template loading/validation is per-REQUEST (shared by every clip in
+    // this job), not per-clip — a bad/missing template fails the whole
+    // request up front rather than surfacing as N identical per-clip errors.
+    const loaded = await this.templateService.load(templateId);
+    this.logger.info({ template: loaded.manifest.id }, 'Using template');
+
     const indexed = clips.map((clip, i) => ({ clip, id: i + 1 }));
 
     const settled = await mapWithConcurrency(indexed, maxConcurrency, ({ clip, id }) =>
-      this.generateSingleRender(videoPath, sourceResolution, sourceDuration, silences, transcript, clip, id),
+      this.generateSingleRender(videoPath, sourceResolution, sourceDuration, silences, transcript, clip, id, loaded, channel),
     );
 
     const renderedClips: RenderedClipMetadata[] = [];
@@ -163,13 +153,11 @@ export class RendererService implements IRendererService {
     transcript: TranscriptResult,
     clip: HighlightClip,
     id: number,
+    loaded: Awaited<ReturnType<ITemplateService['load']>>,
+    channel: RenderContext['channel'],
   ): Promise<RenderedClipMetadata> {
     const label = `[Clip ${id}]`;
     this.logger.info({ id }, `${label} Started`);
-
-    await this.ensureFontAvailable().catch((error: Error) => {
-      throw new RenderFailure(id, 'MISSING_FONT', error.message);
-    });
 
     const rawRefined = this.clipRefinementService.refine(clip, transcript, silences);
     const refined = this.validateRefinedRange(rawRefined, sourceDuration, id);
@@ -178,48 +166,64 @@ export class RendererService implements IRendererService {
     this.logger.info({ id, duration }, `${label} Duration: ${duration.toFixed(1)} seconds`);
 
     const events = this.subtitleService.buildEvents(transcript, refined.start, refined.end);
-    const assContent = this.assService.render(events, this.options.assStyle);
     const assPath = join(this.options.subtitlesDir, `clip-${String(id).padStart(3, '0')}.ass`);
-
-    try {
-      await writeFile(assPath, assContent, 'utf-8');
-    } catch {
-      throw new RenderFailure(id, 'INVALID_SUBTITLE', `Failed to write subtitle file for clip ${id}.`, refined);
-    }
 
     const focalPoint = await this.reframeService.resolveFocalPoint(
       videoPath,
       (refined.start + refined.end) / 2,
       id,
     );
-    const crop = this.reframeService.computeCropRegion(sourceResolution.width, sourceResolution.height, focalPoint);
+
+    const context: RenderContext = {
+      clip: {
+        title: clip.title,
+        score: clip.score,
+        duration: Number(duration.toFixed(2)),
+        start: refined.start,
+        end: refined.end,
+      },
+      video: { path: videoPath },
+      subtitle: { ass: assPath, words: events },
+      channel,
+    };
+
+    let enrichedLayers: Awaited<ReturnType<ITemplateService['resolveLayers']>>;
+    try {
+      enrichedLayers = await this.templateService.resolveLayers(loaded, context);
+    } catch (error) {
+      if (error instanceof TemplateError) {
+        throw new RenderFailure(id, 'TEMPLATE_BINDING_ERROR', error.message, refined);
+      }
+      throw new RenderFailure(id, 'TEMPLATE_BINDING_ERROR', `Failed to resolve template bindings for clip ${id}.`, refined);
+    }
 
     const videoOutputPath = join(this.options.clipsDir, `clip-${String(id).padStart(3, '0')}.mp4`);
 
     this.logger.info({ id }, `${label} Rendering`);
 
     try {
-      await retry(
-        () =>
-          runCommand(
-            this.options.ffmpegBinaryPath,
-            this.buildFfmpegArgs(videoPath, refined, crop, assPath, videoOutputPath),
-          ),
-        {
-          attempts: this.options.maxRetries,
-          onRetry: (error, attempt) => {
-            this.logger.warn({ id, attempt, err: error }, `${label} Retrying render`);
-          },
+      await this.templateRendererService.compose({
+        context,
+        enrichedLayers,
+        canvas: loaded.template.canvas,
+        templateDir: loaded.templateDir,
+        assPath,
+        outputPath: videoOutputPath,
+        hints: {
+          sourceWidth: sourceResolution.width,
+          sourceHeight: sourceResolution.height,
+          focalPoint,
         },
-      );
+      });
     } catch (error) {
-      const ffmpegStderr = error instanceof CommandError ? error.stderr : undefined;
+      if (error instanceof TemplateRenderError) {
+        throw new RenderFailure(id, error.code, error.message, refined, error.ffmpegStderr);
+      }
       throw new RenderFailure(
         id,
-        classifyFfmpegError(ffmpegStderr),
-        `FFmpeg failed to render clip ${id}.`,
+        'TEMPLATE_RENDER_FAILED',
+        `Failed to render clip ${id}: ${(error as Error).message}`,
         refined,
-        ffmpegStderr,
       );
     }
 
@@ -249,53 +253,12 @@ export class RendererService implements IRendererService {
       start: refined.start,
       end: refined.end,
       duration: Number(duration.toFixed(2)),
-      resolution: `${this.options.outputWidth}x${this.options.outputHeight}`,
+      resolution: `${loaded.template.canvas.width}x${loaded.template.canvas.height}`,
       video: videoOutputPath,
       subtitle: assPath,
       thumbnail: thumbnailPath,
+      template: loaded.manifest.id,
     };
-  }
-
-  private buildFfmpegArgs(
-    videoPath: string,
-    refined: RefinedRange,
-    crop: CropRegion,
-    assPath: string,
-    outputPath: string,
-  ): string[] {
-    const { outputWidth, outputHeight, frameRate, preset, crf, audioBitrateKbps } = this.options;
-
-    const filter = [
-      `crop=${crop.width}:${crop.height}:${crop.x}:${crop.y}`,
-      `scale=${outputWidth}:${outputHeight}`,
-      `fps=${frameRate}`,
-      `ass='${escapeFfmpegFilterPath(assPath)}'`,
-    ].join(',');
-
-    return [
-      '-y',
-      '-i',
-      videoPath,
-      '-ss',
-      refined.start.toFixed(3),
-      '-to',
-      refined.end.toFixed(3),
-      '-vf',
-      filter,
-      '-c:v',
-      'libx264',
-      '-preset',
-      preset,
-      '-crf',
-      String(crf),
-      '-c:a',
-      'aac',
-      '-b:a',
-      `${audioBitrateKbps}k`,
-      '-movflags',
-      '+faststart',
-      outputPath,
-    ];
   }
 
   /** Enforces the hard [minDurationSeconds, maxDurationSeconds] safety bounds after refinement. */
@@ -356,30 +319,6 @@ export class RendererService implements IRendererService {
         `Rendered clip ${id} duration (${actualDuration.toFixed(1)}s) does not match the expected duration (${expectedDuration.toFixed(1)}s).`,
         range,
       );
-    }
-  }
-
-  /** Verifies the configured subtitle font is actually installed, via `fc-list` (best-effort). */
-  private async ensureFontAvailable(): Promise<void> {
-    if (this.fontChecked) {
-      if (!this.fontAvailable) {
-        throw new Error(`Configured subtitle font "${this.options.assStyle.fontName}" was not found (fc-list).`);
-      }
-      return;
-    }
-    this.fontChecked = true;
-
-    try {
-      const { stdout } = await runCommand('fc-list', [':family']);
-      this.fontAvailable = stdout.toLowerCase().includes(this.options.assStyle.fontName.toLowerCase());
-    } catch {
-      // fc-list unavailable in this environment — inconclusive, don't hard-fail.
-      this.fontAvailable = true;
-      return;
-    }
-
-    if (!this.fontAvailable) {
-      throw new Error(`Configured subtitle font "${this.options.assStyle.fontName}" was not found (fc-list).`);
     }
   }
 

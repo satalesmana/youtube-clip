@@ -7,7 +7,8 @@ import { AppError } from '../../src/utils/errors.js';
 /**
  * `POST /api/process`
  *
- * Body: `{ "url": "https://youtube.com/watch?v=..." }`
+ * Body: `{ "url": "...", "template"?: "sports"|"news"|"podcast", "channel"?: { "name"?, "logo"? }, "acting_as"?: "viral"|"goal"|"motogp", "custom_prompt"?: string }`
+ * `custom_prompt`, when provided, replaces the system prompt entirely and takes precedence over `acting_as`.
  * Response: `{ "success": true, "video", "transcript", "clips", "clipErrors" }`
  */
 export default defineEventHandler(async (event) => {
@@ -20,7 +21,13 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const result = await processController.process(parsed.data.url);
+    const result = await processController.process(
+      parsed.data.url,
+      parsed.data.template,
+      parsed.data.channel,
+      parsed.data.acting_as,
+      parsed.data.custom_prompt,
+    );
     return { success: true, ...result };
   } catch (error) {
     throw createError(toHttpError(error));

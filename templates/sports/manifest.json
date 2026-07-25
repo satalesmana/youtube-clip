@@ -1,0 +1,8 @@
+{
+  "id": "sports",
+  "name": "Sports Highlight",
+  "version": "1.0.0",
+  "default": true,
+  "description": "Bold title bar, cover-cropped action video, and karaoke captions — tuned for football, basketball, volleyball, F1, UFC, and esports highlights.",
+  "aspectRatio": "9:16"
+}

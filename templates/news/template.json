@@ -1,0 +1,79 @@
+{
+  "id": "news",
+  "canvas": { "width": 1080, "height": 1920 },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "style": {
+        "position": { "mode": "absolute", "x": 0, "y": 0, "width": "100%", "height": "100%" },
+        "color": "#1A0B0B",
+        "zIndex": 0
+      }
+    },
+    {
+      "id": "header",
+      "type": "header",
+      "text": "BREAKING NEWS",
+      "style": {
+        "position": { "mode": "relative", "region": "top", "heightFraction": 0.1 },
+        "align": "center",
+        "verticalAlign": "center",
+        "font": "Arial",
+        "fontSize": 52,
+        "color": "#FFFFFF",
+        "backgroundColor": "#B91C1C",
+        "zIndex": 21
+      }
+    },
+    {
+      "id": "channel-name",
+      "type": "text",
+      "binding": "{{channel.name}}",
+      "optional": true,
+      "style": {
+        "position": { "mode": "relative", "region": "top", "heightFraction": 0.02 },
+        "align": "center",
+        "verticalAlign": "center",
+        "font": "Arial",
+        "fontSize": 26,
+        "color": "#D1D5DB",
+        "zIndex": 22
+      }
+    },
+    {
+      "id": "video",
+      "type": "video",
+      "binding": "{{video.path}}",
+      "style": {
+        "position": { "mode": "relative", "region": "middle", "heightFraction": 0.63 },
+        "fit": "contain",
+        "zIndex": 10
+      }
+    },
+    {
+      "id": "subtitle",
+      "type": "subtitle",
+      "binding": "{{subtitle.ass}}",
+      "style": {
+        "position": { "mode": "relative", "region": "bottom", "heightFraction": 0.25 },
+        "font": "Arial",
+        "fontSize": 58,
+        "color": "#F5F5F5",
+        "outlineColor": "#000000",
+        "outlineWidth": 3,
+        "zIndex": 30
+      }
+    },
+    {
+      "id": "logo",
+      "type": "logo",
+      "binding": "{{channel.logo}}",
+      "optional": true,
+      "style": {
+        "position": { "mode": "absolute", "x": "78%", "y": "2.5%", "width": 130, "height": 130 },
+        "zIndex": 16
+      }
+    }
+  ]
+}

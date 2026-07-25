@@ -10,8 +10,7 @@ export interface OllamaChatOptions {
 }
 
 interface OllamaChatResponseBody {
-  message?: { role: string; content: string };
-  done?: boolean;
+  choices?: { message?: { role: string; content: string } }[];
 }
 
 /** Thin transport-layer abstraction over Ollama's `/api/chat` HTTP endpoint. */
@@ -50,25 +49,64 @@ export class OllamaProvider implements IOllamaProvider {
         signal: controller.signal,
       });
 
+      const bodyText = await response.text();
+
       if (!response.ok) {
-        const body = await response.text().catch(() => '');
         throw AppError.networkError(
-          `Ollama responded with HTTP ${response.status}${body ? `: ${body}` : ''}`,
+          `Ollama responded with HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
         );
       }
 
-      const data = (await response.json()) as OllamaChatResponseBody;
-      return data.message?.content ?? '';
+      const data = parseResponseBody(bodyText);
+      return data.choices?.[0]?.message?.content ?? '';
     } catch (error) {
       if (error instanceof AppError) throw error;
 
       if (error instanceof Error && error.name === 'AbortError') {
-        throw AppError.ollamaTimeout(`Ollama request timed out after ${timeoutMs}ms.`, error);
+        throw AppError.llmTimeout(`Ollama request timed out after ${timeoutMs}ms.`, error);
       }
 
       throw AppError.networkError('Failed to reach the Ollama server.', error);
     } finally {
       clearTimeout(timeoutHandle);
     }
+  }
+}
+
+/**
+ * Parses the response body as a single JSON object. Falls back to reading it as
+ * SSE-style `data: {...}` chunks (concatenating streamed content deltas) in case
+ * the server ignores `stream: false` and streams anyway.
+ */
+function parseResponseBody(bodyText: string): OllamaChatResponseBody {
+  try {
+    return JSON.parse(bodyText) as OllamaChatResponseBody;
+  } catch (error) {
+    const chunks = bodyText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice('data:'.length).trim())
+      .filter((line) => line.length > 0 && line !== '[DONE]');
+
+    if (chunks.length === 0) {
+      throw error;
+    }
+
+    const content = chunks
+      .map((chunk) => {
+        try {
+          const parsed = JSON.parse(chunk) as {
+            choices?: { delta?: { content?: string }; message?: { content?: string } }[];
+          };
+          const choice = parsed.choices?.[0];
+          return choice?.delta?.content ?? choice?.message?.content ?? '';
+        } catch {
+          return '';
+        }
+      })
+      .join('');
+
+    return { choices: [{ message: { role: 'assistant', content } }] };
   }
 }

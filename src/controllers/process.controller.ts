@@ -7,6 +7,7 @@ import type { IHighlightService } from '../services/highlight.service.js';
 import type { IRendererService } from '../services/renderer.service.js';
 import type { HighlightClip, ProcessResult } from '../types/highlight.js';
 import type { TranscriptChunk, TranscriptDocument } from '../types/transcript.js';
+import type { RenderContext } from '../types/template.js';
 
 export interface ProcessControllerDeps {
   youtubeService: IYoutubeService;
@@ -29,7 +30,13 @@ export class ProcessController {
   constructor(private readonly deps: ProcessControllerDeps) {}
 
   /** Runs the full highlight-extraction and clip-rendering pipeline for a single YouTube URL. */
-  async process(url: string): Promise<ProcessResult> {
+  async process(
+    url: string,
+    template?: string,
+    channel?: RenderContext['channel'],
+    actingAs?: string,
+    customPrompt?: string,
+  ): Promise<ProcessResult> {
     const {
       youtubeService,
       transcriptService,
@@ -55,7 +62,13 @@ export class ProcessController {
     const transcriptPath = await transcriptService.saveTranscript(transcriptDocument);
 
     const chunks = transcriptService.chunkTranscript(transcriptResult);
-    const clipGroups = await this.analyzeChunksConcurrently(chunks, ollamaService, logger);
+    const clipGroups = await this.analyzeChunksConcurrently(
+      chunks,
+      ollamaService,
+      logger,
+      actingAs,
+      customPrompt,
+    );
 
     const highlights = highlightService.mergeAndRank(clipGroups);
 
@@ -63,6 +76,8 @@ export class ProcessController {
       download.videoPath,
       highlights,
       transcriptResult,
+      template,
+      channel,
     );
 
     logger.info(
@@ -87,8 +102,12 @@ export class ProcessController {
     chunks: TranscriptChunk[],
     ollamaService: IOllamaService,
     logger: Logger,
+    actingAs?: string,
+    customPrompt?: string,
   ): Promise<HighlightClip[][]> {
-    const settled = await Promise.allSettled(chunks.map((chunk) => ollamaService.analyzeChunk(chunk)));
+    const settled = await Promise.allSettled(
+      chunks.map((chunk) => ollamaService.analyzeChunk(chunk, actingAs, customPrompt)),
+    );
 
     return settled.flatMap((outcome, index) => {
       if (outcome.status === 'fulfilled') return [outcome.value];

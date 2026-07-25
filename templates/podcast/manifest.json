@@ -1,0 +1,7 @@
+{
+  "id": "podcast",
+  "name": "Podcast",
+  "version": "1.0.0",
+  "description": "Episode title, a blurred-background-fitted video (never cropping the speaker), and large easy-read captions — tuned for podcasts, interviews, educational, motivational, and discussion content.",
+  "aspectRatio": "9:16"
+}
