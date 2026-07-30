@@ -39,6 +39,7 @@ const layerStyleSchema = z
       .optional(),
     font: z.string().optional(),
     fontSize: z.number().positive().optional(),
+    fontWeight: z.number().positive().optional(),
     minFontSize: z.number().positive().optional(),
     bold: z.boolean().optional(),
     outlineColor: z.string().optional(),

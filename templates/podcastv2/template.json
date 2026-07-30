@@ -1,0 +1,83 @@
+{
+  "id": "podcastv2",
+  "canvas": {
+    "width": 1080,
+    "height": 1920,
+    "safeArea": {
+      "top": 80,
+      "right": 60,
+      "bottom": 100,
+      "left": 60
+    }
+  },
+  "layers": [
+    {
+      "id": "video",
+      "type": "video",
+      "binding": "{{video.path}}",
+      "style": {
+        "position": {
+          "mode": "absolute",
+          "x": 0,
+          "y": 0,
+          "width": "100%",
+          "height": "100%"
+        },
+        "fit": "cover",
+        "zIndex": 0
+      }
+    },
+    {
+      "id": "title",
+      "type": "title",
+      "binding": "{{clip.title}}",
+      "style": {
+        "position": {
+          "mode": "absolute",
+          "x": "5%",
+          "y": "3%",
+          "width": "90%",
+          "height": "10%"
+        },
+        "align": "center",
+        "verticalAlign": "center",
+        "padding": 24,
+        "zIndex": 20,
+        "color": "#FFFFFF",
+        "fontWeight": 600,
+        "backgroundColor": "#200f75",
+        "shadowColor": "#000000",
+        "backgroundFit": "block",
+        "backgroundPadding": 24,
+        "font": "Arial",
+        "fontSize": 60,
+        "minFontSize": 32,
+        "bold": true
+      }
+    },
+    {
+      "id": "subtitle",
+      "type": "subtitle",
+      "binding": "{{subtitle.ass}}",
+      "style": {
+        "position": {
+          "mode": "absolute",
+          "x": "5%",
+          "y": "76%",
+          "width": "90%",
+          "height": "18%"
+        },
+        "align": "center",
+        "verticalAlign": "center",
+        "zIndex": 30,
+        "font": "Arial",
+        "fontSize": 56,
+        "color": "#FFFFFF",
+        "outlineColor": "#000000",
+        "outlineWidth": 4,
+        "shadowColor": "#000000",
+        "shadowDepth": 2
+      }
+    }
+  ]
+}
