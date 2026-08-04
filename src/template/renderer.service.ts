@@ -5,7 +5,7 @@ import type { ITemplateAssService } from './ass.service.js';
 import type { IFiltergraphService, RenderHints } from './filtergraph.service.js';
 import type { EnrichedLayer } from './template.service.js';
 import type { Canvas, RenderContext } from '../types/template.js';
-
+import type { Logger } from '../utils/logger.js';
 export interface TemplateRendererServiceOptions {
   ffmpegBinaryPath: string;
   preset: string;
@@ -22,6 +22,7 @@ export interface ComposeInput {
   assPath: string;
   outputPath: string;
   hints: RenderHints;
+  logger?: Logger;
 }
 
 export type TemplateRenderErrorCode = 'TEMPLATE_RENDER_FAILED' | 'UNSUPPORTED_CODEC' | 'OUTPUT_WRITE_FAILED';
@@ -70,7 +71,7 @@ export class TemplateRendererService implements ITemplateRendererService {
     private readonly filtergraphService: IFiltergraphService,
   ) {}
 
-  async compose({ context, enrichedLayers, canvas, templateDir, assPath, outputPath, hints }: ComposeInput): Promise<void> {
+  async compose({ context, enrichedLayers, canvas, templateDir, assPath, outputPath, hints, logger }: ComposeInput): Promise<void> {
     const resolvedLayers = this.layoutService.computeLayout(canvas, enrichedLayers);
 
     const subtitleLayer = resolvedLayers.find((l) => l.type === 'subtitle');
@@ -104,7 +105,7 @@ export class TemplateRendererService implements ITemplateRendererService {
     );
 
     try {
-      await retry(() => runCommand(this.options.ffmpegBinaryPath, args), { attempts: this.options.maxRetries });
+      await retry(() => runCommand(this.options.ffmpegBinaryPath, args, { logger }), { attempts: this.options.maxRetries });
     } catch (error) {
       const ffmpegStderr = error instanceof CommandError ? error.stderr : undefined;
       throw new TemplateRenderError(

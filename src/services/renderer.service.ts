@@ -214,6 +214,7 @@ export class RendererService implements IRendererService {
           sourceHeight: sourceResolution.height,
           focalPoint,
         },
+        logger: this.logger,
       });
     } catch (error) {
       if (error instanceof TemplateRenderError) {
