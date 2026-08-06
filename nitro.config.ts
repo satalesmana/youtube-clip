@@ -1,8 +1,19 @@
+import { resolve } from 'node:path';
 import { defineNitroConfig } from 'nitropack/config';
 
 export default defineNitroConfig({
   compatibilityDate: '2025-01-01',
   srcDir: 'server',
+  // Serve the web UI (public/) as static assets at the root, e.g. `/`, `/app.js`.
+  // NOTE: Nitro resolves `publicAssets[].dir` relative to `srcDir` (server/),
+  // so an absolute path is required here.
+  publicAssets: [
+    {
+      baseURL: '/',
+      dir: resolve(process.cwd(), 'public'),
+      maxAge: 60 * 60, // 1h browser cache for the UI shell
+    },
+  ],
   imports: {
     autoImport: false,
   },

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Viral Clip Studio — Riset &amp; Buat Klip Viral</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-logo">🎬</span>
+      <div>
+        <h1>Viral Clip Studio</h1>
+        <p class="tagline">Riset topik viral → cari video YouTube → buat short siap upload</p>
+      </div>
+    </div>
+    <div class="status-pill" id="server-status" title="Status koneksi server">
+      <span class="dot"></span><span id="status-text">menghubungkan…</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="research" role="tab" aria-selected="true">🔍 Riset Viral</button>
+    <button class="tab" data-tab="clip" role="tab" aria-selected="false">✂️ Buat Klip</button>
+    <button class="tab" data-tab="history" role="tab" aria-selected="false">🕘 Riwayat</button>
+  </nav>
+
+  <main>
+    <!-- ============ TAB: RISET VIRAL ============ -->
+    <section id="tab-research" class="tab-panel active">
+      <div class="card">
+        <div class="card-head">
+          <h2>🔍 Riset Topik Viral</h2>
+          <p class="muted">Kumpulkan sinyal dari RSS berita, Reddit, Google Trends &amp; X, lalu ranking dengan AI.</p>
+        </div>
+        <div class="research-controls">
+          <label>
+            Jumlah topik
+            <input type="number" id="res-max-trends" min="1" max="25" value="10" />
+          </label>
+          <label>
+            Bahasa
+            <select id="res-language">
+              <option value="auto">Auto</option>
+              <option value="id">Indonesia</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <label class="wide">
+            Subreddit (pisahkan koma)
+            <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
+          </label>
+          <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
+        </div>
+        <div class="progress hidden" id="research-progress">
+          <div class="progress-bar"><div class="progress-fill" id="research-progress-fill"></div></div>
+          <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal…</span>
+        </div>
+      </div>
+
+      <div id="research-results" class="results hidden">
+        <div class="results-head">
+          <h2>📊 Topik Terdeteksi</h2>
+          <span class="muted" id="research-meta"></span>
+        </div>
+        <div id="research-list"></div>
+      </div>
+
+      <div class="card error-card hidden" id="research-error">
+        <h3>⚠️ Gagal Riset</h3>
+        <p id="research-error-msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ TAB: BUAT KLIP ============ -->
+    <section id="tab-clip" class="tab-panel">
+      <div class="card">
+        <div class="card-head">
+          <h2>✂️ Buat Klip Viral</h2>
+          <p class="muted">Tempel URL YouTube — sistem akan menemukan momen paling viral dan render short 9:16 dengan caption animasi.</p>
+        </div>
+        <div class="clip-controls">
+          <label class="wide">
+            URL YouTube
+            <input type="url" id="clip-url" placeholder="https://www.youtube.com/watch?v=..." />
+          </label>
+          <label>
+            Template
+            <select id="clip-template">
+              <option value="">(default)</option>
+            </select>
+          </label>
+          <label>
+            Gaya
+            <select id="clip-acting">
+              <option value="">(default)</option>
+              <option value="viral">Viral</option>
+              <option value="goal">Goal</option>
+              <option value="motogp">MotoGP</option>
+            </select>
+          </label>
+          <label>
+            Nama channel
+            <input type="text" id="clip-channel-name" placeholder="opsional" />
+          </label>
+          <label>
+            Logo URL
+            <input type="url" id="clip-channel-logo" placeholder="opsional" />
+          </label>
+          <button class="btn primary" id="btn-clip">🎬 Buat Klip</button>
+        </div>
+        <div class="progress hidden" id="clip-progress">
+          <div class="progress-bar"><div class="progress-fill" id="clip-progress-fill"></div></div>
+          <span class="progress-label" id="clip-progress-label">Mengunduh video…</span>
+        </div>
+      </div>
+
+      <div id="clip-results" class="results hidden">
+        <div class="results-head">
+          <h2>🎥 Klip Siap Upload</h2>
+          <span class="muted" id="clip-meta"></span>
+        </div>
+        <div id="clip-list"></div>
+      </div>
+
+      <div class="card error-card hidden" id="clip-error">
+        <h3>⚠️ Gagal Membuat Klip</h3>
+        <p id="clip-error-msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ TAB: RIWAYAT ============ -->
+    <section id="tab-history" class="tab-panel">
+      <div class="card">
+        <div class="card-head">
+          <h2>🕘 Riwayat Klip</h2>
+          <p class="muted">Manifest klip yang sudah berhasil dirender (<code>outputs/metadata/clips.json</code>).</p>
+        </div>
+        <div id="history-list" class="history-list">
+          <p class="muted">Belum ada klip.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Viral Clip Studio — powered by <a href="https://github.com/satalesmana/youtube-clip" target="_blank" rel="noopener">youtube-clip</a> · Whisper · Ollama · FFmpeg</p>
+  </footer>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

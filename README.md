@@ -246,6 +246,27 @@ Response:
 **YouTube matching** uses the YouTube Data API v3 when `YOUTUBE_API_KEY` is
 set, otherwise falls back to `yt-dlp ytsearch` (no API key needed).
 
+## Web Interface
+
+A built-in web UI is served at the app root (`http://localhost:3000/`) — no
+separate frontend build or dev server needed.
+
+- **🔍 Riset Viral** — run the research pipeline with one click: pick the
+  number of topics, language, and subreddits; browse ranked trends with
+  scores, and jump straight from a matched YouTube video into clip
+  creation.
+- **✂️ Buat Klip** — paste a YouTube URL (or click "Buat Klip" on any
+  research result), choose a template / style / channel branding, and
+  render upload-ready 9:16 shorts with a live progress indicator.
+- **🕘 Riwayat** — lists every successfully rendered clip from
+  `outputs/metadata/clips.json`.
+
+The UI lives in `public/` (`index.html`, `app.js`, `styles.css`) and is
+served via `publicAssets` in `nitro.config.ts`. It talks to the same API
+endpoints described above, plus two read-only helpers:
+`GET /api/templates` (populates the template selector) and
+`GET /api/history` (clip manifest).
+
 ## Architecture
 
 ```

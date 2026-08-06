@@ -29,7 +29,14 @@ export default [
     },
   },
   {
-    ignores: ['.output/**', '.nitro/**', 'node_modules/**', 'dist/**', 'scripts/**'],
+    ignores: [
+      '.output/**',
+      '.nitro/**',
+      'node_modules/**',
+      'dist/**',
+      'scripts/**',
+      'public/**', // browser JS/CSS/HTML — not part of the Node/TS lint scope
+    ],
   },
   prettier,
 ];

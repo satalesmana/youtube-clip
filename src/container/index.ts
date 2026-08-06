@@ -201,6 +201,7 @@ const assStyle: AssStyleConfig = {
  * services above never know which template they're composing.
  */
 const manifestService = new ManifestService({ templatesDir: paths.templates });
+export { manifestService };
 const templateLoaderService = new TemplateLoaderService(manifestService);
 const bindingService = new BindingService();
 const layoutService = new LayoutService();
