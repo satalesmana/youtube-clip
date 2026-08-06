@@ -88,6 +88,54 @@ const envSchema = z.object({
   RENDER_CRF: z.coerce.number().min(0).max(51).default(18),
   RENDER_AUDIO_BITRATE_KBPS: z.coerce.number().int().positive().default(192),
 
+  // --- Research pipeline ---
+  // YouTube Data API v3 key for video search (primary). When missing, the
+  // research service falls back to `yt-dlp` search (`ytsearch`).
+  YOUTUBE_API_KEY: z.string().optional(),
+  // Max videos returned per topic by the YouTube search provider.
+  YOUTUBE_SEARCH_MAX_RESULTS: z.coerce.number().int().positive().default(5),
+
+  // News RSS feeds (comma-separated). Each entry may include an optional
+  // `[label]` prefix and a `:lang` suffix, e.g.
+  // `[cnn-indonesia]https://www.cnnindonesia.com/rss:lang=id`.
+  RESEARCH_RSS_FEEDS: z.string().default(
+    'https://www.cnnindonesia.com/rss,https://feeds.bbci.co.uk/news/rss.xml,https://www.kompas.com/feed,https://rss.detik.com',
+  ),
+
+  // Number of recent items to read per RSS feed.
+  RESEARCH_RSS_MAX_ITEMS_PER_FEED: z.coerce.number().int().positive().default(15),
+  // RSS fetch timeout in milliseconds.
+  RESEARCH_RSS_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  // Comma-separated list of subreddits to pull hot posts from (falls back to
+  // the global `/r/popular` feed when empty).
+  RESEARCH_REDDIT_SUBREDDITS: z.string().default('worldnews,indonesia,technology'),
+  // Max posts to read per subreddit.
+  RESEARCH_REDDIT_MAX_POSTS_PER_SUBREDDIT: z.coerce.number().int().positive().default(10),
+  // Reddit fetch timeout in milliseconds.
+  RESEARCH_REDDIT_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  // Google Trends: max rising/trending queries to collect.
+  RESEARCH_TRENDS_MAX_QUERIES: z.coerce.number().int().positive().default(20),
+
+  // X/Twitter: search query used with the `xurl` CLI. Empty disables the X source.
+  RESEARCH_X_SEARCH_QUERY: z.string().default(''),
+  // Max posts to fetch from X.
+  RESEARCH_X_MAX_POSTS: z.coerce.number().int().positive().default(10),
+
+  // Research pipeline controls.
+  RESEARCH_MAX_TRENDS: z.coerce.number().int().positive().default(10),
+  // Language for LLM-generated topic titles/summaries (`auto`, `en`, `id`, ...).
+  RESEARCH_LANGUAGE: z.string().min(1).default('auto'),
+  // OpenAI-compatible API endpoint used by the research LLM. When empty, the
+  // main AI provider (Ollama / router) is reused.
+  RESEARCH_LLM_BASE_URL: z.string().optional(),
+  RESEARCH_LLM_API_KEY: z.string().optional(),
+  RESEARCH_LLM_MODEL: z.string().min(1).default('qwen3:14b'),
+  RESEARCH_LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
+  RESEARCH_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  RESEARCH_LLM_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
+
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   PORT: z.coerce.number().int().positive().default(3000),

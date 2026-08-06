@@ -17,6 +17,13 @@ import { ReframeService } from '../services/reframe.service.js';
 import { ThumbnailService } from '../services/thumbnail.service.js';
 import { RendererService } from '../services/renderer.service.js';
 import { ProcessController } from '../controllers/process.controller.js';
+import { ResearchController } from '../controllers/research.controller.js';
+import { RssProvider } from '../research/rss.provider.js';
+import { RedditProvider } from '../research/reddit.provider.js';
+import { TrendsProvider } from '../research/trends.provider.js';
+import { XProvider } from '../research/x.provider.js';
+import { YouTubeSearchProvider } from '../research/youtube-search.provider.js';
+import { ResearchService } from '../research/research.service.js';
 import { parseShellArgs } from '../utils/shell-args.js';
 import { ManifestService } from '../template/manifest.service.js';
 import { TemplateLoaderService } from '../template/template-loader.service.js';
@@ -251,6 +258,110 @@ export const processController = new ProcessController({
   logger: createLogger('process.controller'),
 });
 
+// --- Research pipeline ---
+
+const researchLogger = createLogger('research');
+
+/** Parses `RESEARCH_RSS_FEEDS` entries like `[label]url:lang=id` into feed configs. */
+function parseRssFeeds(raw: string): { url: string; label?: string; language?: string }[] {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      let label: string | undefined;
+      let language: string | undefined;
+
+      const langMatch = /:lang=([a-zA-Z-]+)\s*$/.exec(entry);
+      if (langMatch) {
+        language = langMatch[1];
+        entry = entry.slice(0, langMatch.index);
+      }
+
+      const labelMatch = /^\[([^\]]+)\]\s*(.*)$/.exec(entry);
+      if (labelMatch) {
+        label = labelMatch[1];
+        entry = labelMatch[2] ?? '';
+      }
+
+      return { url: entry.trim(), label, language };
+    })
+    .filter((feed) => feed.url.length > 0);
+}
+
+const rssProvider = new RssProvider(
+  {
+    feeds: parseRssFeeds(env.RESEARCH_RSS_FEEDS),
+    maxItemsPerFeed: env.RESEARCH_RSS_MAX_ITEMS_PER_FEED,
+    timeoutMs: env.RESEARCH_RSS_TIMEOUT_MS,
+  },
+  researchLogger.child({ component: 'rss.provider' }),
+);
+
+const redditProvider = new RedditProvider(
+  {
+    subreddits: env.RESEARCH_REDDIT_SUBREDDITS.split(',')
+      .map((sub) => sub.trim())
+      .filter(Boolean),
+    maxPostsPerSubreddit: env.RESEARCH_REDDIT_MAX_POSTS_PER_SUBREDDIT,
+    timeoutMs: env.RESEARCH_REDDIT_TIMEOUT_MS,
+  },
+  researchLogger.child({ component: 'reddit.provider' }),
+);
+
+const trendsProvider = new TrendsProvider(
+  {
+    maxQueries: env.RESEARCH_TRENDS_MAX_QUERIES,
+  },
+  researchLogger.child({ component: 'trends.provider' }),
+);
+
+const xProvider = new XProvider(
+  {
+    searchQuery: env.RESEARCH_X_SEARCH_QUERY,
+    maxPosts: env.RESEARCH_X_MAX_POSTS,
+  },
+  researchLogger.child({ component: 'x.provider' }),
+);
+
+const youtubeSearchProvider = new YouTubeSearchProvider(
+  {
+    apiKey: env.YOUTUBE_API_KEY,
+    maxResults: env.YOUTUBE_SEARCH_MAX_RESULTS,
+    ytDlpBinaryPath: env.YT_DLP_BINARY_PATH,
+  },
+  researchLogger.child({ component: 'youtube-search.provider' }),
+);
+
+const researchService = new ResearchService(
+  {
+    maxTrends: env.RESEARCH_MAX_TRENDS,
+    language: env.RESEARCH_LANGUAGE,
+    llm: env.RESEARCH_LLM_BASE_URL
+      ? {
+          baseUrl: env.RESEARCH_LLM_BASE_URL,
+          apiKey: env.RESEARCH_LLM_API_KEY,
+          model: env.RESEARCH_LLM_MODEL,
+          temperature: env.RESEARCH_LLM_TEMPERATURE,
+          timeoutMs: env.RESEARCH_LLM_TIMEOUT_MS,
+          maxRetries: env.RESEARCH_LLM_MAX_RETRIES,
+        }
+      : undefined,
+  },
+  rssProvider,
+  redditProvider,
+  trendsProvider,
+  xProvider,
+  youtubeSearchProvider,
+  aiProvider.provider,
+  researchLogger,
+);
+
+export const researchController = new ResearchController({
+  researchService,
+  logger: createLogger('research.controller'),
+});
+
 /** Exposed for tests/tooling that need direct access to individual services. */
 export const container = {
   paths,
@@ -278,4 +389,6 @@ export const container = {
   templateRendererService,
   rendererService,
   processController,
+  researchService,
+  researchController,
 };

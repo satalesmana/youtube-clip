@@ -21,6 +21,9 @@ export type ErrorCode =
   | 'TEMPLATE_DUPLICATE_LAYER_ID'
   | 'TEMPLATE_INVALID_COLOR'
   | 'TEMPLATE_INVALID_FONT'
+  | 'RESEARCH_SOURCE_FAILED'
+  | 'RESEARCH_ANALYSIS_FAILED'
+  | 'YOUTUBE_API_FAILED'
   | 'INTERNAL_ERROR';
 
 interface AppErrorParams {
@@ -92,6 +95,21 @@ export class AppError extends Error {
 
   static internal(message = 'Internal server error.', cause?: unknown): AppError {
     return new AppError({ code: 'INTERNAL_ERROR', message, statusCode: 500, cause });
+  }
+
+  /** A research data source (RSS, Reddit, Trends, X) failed while collecting signals. */
+  static researchSourceFailed(message: string, cause?: unknown): AppError {
+    return new AppError({ code: 'RESEARCH_SOURCE_FAILED', message, statusCode: 502, cause });
+  }
+
+  /** The LLM failed to analyze/rank research signals. */
+  static researchAnalysisFailed(message: string, cause?: unknown): AppError {
+    return new AppError({ code: 'RESEARCH_ANALYSIS_FAILED', message, statusCode: 502, cause });
+  }
+
+  /** The YouTube video search provider failed. */
+  static youtubeApiFailed(message: string, cause?: unknown): AppError {
+    return new AppError({ code: 'YOUTUBE_API_FAILED', message, statusCode: 502, cause });
   }
 
   /** Normalizes any thrown value into an `AppError`, preserving existing ones as-is. */

@@ -29,7 +29,7 @@ export default [
     },
   },
   {
-    ignores: ['.output/**', '.nitro/**', 'node_modules/**', 'dist/**'],
+    ignores: ['.output/**', '.nitro/**', 'node_modules/**', 'dist/**', 'scripts/**'],
   },
   prettier,
 ];

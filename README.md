@@ -181,16 +181,76 @@ On a request-level failure:
 Error codes: `INVALID_URL`, `VALIDATION_ERROR`, `DOWNLOAD_FAILED`,
 `FFMPEG_FAILED`, `WHISPER_FAILED`, `LLM_TIMEOUT`,
 `LLM_INVALID_RESPONSE`, `NETWORK_ERROR`, `FILE_PERMISSION_ERROR`,
-`MISSING_SOURCE_VIDEO`, `CORRUPTED_SOURCE_VIDEO`, `INTERNAL_ERROR`. Per-clip
+`MISSING_SOURCE_VIDEO`, `CORRUPTED_SOURCE_VIDEO`, `INTERNAL_ERROR`,
+`RESEARCH_SOURCE_FAILED`, `RESEARCH_ANALYSIS_FAILED`,
+`YOUTUBE_API_FAILED`. Per-clip
 errors (in `clipErrors`) use their own codes: `INVALID_TIMESTAMP`,
 `DURATION_OUT_OF_RANGE`, `INVALID_SUBTITLE`, `MISSING_FONT`,
 `UNSUPPORTED_CODEC`, `FFMPEG_FAILED`, `OUTPUT_WRITE_FAILED`,
 `THUMBNAIL_FAILED`, `CORRUPTED_OUTPUT`.
 
+### `POST /api/research`
+
+Finds the most viral topics right now from news RSS feeds, Reddit, Google
+Trends and X (when configured), ranks them with the LLM, and matches YouTube
+videos for each topic — so you can feed the results straight into
+`POST /api/process` to generate clips.
+
+Body (all optional):
+
+```json
+{ "max_trends": 10, "language": "id", "subreddits": "worldnews,indonesia" }
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "generatedAt": "2026-08-06T10:40:49.959Z",
+  "signalCount": 30,
+  "trends": [
+    {
+      "slug": "openai-new-model",
+      "title": "OpenAI releases new flagship model",
+      "summary": "OpenAI dropped a new model topping benchmarks; tech Twitter is exploding.",
+      "score": 95,
+      "keywords": "openai new model, openai benchmark",
+      "category": "tech",
+      "sources": [],
+      "videos": [
+        {
+          "videoId": "URKml8lgw8Y",
+          "url": "https://www.youtube.com/watch?v=URKml8lgw8Y",
+          "title": "OpenAI is so back... GPT 5.6 Sol first look",
+          "channel": "Fireship",
+          "durationSeconds": 299,
+          "viewCount": 815591
+        }
+      ]
+    }
+  ],
+  "skippedSources": [{ "source": "x", "reason": "unavailable or disabled" }]
+}
+```
+
+**Signal sources** (each is optional and failure-isolated):
+
+| Source | How | Requires |
+|---|---|---|
+| News RSS | Fetch latest items from `RESEARCH_RSS_FEEDS` (RSS 2.0 / Atom) | nothing |
+| Reddit | Hot posts from `RESEARCH_REDDIT_SUBREDDITS` (`r/popular` fallback) | nothing |
+| Google Trends | Trending/rising queries via Pytrends | `pip install pytrends` |
+| X/Twitter | Recent posts matching `RESEARCH_X_SEARCH_QUERY` via `xurl` CLI | `xurl auth oauth2` |
+
+**YouTube matching** uses the YouTube Data API v3 when `YOUTUBE_API_KEY` is
+set, otherwise falls back to `yt-dlp ytsearch` (no API key needed).
+
 ## Architecture
 
 ```
 server/api/process.post.ts   → HTTP layer only: parse, validate, delegate, map errors
+server/api/research.post.ts  → HTTP layer for the research pipeline
 src/controllers/              → orchestrates the pipeline, no HTTP-specific code
 src/services/                 → one responsibility each, all behind an interface
 src/providers/                → thin transport clients (Ollama HTTP)
@@ -208,6 +268,26 @@ controller, and map errors to HTTP responses via
 (`IYoutubeService`, `IWhisperService`, etc.) and constructed with its
 dependencies passed in (constructor injection), so any service can be
 swapped or unit-tested in isolation without touching the others.
+
+### Research pipeline
+
+`src/research/` implements the `POST /api/research` flow:
+
+1. **Source providers** (`rss.provider.ts`, `reddit.provider.ts`,
+   `trends.provider.ts`, `x.provider.ts`) collect raw signals in parallel.
+   Each source is optional and failure-isolated: a dead feed, a blocked
+   subreddit, or a missing CLI never fails the request — it lands in
+   `skippedSources` instead.
+2. **`research.service.ts`** feeds the signals to the LLM (strict-JSON
+   prompt in `research.prompt.ts`), which returns ranked viral topics
+   (`slug`, `title`, `summary`, `score`, `keywords`, `category`).
+3. **`youtube-search.provider.ts`** matches each topic against YouTube via
+   the Data API v3 (when `YOUTUBE_API_KEY` is set) or `yt-dlp ytsearch`
+   (no key needed), attaching real videos with durations and view counts.
+
+The research LLM reuses the main AI provider (Ollama / router) unless a
+dedicated OpenAI-compatible endpoint is configured via
+`RESEARCH_LLM_BASE_URL` / `RESEARCH_LLM_API_KEY` / `RESEARCH_LLM_MODEL`.
 
 ### Rendering pipeline
 
