@@ -73,6 +73,45 @@
     a.remove();
   }
 
+  /**
+   * Copy text to the clipboard with a fallback. The async Clipboard API only
+   * exists in secure contexts (HTTPS or localhost); on plain-HTTP LAN access
+   * (`http://192.168.x.x:3000`) it is undefined, so we fall back to the
+   * legacy `document.execCommand('copy')` via a temporary textarea.
+   */
+  function copyText(text) {
+    return new Promise((resolve) => {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(
+          () => resolve(true),
+          () => resolve(copyTextLegacy(text)),
+        );
+      } else {
+        resolve(copyTextLegacy(text));
+      }
+    });
+  }
+
+  function copyTextLegacy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      ok = false;
+    }
+    ta.remove();
+    return ok;
+  }
+
   /* ---------- Tabs ---------- */
   $$('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -84,23 +123,6 @@
       if (tab.dataset.tab === 'history') loadHistory();
     });
   });
-
-  /* ---------- Server status ---------- */
-  async function checkServer() {
-    try {
-      const res = await fetch('/api/research', { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } });
-      // Even an error response proves the server is up.
-      const pill = $('#server-status');
-      pill.classList.add('online');
-      pill.classList.remove('offline');
-      $('#status-text').textContent = res.ok ? 'online' : 'online';
-    } catch {
-      const pill = $('#server-status');
-      pill.classList.add('offline');
-      pill.classList.remove('online');
-      $('#status-text').textContent = 'offline';
-    }
-  }
 
   /* ---------- Templates ---------- */
   async function loadTemplates() {
@@ -318,9 +340,8 @@
 
     if (action === 'copy') {
       if (url) {
-        navigator.clipboard?.writeText(url).then(
-          () => toast('Disalin ke clipboard ✓', 'success'),
-          () => toast('Gagal menyalin', 'error'),
+        copyText(url).then(
+          (ok) => ok ? toast('Disalin ke clipboard ✓', 'success') : toast('Gagal menyalin', 'error'),
         );
       }
     } else if (action === 'clip') {
@@ -335,7 +356,5 @@
   });
 
   /* ---------- Init ---------- */
-  checkServer();
   loadTemplates();
-  setInterval(checkServer, 15000);
 })();
