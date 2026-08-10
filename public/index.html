@@ -46,18 +46,21 @@
             </select>
           </label>
           <label class="wide">
+            Keyword pencarian (Google News)
+            <input type="text" id="res-keyword" placeholder="misal: teknologi AI, politik Indonesia, Piala Dunia" />
+          </label>
+          <label class="wide">
             Subreddit (pisahkan koma)
             <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
           </label>
           <label class="wide">
             Provider riset
-            <select id="res-providers" multiple size="4">
-              <option value="rss" selected>📰 RSS Berita</option>
-              <option value="reddit" selected>🤖 Reddit</option>
-              <option value="trends" selected>📈 Google Trends</option>
-              <option value="x" selected>🐦 X/Twitter</option>
-            </select>
-            <small class="muted">Tahan Ctrl/Cmd untuk multi-select</small>
+            <div class="provider-chips" id="res-providers">
+              <button type="button" class="chip-toggle active" data-provider="rss">📰 RSS Berita</button>
+              <button type="button" class="chip-toggle active" data-provider="reddit">🤖 Reddit</button>
+              <button type="button" class="chip-toggle active" data-provider="trends">📈 Google Trends</button>
+              <button type="button" class="chip-toggle active" data-provider="x">🐦 X/Twitter</button>
+            </div>
           </label>
           <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
         </div>

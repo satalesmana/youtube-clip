@@ -124,6 +124,11 @@
     });
   });
 
+  /* ---------- Provider chip toggles ---------- */
+  $$('.chip-toggle').forEach((chip) => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+
   /* ---------- Templates ---------- */
   async function loadTemplates() {
     try {
@@ -150,15 +155,14 @@
         max_trends: Number($('#res-max-trends').value) || 10,
         language: $('#res-language').value,
       };
+      const keyword = $('#res-keyword').value.trim();
+      if (keyword) body.keyword = keyword;
       const subs = $('#res-subreddits').value.trim();
       if (subs) body.subreddits = subs;
 
-      // Multi-select providers
-      const providersSel = $('#res-providers');
-      if (providersSel) {
-        const selected = [...providersSel.selectedOptions].map((o) => o.value);
-        if (selected.length > 0) body.providers = selected;
-      }
+      // Read selected providers from chip toggles
+      const selectedProviders = $$('.chip-toggle.active').map((c) => c.dataset.provider);
+      if (selectedProviders.length > 0) body.providers = selectedProviders;
 
       setProgress('research', true, 35, 'Menganalisis topik viral dengan AI…');
       const data = await api('/api/research', body);
