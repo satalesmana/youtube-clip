@@ -55,14 +55,37 @@ export function parseResearchLlmResponse(raw: string): ResearchTrend[] {
   }
 
   let parsed: unknown;
+
+  // Strategy 1: Direct parse.
   try {
     parsed = JSON.parse(text);
   } catch {
-    // Tolerate a single trailing comma (common LLM mistake).
-    const fixed = text.replace(/,\s*([}\]])/g, '$1');
-    try {
-      parsed = JSON.parse(fixed);
-    } catch {
+    // Strategy 2: Try to extract JSON object/array from surrounding text.
+    const extracted = extractJsonFromText(text);
+    if (extracted) {
+      try {
+        parsed = JSON.parse(extracted);
+      } catch {
+        // Strategy 3: Fix common LLM JSON mistakes.
+        const fixed = fixLlmJson(extracted);
+        try {
+          parsed = JSON.parse(fixed);
+        } catch {
+          // Strategy 4: Try to extract even more aggressively (nested braces).
+          const deepExtracted = extractJsonDeep(text);
+          if (deepExtracted) {
+            const deepFixed = fixLlmJson(deepExtracted);
+            try {
+              parsed = JSON.parse(deepFixed);
+            } catch {
+              throw AppError.researchAnalysisFailed('LLM research response was not valid JSON.');
+            }
+          } else {
+            throw AppError.researchAnalysisFailed('LLM research response was not valid JSON.');
+          }
+        }
+      }
+    } else {
       throw AppError.researchAnalysisFailed('LLM research response was not valid JSON.');
     }
   }
@@ -98,7 +121,179 @@ export function parseResearchLlmResponse(raw: string): ResearchTrend[] {
 }
 
 function stripCodeFences(text: string): string {
-  return text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  let cleaned = text;
+
+  // Strip <think>...</think> tags (DeepSeek reasoning models output these before JSON)
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '');
+
+  // Strip <think>...</think> tags (some models use this variant)
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '');
+
+  // Strip markdown code fences
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+
+  return cleaned.trim();
+}
+
+/**
+ * Extracts a JSON object or array from text that may contain surrounding prose.
+ * Looks for the first `{...}` or `[...]` block.
+ */
+function extractJsonFromText(text: string): string | null {
+  // Try to find a JSON object (starts with { ends with })
+  const objectMatch = /\{[\s\S]*\}/.exec(text);
+  if (objectMatch) return objectMatch[0];
+
+  // Try to find a JSON array (starts with [ ends with ])
+  const arrayMatch = /\[[\s\S]*\]/.exec(text);
+  if (arrayMatch) return arrayMatch[0];
+
+  return null;
+}
+
+/**
+ * More aggressive extraction: finds the first `{` and matches braces to find
+ * the complete object, ignoring text before/after.
+ */
+function extractJsonDeep(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start === -1) {
+    const arrStart = text.indexOf('[');
+    if (arrStart === -1) return null;
+    return extractArrayDeep(text, arrStart);
+  }
+  return extractObjectDeep(text, start);
+}
+
+function extractObjectDeep(text: string, start: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]!;
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  // If we get here, the JSON might be truncated — return what we have
+  // and let fixLlmJson try to repair it.
+  if (depth > 0) {
+    return text.slice(start);
+  }
+  return null;
+}
+
+function extractArrayDeep(text: string, start: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]!;
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === '[') depth++;
+    else if (ch === ']') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  if (depth > 0) {
+    return text.slice(start);
+  }
+  return null;
+}
+
+/**
+ * Fixes common JSON mistakes made by LLMs:
+ * - Trailing commas before } or ]
+ * - Comments (single-line and multi-line)
+ * - Unquoted keys
+ * - Single quotes instead of double quotes
+ * - Truncated JSON (unclosed braces/brackets)
+ */
+function fixLlmJson(text: string): string {
+  let fixed = text;
+
+  // Remove single-line comments (// ...)
+  fixed = fixed.replace(/\/\/.*$/gm, '');
+
+  // Remove multi-line comments (/* ... */)
+  fixed = fixed.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Remove trailing commas before } or ]
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+
+  // Fix unquoted keys: {"key": ...} patterns where key isn't quoted
+  fixed = fixed.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":');
+
+  // Replace single quotes with double quotes (simple cases only)
+  // Only do this if there are no double quotes as values
+  if (!fixed.includes('"')) {
+    fixed = fixed.replace(/'/g, '"');
+  }
+
+  // Try to fix truncated JSON by closing open braces/brackets
+  const openBraces = (fixed.match(/{/g) ?? []).length;
+  const closeBraces = (fixed.match(/}/g) ?? []).length;
+  const openBrackets = (fixed.match(/\[/g) ?? []).length;
+  const closeBrackets = (fixed.match(/]/g) ?? []).length;
+
+  // Close any unclosed arrays first, then objects
+  for (let i = 0; i < openBrackets - closeBrackets; i++) {
+    fixed += ']';
+  }
+  for (let i = 0; i < openBraces - closeBraces; i++) {
+    fixed += '}';
+  }
+
+  // Remove any trailing comma before the closing brackets we just added
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+
+  return fixed;
 }
 
 function clampScore(value: number): number {

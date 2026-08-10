@@ -90,7 +90,13 @@ export class OpenAiCompatibleLlm implements LlmProvider {
       const data = JSON.parse(bodyText) as {
         choices?: { message?: { content?: string } }[];
       };
-      return data.choices?.[0]?.message?.content ?? '';
+      const content = data.choices?.[0]?.message?.content ?? '';
+      this.options.logger.debug(
+        { promptLength: options.prompt.length, responseLength: content.length, model: options.model ?? this.options.model },
+        'LLM response received',
+      );
+      this.options.logger.trace({ content }, 'LLM raw response');
+      return content;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw AppError.llmTimeout(`Research LLM request timed out after ${timeoutMs}ms.`, error);
