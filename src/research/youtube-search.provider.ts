@@ -7,6 +7,8 @@ export interface YouTubeSearchProviderOptions {
   /** YouTube Data API v3 key. When empty, falls back to yt-dlp search. */
   apiKey?: string;
   maxResults: number;
+  /** Timeout per search request in milliseconds. */
+  timeoutMs: number;
   /** yt-dlp binary path (used for the fallback search). */
   ytDlpBinaryPath: string;
 }
@@ -53,66 +55,77 @@ export class YouTubeSearchProvider implements IYouTubeSearchProvider {
 
   /** Primary: YouTube Data API v3 `search.list` + `videos.list` for details. */
   private async searchViaApi(query: string): Promise<YouTubeVideoResult[] | null> {
-    const { apiKey, maxResults } = this.options;
+    const { apiKey, maxResults, timeoutMs } = this.options;
     const baseUrl = 'https://www.googleapis.com/youtube/v3';
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
-    const searchUrl =
-      `${baseUrl}/search?part=snippet&type=video&maxResults=${maxResults}` +
-      `&q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey!)}`;
+    try {
+      const searchUrl =
+        `${baseUrl}/search?part=snippet&type=video&maxResults=${maxResults}` +
+        `&q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey!)}`;
 
-    const searchResponse = await fetch(searchUrl);
-    const searchBody = (await searchResponse.json()) as YouTubeSearchApiResponse;
+      const searchResponse = await fetch(searchUrl, { signal: controller.signal });
+      const searchBody = (await searchResponse.json()) as YouTubeSearchApiResponse;
 
-    if (!searchResponse.ok || searchBody.error) {
-      throw AppError.youtubeApiFailed(
-        `YouTube Data API search failed: ${searchBody.error?.message ?? `HTTP ${searchResponse.status}`}`,
+      if (!searchResponse.ok || searchBody.error) {
+        throw AppError.youtubeApiFailed(
+          `YouTube Data API search failed: ${searchBody.error?.message ?? `HTTP ${searchResponse.status}`}`,
+        );
+      }
+
+      const items = searchBody.items ?? [];
+      const videoIds = items
+        .map((item) => item.id?.videoId)
+        .filter((id): id is string => Boolean(id));
+
+      if (videoIds.length === 0) return [];
+
+      // Fetch duration + viewCount for each video (1 videos.list call).
+      const detailsUrl =
+        `${baseUrl}/videos?part=contentDetails,statistics&id=${videoIds.join(',')}` +
+        `&key=${encodeURIComponent(apiKey!)}`;
+
+      const detailsResponse = await fetch(detailsUrl, { signal: controller.signal });
+      const detailsBody = (await detailsResponse.json()) as YouTubeSearchApiResponse;
+
+      if (!detailsResponse.ok || detailsBody.error) {
+        throw AppError.youtubeApiFailed(
+          `YouTube Data API videos.list failed: ${detailsBody.error?.message ?? `HTTP ${detailsResponse.status}`}`,
+        );
+      }
+
+      const detailsById = new Map(
+        (detailsBody.items ?? []).map((item) => [item.id?.videoId, item]),
       );
+
+      return items
+        .map((item): YouTubeVideoResult | undefined => {
+          const videoId = item.id?.videoId;
+          if (!videoId) return undefined;
+
+          const details = detailsById.get(videoId);
+          return {
+            videoId,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            title: item.snippet?.title ?? query,
+            channel: item.snippet?.channelTitle ?? '',
+            durationSeconds: parseIso8601Duration(details?.contentDetails?.duration),
+            viewCount: details?.statistics?.viewCount
+              ? Number(details.statistics.viewCount)
+              : undefined,
+            publishedAt: item.snippet?.publishedAt,
+          };
+        })
+        .filter((video): video is YouTubeVideoResult => video !== undefined);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw AppError.youtubeApiFailed(`YouTube search timed out after ${timeoutMs}ms.`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutHandle);
     }
-
-    const items = searchBody.items ?? [];
-    const videoIds = items
-      .map((item) => item.id?.videoId)
-      .filter((id): id is string => Boolean(id));
-
-    if (videoIds.length === 0) return [];
-
-    // Fetch duration + viewCount for each video (1 videos.list call).
-    const detailsUrl =
-      `${baseUrl}/videos?part=contentDetails,statistics&id=${videoIds.join(',')}` +
-      `&key=${encodeURIComponent(apiKey!)}`;
-
-    const detailsResponse = await fetch(detailsUrl);
-    const detailsBody = (await detailsResponse.json()) as YouTubeSearchApiResponse;
-
-    if (!detailsResponse.ok || detailsBody.error) {
-      throw AppError.youtubeApiFailed(
-        `YouTube Data API videos.list failed: ${detailsBody.error?.message ?? `HTTP ${detailsResponse.status}`}`,
-      );
-    }
-
-    const detailsById = new Map(
-      (detailsBody.items ?? []).map((item) => [item.id?.videoId, item]),
-    );
-
-    return items
-      .map((item): YouTubeVideoResult | undefined => {
-        const videoId = item.id?.videoId;
-        if (!videoId) return undefined;
-
-        const details = detailsById.get(videoId);
-        return {
-          videoId,
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          title: item.snippet?.title ?? query,
-          channel: item.snippet?.channelTitle ?? '',
-          durationSeconds: parseIso8601Duration(details?.contentDetails?.duration),
-          viewCount: details?.statistics?.viewCount
-            ? Number(details.statistics.viewCount)
-            : undefined,
-          publishedAt: item.snippet?.publishedAt,
-        };
-      })
-      .filter((video): video is YouTubeVideoResult => video !== undefined);
   }
 
   /** Fallback: `yt-dlp "ytsearchN:query" --print` with flat-playlist. */

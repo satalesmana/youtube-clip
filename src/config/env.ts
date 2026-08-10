@@ -22,7 +22,7 @@ const envSchema = z.object({
   // AI router (e.g. 9Router), an OpenAI-compatible `/v1/chat/completions` gateway.
   ROUTER_BASE_URL: z.url().optional(),
   ROUTER_API_KEY: z.string().min(1).optional(),
-  ROUTER_MODEL: z.string().min(1).default('FreeModel'),
+  ROUTER_MODEL: z.string().min(1).default('auto'),
   ROUTER_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   ROUTER_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   ROUTER_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
@@ -94,6 +94,8 @@ const envSchema = z.object({
   YOUTUBE_API_KEY: z.string().optional(),
   // Max videos returned per topic by the YouTube search provider.
   YOUTUBE_SEARCH_MAX_RESULTS: z.coerce.number().int().positive().default(5),
+  // Timeout per YouTube search request in milliseconds.
+  YOUTUBE_SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
 
   // News RSS feeds (comma-separated). Each entry may include an optional
   // `[label]` prefix and a `:lang` suffix, e.g.
@@ -133,16 +135,19 @@ const envSchema = z.object({
 
   // Research pipeline controls.
   RESEARCH_MAX_TRENDS: z.coerce.number().int().positive().default(10),
+  // Max signals sent to the LLM (keeps prompt size manageable for local models).
+  RESEARCH_MAX_SIGNALS_FOR_LLM: z.coerce.number().int().positive().default(80),
   // Language for LLM-generated topic titles/summaries (`auto`, `en`, `id`, ...).
   RESEARCH_LANGUAGE: z.string().min(1).default('auto'),
-  // Dedicated OpenAI-compatible endpoint for the research LLM. When empty,
-  // the main AI backend (router, then local Ollama) is used instead.
+  // Research LLM config. A dedicated OpenAI-compatible endpoint for the
+  // research LLM; when BASE_URL is empty, the main AI backend (router, then
+  // local Ollama) is used instead. API key falls back to ROUTER_API_KEY.
   RESEARCH_LLM_BASE_URL: z.string().optional(),
   RESEARCH_LLM_API_KEY: z.string().optional(),
   // Research LLM model/temperature/timeout (used for the fallback backend too).
   RESEARCH_LLM_MODEL: z.string().min(1).default('qwen3:14b'),
   RESEARCH_LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
-  RESEARCH_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  RESEARCH_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
   RESEARCH_LLM_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
