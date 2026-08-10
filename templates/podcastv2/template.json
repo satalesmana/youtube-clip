@@ -16,13 +16,7 @@
       "type": "video",
       "binding": "{{video.path}}",
       "style": {
-        "position": {
-          "mode": "absolute",
-          "x": 0,
-          "y": 0,
-          "width": "100%",
-          "heightFraction": 0.62
-        },
+        "position": { "mode": "relative", "region": "middle", "heightFraction": 0.56 },
         "fit": "blur-background",
         "zIndex": 0
       }

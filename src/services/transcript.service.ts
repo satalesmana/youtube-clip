@@ -57,6 +57,7 @@ export class TranscriptService implements ITranscriptService {
     const durationSeconds = await probeDurationSeconds({
       binaryPath: ffmpegBinaryPath,
       inputPath: audioPath,
+      logger: this.logger,
     });
 
     return { audioPath, durationSeconds };

@@ -311,6 +311,7 @@ export class RendererService implements IRendererService {
     const actualDuration = await probeDurationSeconds({
       binaryPath: this.options.ffmpegBinaryPath,
       inputPath: outputPath,
+      logger: this.logger,
     });
 
     if (actualDuration > 0 && Math.abs(actualDuration - expectedDuration) > 2) {

@@ -45,16 +45,18 @@ export async function extractAudio(options: ExtractAudioOptions): Promise<void> 
 export interface ProbeDurationOptions {
   binaryPath: string;
   inputPath: string;
+  logger?: Logger;
 }
 
 /** Reads the duration (in seconds) of a media file using `ffprobe`-style output from FFmpeg. */
 export async function probeDurationSeconds({
   binaryPath,
   inputPath,
+  logger,
 }: ProbeDurationOptions): Promise<number> {
   try {
     // FFmpeg prints duration info to stderr when given no output; parse it from there.
-    const { stderr } = await runCommand(binaryPath, ['-i', inputPath]).catch((error: Error) => ({
+    const { stderr } = await runCommand(binaryPath, ['-i', inputPath], { logger }).catch((error: Error) => ({
       stdout: '',
       stderr: error.message,
       exitCode: 1,
