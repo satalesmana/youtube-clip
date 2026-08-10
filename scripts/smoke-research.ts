@@ -97,7 +97,7 @@ async function main() {
   );
   const x = new XProvider({ searchQuery: '', maxPosts: 5 }, logger);
   const youtube = new YouTubeSearchProvider(
-    { apiKey: undefined, maxResults: 3, ytDlpBinaryPath: 'yt-dlp' },
+    { apiKey: process.env.YOUTUBE_API_KEY, maxResults: 3, timeoutMs: 15_000, ytDlpBinaryPath: 'yt-dlp' },
     logger,
   );
 
@@ -127,6 +127,7 @@ async function main() {
   const service = new ResearchService(
     {
       maxTrends: 10,
+      maxSignalsForLlm: 80,
       language: 'auto',
     },
     rss,
@@ -141,7 +142,7 @@ async function main() {
   // We bypass `research()` (which re-collects) and test the private pieces
   // via the public surface: use the service to rank the stub + real signals.
   // @ts-expect-error testing internals
-  const trendsRanked = await service.analyzeAndRank([...STUB_SIGNALS, ...signals]);
+  const trendsRanked = await service.analyzeAndRank([...STUB_SIGNALS, ...signals], 10);
   console.log(`\n  ✓ LLM ranking: ${trendsRanked.length} trends`);
   for (const t of trendsRanked.slice(0, 5)) {
     console.log(`    - [${t.score}] ${t.title} (${t.category})`);
