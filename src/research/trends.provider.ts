@@ -12,8 +12,12 @@ export interface TrendsProviderOptions {
 }
 
 export interface ITrendsProvider {
-  /** Collects currently trending / rising search queries from Google Trends. */
-  fetchTrendingQueries(): Promise<ResearchSourceItem[]>;
+  /**
+   * Collects trending / rising search queries from Google News RSS.
+   * @param keyword Optional search keyword — when provided, uses the search
+   *   endpoint (`/rss/search?q={keyword}`) instead of the default topic feed.
+   */
+  fetchTrendingQueries(keyword?: string): Promise<ResearchSourceItem[]>;
 }
 
 interface FeedItem {
@@ -93,8 +97,12 @@ export class TrendsProvider implements ITrendsProvider {
     private readonly logger: Logger,
   ) {}
 
-  async fetchTrendingQueries(): Promise<ResearchSourceItem[]> {
-    const { feedUrl, maxQueries, timeoutMs } = this.options;
+  async fetchTrendingQueries(keyword?: string): Promise<ResearchSourceItem[]> {
+    // If a keyword is provided, use the search endpoint; otherwise use the default topic feed.
+    const feedUrl = keyword
+      ? `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=id&gl=ID&ceid=ID:id`
+      : this.options.feedUrl;
+    const { maxQueries, timeoutMs } = this.options;
 
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);

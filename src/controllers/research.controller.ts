@@ -20,7 +20,11 @@ export class ResearchController {
   async research(request?: ResearchRequest): Promise<ResearchResult> {
     const { researchService, logger } = this.deps;
     logger.info('Research started');
-    const result = await researchService.research(request?.providers);
+    const result = await researchService.research({
+      enabledProviders: request?.providers,
+      maxTrends: request?.max_trends,
+      keyword: request?.keyword,
+    });
     logger.info(
       { trendCount: result.trends.length, signalCount: result.signalCount },
       'Research completed',

@@ -9,6 +9,8 @@ export const researchRequestSchema = z.object({
   max_trends: z.coerce.number().int().min(1).max(25).optional(),
   /** Override the configured language for titles/summaries, e.g. `id`, `en`, `auto`. */
   language: z.string().trim().min(1).optional(),
+  /** Keyword for Google News search (empty = use default trending feed). */
+  keyword: z.string().trim().optional(),
   /** Comma-separated subreddit override (falls back to config when absent). */
   subreddits: z.string().trim().min(1).optional(),
   /** Comma-separated RSS feed override. */

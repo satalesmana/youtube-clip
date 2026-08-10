@@ -332,6 +332,7 @@ const youtubeSearchProvider = new YouTubeSearchProvider(
   {
     apiKey: env.YOUTUBE_API_KEY,
     maxResults: env.YOUTUBE_SEARCH_MAX_RESULTS,
+    timeoutMs: env.YOUTUBE_SEARCH_TIMEOUT_MS,
     ytDlpBinaryPath: env.YT_DLP_BINARY_PATH,
   },
   researchLogger.child({ component: 'youtube-search.provider' }),
@@ -355,6 +356,7 @@ const researchLlm = new OpenAiCompatibleLlm({
 const researchService = new ResearchService(
   {
     maxTrends: env.RESEARCH_MAX_TRENDS,
+    maxSignalsForLlm: env.RESEARCH_MAX_SIGNALS_FOR_LLM,
     language: env.RESEARCH_LANGUAGE,
   },
   rssProvider,
