@@ -28,10 +28,25 @@ export class VideoLayerBuilder implements ILayerFilterBuilder {
       const bgBlur = allocateLabel('vbgblur');
       const fgFit = allocateLabel('vfgfit');
 
+      // filterLines.push(
+      //   `[${inStream}]split=2[${bgRaw}][${fgRaw}]`,
+      //   `[${bgRaw}]scale=${rectWidth}:${rectHeight}:force_original_aspect_ratio=increase,crop=${rectWidth}:${rectHeight},gblur=sigma=25[${bgBlur}]`,
+      //   `[${fgRaw}]scale=${rectWidth}:${rectHeight}:force_original_aspect_ratio=decrease[${fgFit}]`,
+      //   `[${bgBlur}][${fgFit}]overlay=(W-w)/2:(H-h)/2[${outputLabel}]`,
+      // );
+
+      const fgHeight = Math.round(rectHeight * 0.5);
+
       filterLines.push(
         `[${inStream}]split=2[${bgRaw}][${fgRaw}]`,
+        
+        // 1. Background: Fills 100% width and 100% height with blur (no black bars)
         `[${bgRaw}]scale=${rectWidth}:${rectHeight}:force_original_aspect_ratio=increase,crop=${rectWidth}:${rectHeight},gblur=sigma=25[${bgBlur}]`,
-        `[${fgRaw}]scale=${rectWidth}:${rectHeight}:force_original_aspect_ratio=decrease[${fgFit}]`,
+        
+        // 2. Foreground: Scaled to fill 100% width x 70% height, then cropped to fit exact bounds
+        `[${fgRaw}]scale=${rectWidth}:${fgHeight}:force_original_aspect_ratio=increase,crop=${rectWidth}:${fgHeight}[${fgFit}]`,
+        
+        // 3. Overlay foreground directly in the center over the blurred background
         `[${bgBlur}][${fgFit}]overlay=(W-w)/2:(H-h)/2[${outputLabel}]`,
       );
     } else {
