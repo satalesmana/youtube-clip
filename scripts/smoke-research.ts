@@ -10,9 +10,9 @@ import { RedditProvider } from '../src/research/reddit.provider.js';
 import { TrendsProvider } from '../src/research/trends.provider.js';
 import { XProvider } from '../src/research/x.provider.js';
 import { YouTubeSearchProvider } from '../src/research/youtube-search.provider.js';
+import type { LlmProvider } from '../src/research/llm.provider.js';
 import { ResearchService } from '../src/research/research.service.js';
 import { createLogger } from '../src/utils/logger.js';
-import type { IOllamaProvider } from '../src/providers/ollama.provider.js';
 import type { ResearchSourceItem } from '../src/types/media.js';
 
 /** Minimal fake signals to test LLM ranking without external LLM. */
@@ -40,30 +40,32 @@ const STUB_SIGNALS: ResearchSourceItem[] = [
 const logger = createLogger('smoke-research');
 
 /** Stub provider that returns a fixed, valid JSON analysis. */
-class StubLlm implements IOllamaProvider {
+class StubLlm implements LlmProvider {
   async chat(): Promise<string> {
-    return JSON.stringify({
-      trends: [
-        {
-          slug: 'openai-new-model',
-          title: 'OpenAI releases new flagship model',
-          summary: 'OpenAI dropped a new model topping the benchmarks; tech Twitter is exploding.',
-          score: 95,
-          keywords: 'openai new model, openai benchmark, openai release',
-          category: 'tech',
-        },
-        {
-          slug: 'umkm-stimulus',
-          title: 'Pemerintah umumkan stimulus UMKM baru',
-          summary: 'Paket stimulus ekonomi baru untuk UMKM diumumkan pemerintah.',
-          score: 80,
-          keywords: 'stimulus umkm, kebijakan ekonomi pemerintah',
-          category: 'business',
-        },
-      ],
-    });
+    return STUB_LLM_RESPONSE;
   }
 }
+
+const STUB_LLM_RESPONSE = JSON.stringify({
+  trends: [
+    {
+      slug: 'openai-new-model',
+      title: 'OpenAI releases new flagship model',
+      summary: 'OpenAI dropped a new model topping the benchmarks; tech Twitter is exploding.',
+      score: 95,
+      keywords: 'openai new model, openai benchmark, openai release',
+      category: 'tech',
+    },
+    {
+      slug: 'umkm-stimulus',
+      title: 'Pemerintah umumkan stimulus UMKM baru',
+      summary: 'Paket stimulus ekonomi baru untuk UMKM diumumkan pemerintah.',
+      score: 80,
+      keywords: 'stimulus umkm, kebijakan ekonomi pemerintah',
+      category: 'business',
+    },
+  ],
+});
 
 async function main() {
   console.log('🧪 Research pipeline smoke test (LLM stubbed)\n');
@@ -85,7 +87,14 @@ async function main() {
     { subreddits: ['worldnews', 'technology'], maxPostsPerSubreddit: 5, timeoutMs: 8000 },
     logger,
   );
-  const trends = new TrendsProvider({ maxQueries: 10 }, logger);
+  const trends = new TrendsProvider(
+    {
+      feedUrl: 'https://news.google.com/rss/headlines/section/topic/NATION?hl=id&gl=ID&ceid=ID:id',
+      maxQueries: 10,
+      timeoutMs: 8000,
+    },
+    logger,
+  );
   const x = new XProvider({ searchQuery: '', maxPosts: 5 }, logger);
   const youtube = new YouTubeSearchProvider(
     { apiKey: undefined, maxResults: 3, ytDlpBinaryPath: 'yt-dlp' },
@@ -116,7 +125,10 @@ async function main() {
 
   // 2. LLM ranking (stubbed — uses the stub provider).
   const service = new ResearchService(
-    { maxTrends: 10, language: 'auto', llm: undefined },
+    {
+      maxTrends: 10,
+      language: 'auto',
+    },
     rss,
     reddit,
     trends,
@@ -143,7 +155,9 @@ async function main() {
       console.log(`    ✓ "${t.title}": ${videos.length} videos`);
       videos.slice(0, 2).forEach((v) => console.log(`      - ${v.title} [${v.channel}]`));
     } catch (error) {
-      console.log(`    ✗ "${t.title}": ${error instanceof Error ? error.message.slice(0, 100) : error}`);
+      console.log(
+        `    ✗ "${t.title}": ${error instanceof Error ? error.message.slice(0, 100) : error}`,
+      );
     }
   }
 

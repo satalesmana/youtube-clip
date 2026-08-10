@@ -14,13 +14,13 @@ render klip + subtitle + thumbnail.
 
 ## 1. Prasyarat (wajib)
 
-| Tool | Untuk apa | Cek | Install |
-|---|---|---|---|
-| Node.js **22+** | Runtime | `node -v` ✅ v22.23.2 (sudah ada) | https://nodejs.org |
-| **yt-dlp** | Download video | `yt-dlp --version` ✅ (sudah ada) | `brew install yt-dlp` |
-| **FFmpeg + libass** | Render klip & burn subtitle | `ffmpeg -version` ⚠️ ada, tapi **tanpa libass** | `brew install ffmpeg-full` (lihat §3) |
-| **Ollama** | LLM lokal untuk analisis | `ollama list` ❌ belum ada | `brew install ollama`, lalu `ollama pull qwen3:14b` |
-| **Whisper CLI** | Transkripsi + timestamp kata | ❌ belum ada | `pip install whisper-ctranslate2` (lihat §4) |
+| Tool                | Untuk apa                    | Cek                                             | Install                                             |
+| ------------------- | ---------------------------- | ----------------------------------------------- | --------------------------------------------------- |
+| Node.js **22+**     | Runtime                      | `node -v` ✅ v22.23.2 (sudah ada)               | https://nodejs.org                                  |
+| **yt-dlp**          | Download video               | `yt-dlp --version` ✅ (sudah ada)               | `brew install yt-dlp`                               |
+| **FFmpeg + libass** | Render klip & burn subtitle  | `ffmpeg -version` ⚠️ ada, tapi **tanpa libass** | `brew install ffmpeg-full` (lihat §3)               |
+| **Ollama**          | LLM lokal untuk analisis     | `ollama list` ❌ belum ada                      | `brew install ollama`, lalu `ollama pull qwen3:14b` |
+| **Whisper CLI**     | Transkripsi + timestamp kata | ❌ belum ada                                    | `pip install whisper-ctranslate2` (lihat §4)        |
 
 Cek libass pada FFmpeg kamu:
 
@@ -55,6 +55,7 @@ ASS_HIGHLIGHT_COLOR="#FFE135"
 Ada dua mode:
 
 **A. Ollama (lokal, gratis, butuh download model ~9 GB untuk qwen3:14b):**
+
 ```env
 AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
@@ -62,6 +63,7 @@ OLLAMA_MODEL=qwen3:14b
 ```
 
 **B. Router OpenAI-compatible (9Router — sudah dipakai sebelumnya):**
+
 ```env
 AI_PROVIDER=router
 ROUTER_BASE_URL=http://10.9.14.126:20128
@@ -76,6 +78,7 @@ Mode B tidak butuh Ollama — cukup untuk menjalankan server & riset viral.
 ## 4. Whisper (transkripsi)
 
 Default `.env.example` memakai **faster-whisper**:
+
 ```env
 WHISPER_PROVIDER=faster-whisper
 WHISPER_BINARY_PATH=whisper
@@ -83,11 +86,13 @@ WHISPER_MODEL=base
 ```
 
 Install:
+
 ```bash
 pip install whisper-ctranslate2   # menyediakan perintah `whisper`
 ```
 
 Alternatif (whisper.cpp): `brew install whisper-cpp`, lalu
+
 ```env
 WHISPER_PROVIDER=whisper-cpp
 WHISPER_BINARY_PATH=whisper-cli
@@ -98,7 +103,8 @@ WHISPER_MODEL=models/ggml-base.bin   # harus path file model, bukan nama
 
 ## 5. yt-dlp bot-check (opsional tapi sering dibutuhkan)
 
-Kalau YouTube balas *"Sign in to confirm you're not a bot"*:
+Kalau YouTube balas _"Sign in to confirm you're not a bot"_:
+
 ```env
 YT_DLP_EXTRA_ARGS=--cookies-from-browser chrome
 ```
@@ -113,6 +119,7 @@ npm run dev        # dev server + hot reload → http://localhost:3000/
 ```
 
 Mode produksi:
+
 ```bash
 npm run build      # build ke .output/
 npm run preview    # jalankan build produksi
@@ -121,11 +128,11 @@ npm run preview    # jalankan build produksi
 Setelah server jalan, buka **http://localhost:3000/** — UI bawaan (tidak perlu
 frontend terpisah) punya 3 tab:
 
-| Tab | Fungsi |
-|---|---|
+| Tab                | Fungsi                                                              |
+| ------------------ | ------------------------------------------------------------------- |
 | 🔍 **Riset Viral** | Cari topik viral dari RSS/Reddit/Trends/X, lalu match video YouTube |
-| ✂️ **Buat Klip** | Tempel URL YouTube → render klip 9:16 + subtitle + thumbnail |
-| 🕘 **Riwayat** | Daftar klip yang sudah berhasil dibuat |
+| ✂️ **Buat Klip**   | Tempel URL YouTube → render klip 9:16 + subtitle + thumbnail        |
+| 🕘 **Riwayat**     | Daftar klip yang sudah berhasil dibuat                              |
 
 ---
 
@@ -148,6 +155,7 @@ curl http://localhost:3000/api/history
 ```
 
 Hasil klip tersimpan di:
+
 - `outputs/clips/clip-001.mp4` — video final 1080×1920
 - `outputs/subtitles/clip-001.ass` — file subtitle
 - `outputs/thumbnails/clip-001.jpg` — thumbnail
@@ -163,6 +171,7 @@ npm run lint        # lint ESLint
 ```
 
 Ada juga stub server LLM untuk tes tanpa Ollama/router:
+
 ```bash
 node scripts/stub-llm-server.mjs
 ```
@@ -183,12 +192,15 @@ node scripts/stub-llm-server.mjs
 
 ## Troubleshooting
 
-| Gejala | Penyebab → Solusi |
-|---|---|
-| Subtitle tidak ke-burn / error filter `ass` | FFmpeg tanpa libass → `brew install ffmpeg-full` + set `FFMPEG_BINARY_PATH` |
-| yt-dlp: "Sign in to confirm you're not a bot" | Set `YT_DLP_EXTRA_ARGS=--cookies-from-browser chrome` |
-| Nilai warna kosong di subtitle | Hex di `.env` tanpa kutip → `ASS_HIGHLIGHT_COLOR="#FFE135"` |
-| `WHISPER_FAILED` | Binary/model salah → cek `WHISPER_BINARY_PATH` & `WHISPER_MODEL` vs `whisper --help` |
-| `LLM_TIMEOUT` / `LLM_INVALID_RESPONSE` | Ollama belum jalan / model belum di-pull; atau `OLLAMA_TIMEOUT_MS` terlalu kecil |
-| Error `RESEARCH_*` | Sumber opsional gagal — tidak fatal; cek log `LOG_LEVEL=debug` |
-| Server tidak reload config | `.env` dibaca saat start → restart `npm run dev` setelah ubah `.env` |
+| Gejala                                                 | Penyebab → Solusi                                                                                                                                  |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Subtitle tidak ke-burn / error filter `ass`            | FFmpeg tanpa libass → `brew install ffmpeg-full` + set `FFMPEG_BINARY_PATH`                                                                        |
+| yt-dlp: "Sign in to confirm you're not a bot"          | Set `YT_DLP_EXTRA_ARGS=--cookies-from-browser chrome`                                                                                              |
+| Nilai warna kosong di subtitle                         | Hex di `.env` tanpa kutip → `ASS_HIGHLIGHT_COLOR="#FFE135"`                                                                                        |
+| `WHISPER_FAILED`                                       | Binary/model salah → cek `WHISPER_BINARY_PATH` & `WHISPER_MODEL` vs `whisper --help`                                                               |
+| `LLM_TIMEOUT` / `LLM_INVALID_RESPONSE`                 | Ollama belum jalan / model belum di-pull; atau `OLLAMA_TIMEOUT_MS` terlalu kecil                                                                   |
+| `Missing model` (HTTP 400) dari router                 | `RESEARCH_LLM_BASE_URL` kosong → fallback ke `ROUTER_BASE_URL` dengan `RESEARCH_LLM_MODEL` (selalu terisi). Pastikan model itu ada di router       |
+| Router balas `content: ""` + `finish_reason: "length"` | Model reasoning (mis. deepseek) menghabiskan `max_tokens` untuk berpikir. RouterProvider kini kirim `reasoning_effort: "low"` + `max_tokens: 8192` |
+| Router lambat (menit)                                  | Tanpa `reasoning_effort`, model reasoning berpikir panjang. Set `reasoning_effort: "low"` di `router.provider.ts`                                  |
+| Error `RESEARCH_*`                                     | Sumber opsional gagal — tidak fatal; cek log `LOG_LEVEL=debug`                                                                                     |
+| Server tidak reload config                             | `.env` dibaca saat start → restart `npm run dev` setelah ubah `.env`                                                                               |

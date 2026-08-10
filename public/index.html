@@ -49,6 +49,16 @@
             Subreddit (pisahkan koma)
             <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
           </label>
+          <label class="wide">
+            Provider riset
+            <select id="res-providers" multiple size="4">
+              <option value="rss" selected>📰 RSS Berita</option>
+              <option value="reddit" selected>🤖 Reddit</option>
+              <option value="trends" selected>📈 Google Trends</option>
+              <option value="x" selected>🐦 X/Twitter</option>
+            </select>
+            <small class="muted">Tahan Ctrl/Cmd untuk multi-select</small>
+          </label>
           <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
         </div>
         <div class="progress hidden" id="research-progress">

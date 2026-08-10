@@ -23,6 +23,7 @@ import { RedditProvider } from '../research/reddit.provider.js';
 import { TrendsProvider } from '../research/trends.provider.js';
 import { XProvider } from '../research/x.provider.js';
 import { YouTubeSearchProvider } from '../research/youtube-search.provider.js';
+import { OpenAiCompatibleLlm } from '../research/llm.provider.js';
 import { ResearchService } from '../research/research.service.js';
 import { parseShellArgs } from '../utils/shell-args.js';
 import { ManifestService } from '../template/manifest.service.js';
@@ -312,7 +313,9 @@ const redditProvider = new RedditProvider(
 
 const trendsProvider = new TrendsProvider(
   {
+    feedUrl: env.RESEARCH_TRENDS_FEED_URL,
     maxQueries: env.RESEARCH_TRENDS_MAX_QUERIES,
+    timeoutMs: env.RESEARCH_TRENDS_TIMEOUT_MS,
   },
   researchLogger.child({ component: 'trends.provider' }),
 );
@@ -334,27 +337,32 @@ const youtubeSearchProvider = new YouTubeSearchProvider(
   researchLogger.child({ component: 'youtube-search.provider' }),
 );
 
+/**
+ * Research LLM: a dedicated OpenAI-compatible endpoint (`RESEARCH_LLM_*`) if
+ * configured, otherwise the main AI backend (router, then local Ollama) —
+ * both expose the OpenAI-compatible `/v1/chat/completions` API.
+ */
+const researchLlm = new OpenAiCompatibleLlm({
+  baseUrl: env.RESEARCH_LLM_BASE_URL || env.ROUTER_BASE_URL || env.OLLAMA_BASE_URL,
+  apiKey: env.RESEARCH_LLM_API_KEY ?? env.ROUTER_API_KEY,
+  model: env.RESEARCH_LLM_MODEL,
+  temperature: env.RESEARCH_LLM_TEMPERATURE,
+  timeoutMs: env.RESEARCH_LLM_TIMEOUT_MS,
+  maxRetries: env.RESEARCH_LLM_MAX_RETRIES ?? 2,
+  logger: researchLogger.child({ component: 'research.llm' }),
+});
+
 const researchService = new ResearchService(
   {
     maxTrends: env.RESEARCH_MAX_TRENDS,
     language: env.RESEARCH_LANGUAGE,
-    llm: env.RESEARCH_LLM_BASE_URL
-      ? {
-          baseUrl: env.RESEARCH_LLM_BASE_URL,
-          apiKey: env.RESEARCH_LLM_API_KEY,
-          model: env.RESEARCH_LLM_MODEL,
-          temperature: env.RESEARCH_LLM_TEMPERATURE,
-          timeoutMs: env.RESEARCH_LLM_TIMEOUT_MS,
-          maxRetries: env.RESEARCH_LLM_MAX_RETRIES,
-        }
-      : undefined,
   },
   rssProvider,
   redditProvider,
   trendsProvider,
   xProvider,
   youtubeSearchProvider,
-  aiProvider.provider,
+  researchLlm,
   researchLogger,
 );
 

@@ -13,6 +13,8 @@ export const researchRequestSchema = z.object({
   subreddits: z.string().trim().min(1).optional(),
   /** Comma-separated RSS feed override. */
   rss_feeds: z.string().trim().min(1).optional(),
+  /** Research providers to enable: 'rss', 'reddit', 'trends', 'x'. Default: all. */
+  providers: z.array(z.enum(['rss', 'reddit', 'trends', 'x'])).optional(),
 });
 
 export type ResearchRequest = z.infer<typeof researchRequestSchema>;

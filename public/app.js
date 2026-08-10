@@ -153,6 +153,13 @@
       const subs = $('#res-subreddits').value.trim();
       if (subs) body.subreddits = subs;
 
+      // Multi-select providers
+      const providersSel = $('#res-providers');
+      if (providersSel) {
+        const selected = [...providersSel.selectedOptions].map((o) => o.value);
+        if (selected.length > 0) body.providers = selected;
+      }
+
       setProgress('research', true, 35, 'Menganalisis topik viral dengan AI…');
       const data = await api('/api/research', body);
       setProgress('research', true, 90, 'Mencari video YouTube…');
@@ -287,7 +294,7 @@
               ${clip.video ? `<button class="btn ghost small" data-action="download" data-url="${esc(clip.video)}" data-name="clip-${esc(clip.id)}.mp4">⬇️ Unduh MP4</button>` : ''}
               ${clip.subtitle ? `<a class="btn ghost small" href="${esc(clip.subtitle)}" download>💬 Subtitle</a>` : ''}
               ${clip.thumbnail ? `<a class="btn ghost small" href="${esc(clip.thumbnail)}" download>🖼️ Thumbnail</a>` : ''}
-              <button class="btn ghost small" data-action="copy" data-url="${esc(clip.video)}">🔗 Salin Path</button>
+              ${clip.video ? `<button class="btn ghost small" data-action="copy" data-url="${esc(clip.video)}">🔗 Salin Path</button>` : ''}
             </div>
           </div>
         </div>`;
@@ -340,9 +347,10 @@
 
     if (action === 'copy') {
       if (url) {
-        copyText(url).then(
-          (ok) => ok ? toast('Disalin ke clipboard ✓', 'success') : toast('Gagal menyalin', 'error'),
-        );
+        copyText(url).then((ok) => {
+          if (ok) toast('Disalin ke clipboard ✓', 'success');
+          else toast('Gagal menyalin — coba manual', 'error');
+        });
       }
     } else if (action === 'clip') {
       if (url) {

@@ -100,6 +100,22 @@ input, select {
 input:focus, select:focus { border-color: var(--blue); }
 input::placeholder { color: #5a6275; }
 
+select[multiple] {
+  min-height: 120px;
+  padding: 8px;
+}
+select[multiple] option {
+  padding: 8px 10px;
+  margin: 2px 0;
+  border-radius: 6px;
+  background: var(--bg-soft);
+}
+select[multiple] option:checked {
+  background: linear-gradient(135deg, rgba(255, 59, 92, 0.25), rgba(77, 159, 255, 0.25));
+  border: 1px solid var(--accent);
+  color: var(--text);
+}
+
 .btn {
   border: none; border-radius: 10px; padding: 12px 22px;
   font-size: 14px; font-weight: 700; cursor: pointer;

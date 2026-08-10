@@ -1,6 +1,5 @@
 import { AppError } from '../utils/errors.js';
 import type { Logger } from '../utils/logger.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { ResearchSourceItem, YouTubeVideoResult } from '../types/media.js';
 import type { ResearchResult, ResearchTrend } from '../types/research.js';
 import type { IRedditProvider } from './reddit.provider.js';
@@ -8,106 +7,19 @@ import type { IRssProvider } from './rss.provider.js';
 import type { ITrendsProvider } from './trends.provider.js';
 import type { IXProvider } from './x.provider.js';
 import type { IYouTubeSearchProvider } from './youtube-search.provider.js';
+import type { LlmProvider } from './llm.provider.js';
 import { buildResearchPrompt, parseResearchLlmResponse } from './research.prompt.js';
 
 export interface ResearchServiceOptions {
   maxTrends: number;
   language: string;
-  /** Optional dedicated LLM config; falls back to the main provider when unset. */
-  llm?: {
-    baseUrl?: string;
-    apiKey?: string;
-    model: string;
-    temperature: number;
-    timeoutMs: number;
-    maxRetries: number;
-  };
+  /** Enabled providers: 'rss', 'reddit', 'trends', 'x'. Default: all. */
+  enabledProviders?: ('rss' | 'reddit' | 'trends' | 'x')[];
 }
 
 export interface IResearchService {
   /** Runs the full research pipeline: collect signals → analyze → match videos. */
-  research(): Promise<ResearchResult>;
-}
-
-interface LlmProvider {
-  chat(options: { system?: string; prompt: string; model?: string; temperature?: number; timeoutMs?: number }): Promise<string>;
-}
-
-/** Adapter that maps the main `IOllamaProvider` to the research LLM interface. */
-class ProviderAdapter implements LlmProvider {
-  constructor(private readonly provider: IOllamaProvider) {}
-  chat(options: {
-    system?: string;
-    prompt: string;
-    model?: string;
-    temperature?: number;
-    timeoutMs?: number;
-  }): Promise<string> {
-    return this.provider.chat({
-      model: options.model ?? '',
-      system: options.system,
-      prompt: options.prompt,
-      temperature: options.temperature,
-      timeoutMs: options.timeoutMs,
-    });
-  }
-}
-
-/** OpenAI-compatible provider used when a dedicated research LLM is configured. */
-class OpenAiCompatibleLlm implements LlmProvider {
-  constructor(
-    private readonly baseUrl: string,
-    private readonly apiKey: string | undefined,
-    private readonly logger: Logger,
-  ) {}
-
-  async chat(options: {
-    system?: string;
-    prompt: string;
-    model?: string;
-    temperature?: number;
-    timeoutMs?: number;
-  }): Promise<string> {
-    const timeoutMs = options.timeoutMs ?? 120_000;
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-        },
-        body: JSON.stringify({
-          model: options.model,
-          stream: false,
-          messages: [
-            ...(options.system ? [{ role: 'system', content: options.system }] : []),
-            { role: 'user', content: options.prompt },
-          ],
-        }),
-        signal: controller.signal,
-      });
-
-      const bodyText = await response.text();
-      if (!response.ok) {
-        throw new Error(`Research LLM responded with HTTP ${response.status}: ${bodyText}`);
-      }
-
-      const data = JSON.parse(bodyText) as {
-        choices?: { message?: { content?: string } }[];
-      };
-      return data.choices?.[0]?.message?.content ?? '';
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw AppError.llmTimeout(`Research LLM request timed out after ${timeoutMs}ms.`, error);
-      }
-      throw AppError.researchAnalysisFailed('Failed to reach the research LLM.', error);
-    } finally {
-      clearTimeout(timeoutHandle);
-    }
-  }
+  research(enabledProviders?: ('rss' | 'reddit' | 'trends' | 'x')[]): Promise<ResearchResult>;
 }
 
 /**
@@ -127,13 +39,15 @@ export class ResearchService implements IResearchService {
     private readonly trendsProvider: ITrendsProvider,
     private readonly xProvider: IXProvider,
     private readonly youtubeSearchProvider: IYouTubeSearchProvider,
-    private readonly mainProvider: IOllamaProvider,
+    private readonly llm: LlmProvider,
     private readonly logger: Logger,
   ) {}
 
-  async research(): Promise<ResearchResult> {
+  async research(
+    enabledProviders?: ('rss' | 'reddit' | 'trends' | 'x')[],
+  ): Promise<ResearchResult> {
     const skippedSources: { source: string; reason: string }[] = [];
-    const collected = await this.collectSignals(skippedSources);
+    const collected = await this.collectSignals(skippedSources, enabledProviders);
 
     if (collected.length === 0) {
       throw AppError.researchSourceFailed(
@@ -161,13 +75,18 @@ export class ResearchService implements IResearchService {
 
   private async collectSignals(
     skippedSources: { source: string; reason: string }[],
+    enabledProviders?: ('rss' | 'reddit' | 'trends' | 'x')[],
   ): Promise<ResearchSourceItem[]> {
+    const providerSet = new Set(
+      enabledProviders ?? this.options.enabledProviders ?? ['rss', 'reddit', 'trends', 'x'],
+    );
+
     const sources: { name: string; fetch: () => Promise<ResearchSourceItem[] | null> }[] = [
       { name: 'rss', fetch: () => this.rssProvider.fetchLatest() },
       { name: 'reddit', fetch: () => this.redditProvider.fetchHotPosts() },
       { name: 'trends', fetch: () => this.trendsProvider.fetchTrendingQueries() },
       { name: 'x', fetch: () => this.xProvider.fetchRecentPosts() },
-    ];
+    ].filter((s) => providerSet.has(s.name));
 
     const settled = await Promise.allSettled(
       sources.map(async ({ name, fetch }) => {
@@ -199,16 +118,12 @@ export class ResearchService implements IResearchService {
 
   private async analyzeAndRank(signals: ResearchSourceItem[]): Promise<ResearchTrend[]> {
     const prompt = buildResearchPrompt(signals, this.options.language, this.options.maxTrends);
-    const llm = this.resolveLlm();
-    const llmOptions = this.options.llm;
 
     try {
-      const raw = await llm.chat({
-        system: 'You are a viral-trend analyst for a short-video content studio. Respond with strict JSON only, no markdown, no commentary.',
+      const raw = await this.llm.chat({
+        system:
+          'You are a viral-trend analyst for a short-video content studio. Respond with strict JSON only, no markdown, no commentary.',
         prompt,
-        model: llmOptions?.model,
-        temperature: llmOptions?.temperature,
-        timeoutMs: llmOptions?.timeoutMs,
       });
 
       const trends = parseResearchLlmResponse(raw);
@@ -220,14 +135,6 @@ export class ResearchService implements IResearchService {
       if (error instanceof AppError) throw error;
       throw AppError.researchAnalysisFailed('Failed to analyze research signals.', error);
     }
-  }
-
-  private resolveLlm(): LlmProvider {
-    const llm = this.options.llm;
-    if (llm?.baseUrl) {
-      return new OpenAiCompatibleLlm(llm.baseUrl, llm.apiKey, this.logger);
-    }
-    return new ProviderAdapter(this.mainProvider);
   }
 
   private async attachVideos(trends: ResearchTrend[]): Promise<ResearchTrend[]> {
@@ -254,7 +161,9 @@ export class ResearchService implements IResearchService {
     // Search with the first (most specific) keyword, then fill remaining slots
     // with the second keyword if provided.
     const [primary, secondary] = queries;
-    const results: YouTubeVideoResult[] = await this.youtubeSearchProvider.search(primary ?? trend.title);
+    const results: YouTubeVideoResult[] = await this.youtubeSearchProvider.search(
+      primary ?? trend.title,
+    );
     if (secondary && results.length === 0) {
       const fallback = await this.youtubeSearchProvider.search(secondary);
       results.push(...fallback);

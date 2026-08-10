@@ -240,7 +240,7 @@ Response:
 |---|---|---|
 | News RSS | Fetch latest items from `RESEARCH_RSS_FEEDS` (RSS 2.0 / Atom) | nothing |
 | Reddit | Hot posts from `RESEARCH_REDDIT_SUBREDDITS` (`r/popular` fallback) | nothing |
-| Google Trends | Trending/rising queries via Pytrends | `pip install pytrends` |
+| Google News | Trending headlines from the `RESEARCH_TRENDS_FEED_URL` RSS feed (no API key) | nothing |
 | X/Twitter | Recent posts matching `RESEARCH_X_SEARCH_QUERY` via `xurl` CLI | `xurl auth oauth2` |
 
 **YouTube matching** uses the YouTube Data API v3 when `YOUTUBE_API_KEY` is
@@ -306,9 +306,9 @@ swapped or unit-tested in isolation without touching the others.
    the Data API v3 (when `YOUTUBE_API_KEY` is set) or `yt-dlp ytsearch`
    (no key needed), attaching real videos with durations and view counts.
 
-The research LLM reuses the main AI provider (Ollama / router) unless a
-dedicated OpenAI-compatible endpoint is configured via
-`RESEARCH_LLM_BASE_URL` / `RESEARCH_LLM_API_KEY` / `RESEARCH_LLM_MODEL`.
+The research LLM is an OpenAI-compatible endpoint — a dedicated one via
+`RESEARCH_LLM_BASE_URL` / `RESEARCH_LLM_API_KEY` / `RESEARCH_LLM_MODEL`, or the
+main AI backend (router, then local Ollama) when unset.
 
 ### Rendering pipeline
 

@@ -115,8 +115,16 @@ const envSchema = z.object({
   // Reddit fetch timeout in milliseconds.
   RESEARCH_REDDIT_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
-  // Google Trends: max rising/trending queries to collect.
+  // Google News RSS (trending headlines, no API key). Topic feeds are
+  // available per country, e.g. `topic/NATION` for Indonesia:
+  // https://news.google.com/rss/headlines/section/topic/NATION?hl=id&gl=ID&ceid=ID:id
+  RESEARCH_TRENDS_FEED_URL: z
+    .url()
+    .default('https://news.google.com/rss/headlines/section/topic/NATION?hl=id&gl=ID&ceid=ID:id'),
+  // Max headline items to collect per fetch.
   RESEARCH_TRENDS_MAX_QUERIES: z.coerce.number().int().positive().default(20),
+  // Google News RSS fetch timeout in milliseconds.
+  RESEARCH_TRENDS_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
   // X/Twitter: search query used with the `xurl` CLI. Empty disables the X source.
   RESEARCH_X_SEARCH_QUERY: z.string().default(''),
@@ -127,10 +135,11 @@ const envSchema = z.object({
   RESEARCH_MAX_TRENDS: z.coerce.number().int().positive().default(10),
   // Language for LLM-generated topic titles/summaries (`auto`, `en`, `id`, ...).
   RESEARCH_LANGUAGE: z.string().min(1).default('auto'),
-  // OpenAI-compatible API endpoint used by the research LLM. When empty, the
-  // main AI provider (Ollama / router) is reused.
+  // Dedicated OpenAI-compatible endpoint for the research LLM. When empty,
+  // the main AI backend (router, then local Ollama) is used instead.
   RESEARCH_LLM_BASE_URL: z.string().optional(),
   RESEARCH_LLM_API_KEY: z.string().optional(),
+  // Research LLM model/temperature/timeout (used for the fallback backend too).
   RESEARCH_LLM_MODEL: z.string().min(1).default('qwen3:14b'),
   RESEARCH_LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   RESEARCH_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
