@@ -131,8 +131,8 @@ Response:
 ```json
 {
   "success": true,
-  "video": "downloads/dQw4w9WgXcQ.mp4",
-  "transcript": "transcripts/dQw4w9WgXcQ.json",
+  "video": "outputs/dQw4w9WgXcQ/downloads/dQw4w9WgXcQ.mp4",
+  "transcript": "outputs/dQw4w9WgXcQ/transcripts/dQw4w9WgXcQ.json",
   "clips": [
     {
       "id": 1,
@@ -144,9 +144,9 @@ Response:
       "end": 229.8,
       "duration": 36.6,
       "resolution": "1080x1920",
-      "video": "outputs/clips/clip-001.mp4",
-      "subtitle": "outputs/subtitles/clip-001.ass",
-      "thumbnail": "outputs/thumbnails/clip-001.jpg"
+      "video": "outputs/dQw4w9WgXcQ/clips/clip-001.mp4",
+      "subtitle": "outputs/dQw4w9WgXcQ/subtitles/clip-001.ass",
+      "thumbnail": "outputs/dQw4w9WgXcQ/thumbnails/clip-001.jpg"
     }
   ],
   "clipErrors": []
@@ -258,8 +258,8 @@ separate frontend build or dev server needed.
 - **✂️ Buat Klip** — paste a YouTube URL (or click "Buat Klip" on any
   research result), choose a template / style / channel branding, and
   render upload-ready 9:16 shorts with a live progress indicator.
-- **🕘 Riwayat** — lists every successfully rendered clip from
-  `outputs/metadata/clips.json`.
+- **🕘 Riwayat** — lists every successfully rendered clip from each video's
+  `outputs/{videoId}/metadata/clips.json`.
 
 The UI lives in `public/` (`index.html`, `app.js`, `styles.css`) and is
 served via `publicAssets` in `nitro.config.ts`. It talks to the same API
@@ -357,7 +357,7 @@ concurrency pool (`src/utils/concurrency.ts`), each retried up to
 `CLIP_MAX_RETRIES` times on failure. One clip failing never stops the
 others — failures are collected into `clipErrors` with the clip index,
 timestamp, and raw FFmpeg stderr when available. A manifest of every
-successful clip is written to `outputs/metadata/clips.json`.
+successful clip is written to `outputs/{videoId}/metadata/clips.json`.
 
 ## Configuration
 

@@ -6,6 +6,7 @@ import { estimateTokens } from '../utils/timestamp.js';
 import { AppError } from '../utils/errors.js';
 import type { Logger } from '../utils/logger.js';
 import type { AudioExtractionResult } from '../types/media.js';
+import type { JobWorkspace } from '../types/job.js';
 import type {
   TranscriptChunk,
   TranscriptDocument,
@@ -26,8 +27,15 @@ export interface TranscriptServiceOptions {
  * transcript into LLM-sized chunks with time-based overlap.
  */
 export interface ITranscriptService {
-  extractAudio(videoPath: string, videoId: string): Promise<AudioExtractionResult>;
-  saveTranscript(document: TranscriptDocument): Promise<string>;
+  extractAudio(
+    videoPath: string,
+    videoId: string,
+    workspace?: Pick<JobWorkspace, 'temp'>,
+  ): Promise<AudioExtractionResult>;
+  saveTranscript(
+    document: TranscriptDocument,
+    workspace?: Pick<JobWorkspace, 'transcripts'>,
+  ): Promise<string>;
   chunkTranscript(result: TranscriptResult): TranscriptChunk[];
 }
 
@@ -38,15 +46,19 @@ export class TranscriptService implements ITranscriptService {
   ) {}
 
   /** Extracts a mono 16kHz WAV track from the given video file via FFmpeg. */
-  async extractAudio(videoPath: string, videoId: string): Promise<AudioExtractionResult> {
-    const { ffmpegBinaryPath, tempDir } = this.options;
+  async extractAudio(
+    videoPath: string,
+    videoId: string,
+    workspace?: Pick<JobWorkspace, 'temp'>,
+  ): Promise<AudioExtractionResult> {
+    const tempDir = workspace?.temp ?? this.options.tempDir;
     await ensureDir(tempDir);
 
     const audioPath = join(tempDir, `${videoId}.wav`);
     this.logger.info({ videoPath, audioPath }, 'Extracting audio');
 
     await extractAudio({
-      binaryPath: ffmpegBinaryPath,
+      binaryPath: this.options.ffmpegBinaryPath,
       inputPath: videoPath,
       outputPath: audioPath,
       sampleRateHz: 16_000,
@@ -55,7 +67,7 @@ export class TranscriptService implements ITranscriptService {
     });
 
     const durationSeconds = await probeDurationSeconds({
-      binaryPath: ffmpegBinaryPath,
+      binaryPath: this.options.ffmpegBinaryPath,
       inputPath: audioPath,
     });
 
@@ -63,8 +75,11 @@ export class TranscriptService implements ITranscriptService {
   }
 
   /** Persists a transcript document as JSON under the transcripts directory. */
-  async saveTranscript(document: TranscriptDocument): Promise<string> {
-    const { transcriptsDir } = this.options;
+  async saveTranscript(
+    document: TranscriptDocument,
+    workspace?: Pick<JobWorkspace, 'transcripts'>,
+  ): Promise<string> {
+    const transcriptsDir = workspace?.transcripts ?? this.options.transcriptsDir;
     await ensureDir(transcriptsDir);
 
     const transcriptPath = join(transcriptsDir, `${document.videoId}.json`);

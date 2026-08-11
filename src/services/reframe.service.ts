@@ -24,7 +24,7 @@ const CENTER_FOCAL_POINT: FocalPoint = { x: 0.5, y: 0.5 };
  * documented no-op) and the fallback are implemented today.
  */
 export interface IReframeService {
-  resolveFocalPoint(videoPath: string, sampleTimestampSeconds: number, id: number): Promise<FocalPoint>;
+  resolveFocalPoint(videoPath: string, sampleTimestampSeconds: number, id: number, tempDir?: string): Promise<FocalPoint>;
   computeCropRegion(
     sourceWidth: number,
     sourceHeight: number,
@@ -44,8 +44,10 @@ export class ReframeService implements IReframeService {
     videoPath: string,
     sampleTimestampSeconds: number,
     id: number,
+    tempDir?: string,
   ): Promise<FocalPoint> {
-    const framePath = join(this.options.tempDir, `reframe-sample-${id}.jpg`);
+    const dir = tempDir ?? this.options.tempDir;
+    const framePath = join(dir, `reframe-sample-${id}.jpg`);
 
     try {
       await extractFrame({

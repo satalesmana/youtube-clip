@@ -23,6 +23,7 @@ import type { HighlightClip } from '../types/highlight.js';
 import type { TranscriptResult } from '../types/transcript.js';
 import type { RenderContext } from '../types/template.js';
 import type { RefinedRange, RenderedClipMetadata, RenderError, RenderErrorCode, RenderSummary } from '../types/render.js';
+import type { JobWorkspace } from '../types/job.js';
 
 export interface RendererServiceOptions {
   ffmpegBinaryPath: string;
@@ -30,6 +31,7 @@ export interface RendererServiceOptions {
   subtitlesDir: string;
   thumbnailsDir: string;
   metadataDir: string;
+  tempDir: string;
   minDurationSeconds: number;
   maxDurationSeconds: number;
   maxConcurrency: number;
@@ -50,6 +52,7 @@ export interface IRendererService {
     transcript: TranscriptResult,
     templateId?: string,
     channel?: RenderContext['channel'],
+    workspace?: Pick<JobWorkspace, 'clips' | 'subtitles' | 'thumbnails' | 'metadata' | 'temp'>,
   ): Promise<RenderSummary>;
 }
 
@@ -85,8 +88,12 @@ export class RendererService implements IRendererService {
     transcript: TranscriptResult,
     templateId?: string,
     channel?: RenderContext['channel'],
+    workspace?: Pick<JobWorkspace, 'clips' | 'subtitles' | 'thumbnails' | 'metadata' | 'temp'>,
   ): Promise<RenderSummary> {
-    const { clipsDir, subtitlesDir, thumbnailsDir, metadataDir, ffmpegBinaryPath, maxConcurrency } = this.options;
+    const clipsDir = workspace?.clips ?? this.options.clipsDir;
+    const subtitlesDir = workspace?.subtitles ?? this.options.subtitlesDir;
+    const thumbnailsDir = workspace?.thumbnails ?? this.options.thumbnailsDir;
+    const metadataDir = workspace?.metadata ?? this.options.metadataDir;
 
     await Promise.all([ensureDir(clipsDir), ensureDir(subtitlesDir), ensureDir(thumbnailsDir), ensureDir(metadataDir)]);
 
@@ -94,8 +101,8 @@ export class RendererService implements IRendererService {
       throw AppError.missingSourceVideo(`Source video "${videoPath}" does not exist.`, error);
     });
 
-    const sourceResolution = await probeResolution({ binaryPath: ffmpegBinaryPath, inputPath: videoPath });
-    const sourceDuration = await probeDurationSeconds({ binaryPath: ffmpegBinaryPath, inputPath: videoPath });
+    const sourceResolution = await probeResolution({ binaryPath: this.options.ffmpegBinaryPath, inputPath: videoPath });
+    const sourceDuration = await probeDurationSeconds({ binaryPath: this.options.ffmpegBinaryPath, inputPath: videoPath });
 
     if (!sourceResolution || sourceDuration <= 0) {
       throw AppError.corruptedSourceVideo(
@@ -104,7 +111,7 @@ export class RendererService implements IRendererService {
     }
 
     this.logger.info({ videoPath }, 'Detecting silence intervals');
-    const silences = await detectSilences({ binaryPath: ffmpegBinaryPath, inputPath: videoPath });
+    const silences = await detectSilences({ binaryPath: this.options.ffmpegBinaryPath, inputPath: videoPath });
 
     // Template loading/validation is per-REQUEST (shared by every clip in
     // this job), not per-clip — a bad/missing template fails the whole
@@ -114,8 +121,19 @@ export class RendererService implements IRendererService {
 
     const indexed = clips.map((clip, i) => ({ clip, id: i + 1 }));
 
-    const settled = await mapWithConcurrency(indexed, maxConcurrency, ({ clip, id }) =>
-      this.generateSingleRender(videoPath, sourceResolution, sourceDuration, silences, transcript, clip, id, loaded, channel),
+    const settled = await mapWithConcurrency(indexed, this.options.maxConcurrency, ({ clip, id }) =>
+      this.generateSingleRender(
+        videoPath,
+        sourceResolution,
+        sourceDuration,
+        silences,
+        transcript,
+        clip,
+        id,
+        loaded,
+        channel,
+        { clipsDir, subtitlesDir, thumbnailsDir, tempDir: workspace?.temp ?? this.options.tempDir },
+      ),
     );
 
     const renderedClips: RenderedClipMetadata[] = [];
@@ -155,6 +173,12 @@ export class RendererService implements IRendererService {
     id: number,
     loaded: Awaited<ReturnType<ITemplateService['load']>>,
     channel: RenderContext['channel'],
+    dirs: {
+      clipsDir: string;
+      subtitlesDir: string;
+      thumbnailsDir: string;
+      tempDir: string;
+    },
   ): Promise<RenderedClipMetadata> {
     const label = `[Clip ${id}]`;
     this.logger.info({ id }, `${label} Started`);
@@ -166,12 +190,13 @@ export class RendererService implements IRendererService {
     this.logger.info({ id, duration }, `${label} Duration: ${duration.toFixed(1)} seconds`);
 
     const events = this.subtitleService.buildEvents(transcript, refined.start, refined.end);
-    const assPath = join(this.options.subtitlesDir, `clip-${String(id).padStart(3, '0')}.ass`);
+    const assPath = join(dirs.subtitlesDir, `clip-${String(id).padStart(3, '0')}.ass`);
 
     const focalPoint = await this.reframeService.resolveFocalPoint(
       videoPath,
       (refined.start + refined.end) / 2,
       id,
+      dirs.tempDir,
     );
 
     const context: RenderContext = {
@@ -197,7 +222,7 @@ export class RendererService implements IRendererService {
       throw new RenderFailure(id, 'TEMPLATE_BINDING_ERROR', `Failed to resolve template bindings for clip ${id}.`, refined);
     }
 
-    const videoOutputPath = join(this.options.clipsDir, `clip-${String(id).padStart(3, '0')}.mp4`);
+    const videoOutputPath = join(dirs.clipsDir, `clip-${String(id).padStart(3, '0')}.mp4`);
 
     this.logger.info({ id }, `${label} Rendering`);
 
@@ -230,10 +255,10 @@ export class RendererService implements IRendererService {
 
     await this.validateOutputFile(videoOutputPath, duration, id, refined);
 
-    const thumbnailPath = join(this.options.thumbnailsDir, `clip-${String(id).padStart(3, '0')}.jpg`);
+    const thumbnailPath = join(dirs.thumbnailsDir, `clip-${String(id).padStart(3, '0')}.jpg`);
 
     try {
-      await this.thumbnailService.generateThumbnail(videoOutputPath, duration, thumbnailPath, id);
+      await this.thumbnailService.generateThumbnail(videoOutputPath, duration, thumbnailPath, id, dirs.tempDir);
     } catch (error) {
       throw new RenderFailure(
         id,

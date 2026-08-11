@@ -8,6 +8,10 @@ import type { IRendererService } from '../services/renderer.service.js';
 import type { HighlightClip, ProcessResult } from '../types/highlight.js';
 import type { TranscriptChunk, TranscriptDocument } from '../types/transcript.js';
 import type { RenderContext } from '../types/template.js';
+import type { JobWorkspace } from '../types/job.js';
+import { extractVideoIdFromUrl } from '../utils/youtube-id.js';
+import { createJobWorkspace } from '../utils/workspace.js';
+import { AppError } from '../utils/errors.js';
 
 export interface ProcessControllerDeps {
   youtubeService: IYoutubeService;
@@ -16,6 +20,7 @@ export interface ProcessControllerDeps {
   ollamaService: IOllamaService;
   highlightService: IHighlightService;
   rendererService: IRendererService;
+  outputsDir: string;
   logger: Logger;
 }
 
@@ -44,14 +49,24 @@ export class ProcessController {
       ollamaService,
       highlightService,
       rendererService,
+      outputsDir,
       logger,
     } = this.deps;
 
-    const download = await youtubeService.downloadVideo(url);
+    // Extract video ID from URL up-front so the download lands directly in
+    // its isolated workspace. Non-YouTube/non-standard URLs fall back to a
+    // shared downloads dir, then get their own workspace from the actual ID.
+    const videoIdFromUrl = extractVideoIdFromUrl(url);
+    const workspace = videoIdFromUrl
+      ? await createJobWorkspace(outputsDir, videoIdFromUrl)
+      : null;
+    const download = await youtubeService.downloadVideo(url, workspace ?? undefined);
+    const job = workspace ?? (await createJobWorkspace(outputsDir, download.videoId));
+    logger.info({ workspace: job.root }, 'Job workspace ready');
 
-    const audio = await transcriptService.extractAudio(download.videoPath, download.videoId);
+    const audio = await transcriptService.extractAudio(download.videoPath, download.videoId, job);
 
-    const transcriptResult = await whisperService.transcribe(audio.audioPath);
+    const transcriptResult = await whisperService.transcribe(audio.audioPath, job);
 
     const transcriptDocument: TranscriptDocument = {
       ...transcriptResult,
@@ -59,7 +74,7 @@ export class ProcessController {
       sourceUrl: url,
       createdAt: new Date().toISOString(),
     };
-    const transcriptPath = await transcriptService.saveTranscript(transcriptDocument);
+    const transcriptPath = await transcriptService.saveTranscript(transcriptDocument, job);
 
     const chunks = transcriptService.chunkTranscript(transcriptResult);
     const clipGroups = await this.analyzeChunksConcurrently(
@@ -78,6 +93,7 @@ export class ProcessController {
       transcriptResult,
       template,
       channel,
+      job,
     );
 
     logger.info(

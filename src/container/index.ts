@@ -48,10 +48,7 @@ import type { AssStyleConfig } from '../types/subtitle.js';
 const rootDir = process.cwd();
 
 const paths = {
-  downloads: resolve(rootDir, env.DOWNLOADS_DIR),
-  transcripts: resolve(rootDir, env.TRANSCRIPTS_DIR),
   outputs: resolve(rootDir, env.OUTPUTS_DIR),
-  temp: resolve(rootDir, env.TEMP_DIR),
   clips: resolve(rootDir, env.OUTPUTS_DIR, 'clips'),
   subtitles: resolve(rootDir, env.OUTPUTS_DIR, 'subtitles'),
   thumbnails: resolve(rootDir, env.OUTPUTS_DIR, 'thumbnails'),
@@ -62,7 +59,7 @@ const paths = {
 const youtubeService = new YoutubeService(
   {
     binaryPath: env.YT_DLP_BINARY_PATH,
-    downloadsDir: paths.downloads,
+    downloadsDir: resolve(rootDir, 'outputs', 'downloads'),
     maxRetries: env.YT_DLP_MAX_RETRIES,
     extraArgs: parseShellArgs(env.YT_DLP_EXTRA_ARGS),
   },
@@ -72,8 +69,8 @@ const youtubeService = new YoutubeService(
 const transcriptService = new TranscriptService(
   {
     ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
-    tempDir: paths.temp,
-    transcriptsDir: paths.transcripts,
+    tempDir: resolve(rootDir, 'outputs', 'temp'),
+    transcriptsDir: resolve(rootDir, 'outputs', 'transcripts'),
     chunkMaxTokens: env.CHUNK_MAX_TOKENS,
     chunkOverlapSeconds: env.CHUNK_OVERLAP_SECONDS,
   },
@@ -86,9 +83,8 @@ const whisperService = new WhisperService(
     binaryPath: env.WHISPER_BINARY_PATH,
     model: env.WHISPER_MODEL,
     language: env.WHISPER_LANGUAGE,
-    // Whisper's own CLI output is an intermediate artifact, kept separate
-    // from our own normalized transcript JSON written under `transcripts/`.
-    outputDir: paths.temp,
+    outputDir: resolve(rootDir, 'outputs', 'temp'),
+    extraArgs: env.WHISPER_EXTRA_ARGS,
   },
   createLogger('whisper.service'),
 );
@@ -169,14 +165,14 @@ const assService = new AssService({
 const faceDetectionService = new NoOpFaceDetectionService();
 
 const reframeService = new ReframeService(
-  { ffmpegBinaryPath: env.FFMPEG_BINARY_PATH, tempDir: paths.temp },
+  { ffmpegBinaryPath: env.FFMPEG_BINARY_PATH, tempDir: resolve(rootDir, 'outputs', 'temp') },
   faceDetectionService,
 );
 
 const thumbnailService = new ThumbnailService(
   {
     ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
-    tempDir: paths.temp,
+    tempDir: resolve(rootDir, 'outputs', 'temp'),
     candidateCount: env.THUMBNAIL_CANDIDATE_COUNT,
   },
   faceDetectionService,
@@ -236,6 +232,7 @@ const rendererService = new RendererService(
     subtitlesDir: paths.subtitles,
     thumbnailsDir: paths.thumbnails,
     metadataDir: paths.clipMetadata,
+    tempDir: resolve(rootDir, 'outputs', 'temp'),
     minDurationSeconds: env.CLIP_MIN_SECONDS,
     maxDurationSeconds: env.CLIP_MAX_SECONDS,
     maxConcurrency: env.CLIP_MAX_CONCURRENCY,
@@ -257,6 +254,7 @@ export const processController = new ProcessController({
   ollamaService,
   highlightService,
   rendererService,
+  outputsDir: paths.outputs,
   logger: createLogger('process.controller'),
 });
 

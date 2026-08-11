@@ -27,10 +27,13 @@ const envSchema = z.object({
   ROUTER_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   ROUTER_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
 
-  WHISPER_PROVIDER: z.enum(['faster-whisper', 'whisper-cpp']).default('faster-whisper'),
+  WHISPER_PROVIDER: z.enum(['faster-whisper', 'whisper-cpp', 'whisperx']).default('faster-whisper'),
   WHISPER_BINARY_PATH: z.string().min(1).default('whisper'),
   WHISPER_MODEL: z.string().min(1).default('base'),
   WHISPER_LANGUAGE: z.string().min(1).default('auto'),
+  // Extra CLI args passed straight through to the whisper binary, e.g.
+  // WHISPER_EXTRA_ARGS="--device cuda --compute_type float16"
+  WHISPER_EXTRA_ARGS: z.string().default(''),
 
   YT_DLP_BINARY_PATH: z.string().min(1).default('yt-dlp'),
   YT_DLP_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
@@ -40,10 +43,7 @@ const envSchema = z.object({
 
   FFMPEG_BINARY_PATH: z.string().min(1).default('ffmpeg'),
 
-  DOWNLOADS_DIR: z.string().min(1).default('downloads'),
-  TRANSCRIPTS_DIR: z.string().min(1).default('transcripts'),
   OUTPUTS_DIR: z.string().min(1).default('outputs'),
-  TEMP_DIR: z.string().min(1).default('temp'),
   TEMPLATES_DIR: z.string().min(1).default('templates'),
 
   CHUNK_MAX_TOKENS: z.coerce.number().int().positive().default(2500),
