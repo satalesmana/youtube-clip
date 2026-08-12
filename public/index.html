@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Viral Clip Studio — Riset &amp; Buat Klip Viral</title>
+  <title>Viral Clip Studio — Transformasi Konten Viral</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
 </head>
@@ -13,131 +13,190 @@
       <span class="brand-logo">🎬</span>
       <div>
         <h1>Viral Clip Studio</h1>
-        <p class="tagline">Riset topik viral → cari video YouTube → buat short siap upload</p>
+        <p class="tagline">YouTube URL → Script orisinal → TTS → Video 9:16 siap upload</p>
       </div>
+    </div>
+    <div class="status-pill" id="status-pill">
+      <span class="dot"></span>
+      <span id="status-text">Checking…</span>
     </div>
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="research" role="tab" aria-selected="true">🔍 Riset Viral</button>
-    <button class="tab" data-tab="clip" role="tab" aria-selected="false">✂️ Buat Klip</button>
+    <button class="tab active" data-tab="transform" role="tab" aria-selected="true">✨ Transform</button>
+    <button class="tab" data-tab="rights" role="tab" aria-selected="false">⚖️ Rights & Review</button>
     <button class="tab" data-tab="history" role="tab" aria-selected="false">🕘 Riwayat</button>
   </nav>
 
   <main>
-    <!-- ============ TAB: RISET VIRAL ============ -->
-    <section id="tab-research" class="tab-panel active">
+    <!-- ============ TAB: TRANSFORM ============ -->
+    <section id="tab-transform" class="tab-panel active">
       <div class="card">
         <div class="card-head">
-          <h2>🔍 Riset Topik Viral</h2>
-          <p class="muted">Kumpulkan sinyal dari RSS berita, Reddit, Google Trends &amp; X, lalu ranking dengan AI.</p>
+          <h2>✨ Transformasi Konten</h2>
+          <p class="muted">Masukkan URL YouTube — sistem akan generate script orisinal, narasi TTS, dan render video 9:16.</p>
         </div>
-        <div class="research-controls">
-          <label>
-            Jumlah topik
-            <input type="number" id="res-max-trends" min="1" max="25" value="10" />
-          </label>
-          <label>
-            Bahasa
-            <select id="res-language">
-              <option value="auto">Auto</option>
-              <option value="id">Indonesia</option>
-              <option value="en">English</option>
-            </select>
-          </label>
+        <div class="transform-controls">
           <label class="wide">
-            Keyword pencarian (Google News)
-            <input type="text" id="res-keyword" placeholder="misal: teknologi AI, politik Indonesia, Piala Dunia" />
+            URL YouTube
+            <input type="url" id="transform-url" placeholder="https://www.youtube.com/watch?v=..." />
           </label>
+          <div class="form-row">
+            <label>
+              Template
+              <select id="transform-template">
+                <option value="">(default)</option>
+                <option value="commentary">Commentary (9:16)</option>
+                <option value="news">News</option>
+                <option value="podcast">Podcast</option>
+                <option value="sports">Sports</option>
+              </select>
+            </label>
+            <label>
+              Engine Render
+              <select id="transform-engine">
+                <option value="ffmpeg-template" selected>FFmpeg Template</option>
+                <option value="remotion">Remotion</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              Bahasa Script
+              <select id="transform-language">
+                <option value="id" selected>Indonesia</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>
+              TTS Voice
+              <select id="transform-voice">
+                <option value="id-ID-ArdiNeural" selected>Ardi (ID)</option>
+                <option value="id-ID-GadisNeural">Gadis (ID)</option>
+                <option value="en-US-GuyNeural">Guy (EN)</option>
+                <option value="en-US-AriaNeural">Aria (EN)</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <input type="checkbox" id="transform-rights-gate" checked />
+              Rights Gate
+            </label>
+            <label>
+              <input type="checkbox" id="transform-quality-check" checked />
+              Quality Check
+            </label>
+          </div>
           <label class="wide">
-            Subreddit (pisahkan koma)
-            <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
+            Nama Channel (opsional)
+            <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
           </label>
-          <label class="wide">
-            Provider riset
-            <div class="provider-chips" id="res-providers">
-              <button type="button" class="chip-toggle active" data-provider="rss">📰 RSS Berita</button>
-              <button type="button" class="chip-toggle active" data-provider="reddit">🤖 Reddit</button>
-              <button type="button" class="chip-toggle active" data-provider="trends">📈 Google Trends</button>
-              <button type="button" class="chip-toggle active" data-provider="x">🐦 X/Twitter</button>
-            </div>
-          </label>
-          <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
+          <button class="btn primary" id="btn-transform">🚀 Mulai Transform</button>
         </div>
-        <div class="progress hidden" id="research-progress">
-          <div class="progress-bar"><div class="progress-fill" id="research-progress-fill"></div></div>
-          <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal…</span>
+        <div class="progress hidden" id="transform-progress">
+          <div class="progress-bar"><div class="progress-fill" id="transform-progress-fill"></div></div>
+          <span class="progress-label" id="transform-progress-label">Mempersiapkan…</span>
         </div>
       </div>
 
-      <div id="research-results" class="results hidden">
+      <!-- Progress stages -->
+      <div id="transform-stages" class="stages hidden">
+        <div class="stage" data-stage="transcript">
+          <div class="stage-icon">🎙️</div>
+          <div class="stage-content">
+            <div class="stage-title">Transkripsi</div>
+            <div class="stage-desc">Whisper ekstraksi audio ke text</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="angle">
+          <div class="stage-icon">💡</div>
+          <div class="stage-content">
+            <div class="stage-title">Analisis Angle</div>
+            <div class="stage-desc">LLM identifikasi angle viral</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="script">
+          <div class="stage-icon">📝</div>
+          <div class="stage-content">
+            <div class="stage-title">Penulisan Script</div>
+            <div class="stage-desc">Generate script orisinal + LCS check</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="tts">
+          <div class="stage-icon">🔊</div>
+          <div class="stage-content">
+            <div class="stage-title">TTS Synthesis</div>
+            <div class="stage-desc">Edge TTS convert script ke audio</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="plan">
+          <div class="stage-icon">🎬</div>
+          <div class="stage-content">
+            <div class="stage-title">Video Plan</div>
+            <div class="stage-desc">Scene breakdown & timing</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="render">
+          <div class="stage-icon">⚡</div>
+          <div class="stage-content">
+            <div class="stage-title">Rendering</div>
+            <div class="stage-desc">FFmpeg/Remotion composition</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+      </div>
+
+      <div id="transform-results" class="results hidden">
         <div class="results-head">
-          <h2>📊 Topik Terdeteksi</h2>
-          <span class="muted" id="research-meta"></span>
+          <h2>🎥 Transform Selesai</h2>
+          <span class="muted" id="transform-meta"></span>
         </div>
-        <div id="research-list"></div>
+        <div id="transform-list"></div>
       </div>
 
-      <div class="card error-card hidden" id="research-error">
-        <h3>⚠️ Gagal Riset</h3>
-        <p id="research-error-msg"></p>
+      <div class="card error-card hidden" id="transform-error">
+        <h3>⚠️ Transform Gagal</h3>
+        <p id="transform-error-msg"></p>
       </div>
     </section>
 
-    <!-- ============ TAB: BUAT KLIP ============ -->
-    <section id="tab-clip" class="tab-panel">
+    <!-- ============ TAB: RIGHTS & REVIEW ============ -->
+    <section id="tab-rights" class="tab-panel">
       <div class="card">
         <div class="card-head">
-          <h2>✂️ Buat Klip Viral</h2>
-          <p class="muted">Tempel URL YouTube — sistem akan menemukan momen paling viral dan render short 9:16 dengan caption animasi.</p>
+          <h2>⚖️ Rights Gate & Review</h2>
+          <p class="muted">Verifikasi hak cipta source dan approve konten sebelum publish.</p>
         </div>
-        <div class="clip-controls">
+        <div class="rights-controls">
           <label class="wide">
-            URL YouTube
-            <input type="url" id="clip-url" placeholder="https://www.youtube.com/watch?v=..." />
+            Video ID / URL
+            <input type="text" id="rights-video-id" placeholder="QyW1rOk-qqI atau URL YouTube" />
           </label>
-          <label>
-            Template
-            <select id="clip-template">
-              <option value="">(default)</option>
-            </select>
-          </label>
-          <label>
-            Gaya
-            <select id="clip-acting">
-              <option value="">(default)</option>
-              <option value="viral">Viral</option>
-              <option value="goal">Goal</option>
-              <option value="motogp">MotoGP</option>
-            </select>
-          </label>
-          <label>
-            Nama channel
-            <input type="text" id="clip-channel-name" placeholder="opsional" />
-          </label>
-          <label>
-            Logo URL
-            <input type="url" id="clip-channel-logo" placeholder="opsional" />
-          </label>
-          <button class="btn primary" id="btn-clip">🎬 Buat Klip</button>
-        </div>
-        <div class="progress hidden" id="clip-progress">
-          <div class="progress-bar"><div class="progress-fill" id="clip-progress-fill"></div></div>
-          <span class="progress-label" id="clip-progress-label">Mengunduh video…</span>
+          <button class="btn" id="btn-check-rights">🔍 Cek Rights</button>
+          <button class="btn" id="btn-check-quality">✅ Quality Check</button>
         </div>
       </div>
 
-      <div id="clip-results" class="results hidden">
+      <div id="rights-result" class="results hidden">
         <div class="results-head">
-          <h2>🎥 Klip Siap Upload</h2>
-          <span class="muted" id="clip-meta"></span>
+          <h2>📋 Status Rights</h2>
+          <span class="muted" id="rights-meta"></span>
         </div>
-        <div id="clip-list"></div>
+        <div id="rights-content"></div>
       </div>
 
-      <div class="card error-card hidden" id="clip-error">
-        <h3>⚠️ Gagal Membuat Klip</h3>
-        <p id="clip-error-msg"></p>
+      <div id="quality-result" class="results hidden">
+        <div class="results-head">
+          <h2>📊 Quality Check</h2>
+          <span class="muted" id="quality-meta"></span>
+        </div>
+        <div id="quality-content"></div>
       </div>
     </section>
 
@@ -145,18 +204,18 @@
     <section id="tab-history" class="tab-panel">
       <div class="card">
         <div class="card-head">
-          <h2>🕘 Riwayat Klip</h2>
-          <p class="muted">Manifest klip yang sudah berhasil dirender (<code>outputs/metadata/clips.json</code>).</p>
+          <h2>🕘 Riwayat Transform</h2>
+          <p class="muted">Daftar job transform yang pernah dijalankan.</p>
         </div>
         <div id="history-list" class="history-list">
-          <p class="muted">Belum ada klip.</p>
+          <p class="muted">Belum ada riwayat.</p>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <p>Viral Clip Studio — powered by <a href="https://github.com/satalesmana/youtube-clip" target="_blank" rel="noopener">youtube-clip</a> · Whisper · Ollama · FFmpeg</p>
+    <p>Viral Clip Studio v0.1 — Sprint A-G Complete · FFmpeg Template + Remotion Engine</p>
   </footer>
 
   <!-- Toast -->
