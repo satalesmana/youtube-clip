@@ -35,12 +35,10 @@
   }
 
   function extractVideoId(input) {
-    // Handle full URL or raw video ID
     if (input.startsWith('http')) {
       const match = input.match(/[?&]v=([^&]+)/);
       return match ? match[1] : null;
     }
-    // Assume it's a video ID
     return input.length >= 10 ? input : null;
   }
 
@@ -160,6 +158,95 @@
     } catch { /* templates optional */ }
   }
 
+  /* ---------- Provider chip toggles ---------- */
+  $$('.chip-toggle').forEach((chip) => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+
+  /* ---------- Research ---------- */
+  $('#btn-research').addEventListener('click', async () => {
+    const btn = $('#btn-research');
+    btn.disabled = true;
+    $('#research-results').classList.add('hidden');
+    $('#research-error').classList.add('hidden');
+    setProgress('research', true, 8, 'Mengumpulkan sinyal dari RSS, Reddit, Trends & X…');
+
+    try {
+      const body = {
+        max_trends: Number($('#res-max-trends').value) || 10,
+        language: $('#res-language').value,
+      };
+      const keyword = $('#res-keyword').value.trim();
+      if (keyword) body.keyword = keyword;
+      const subs = $('#res-subreddits').value.trim();
+      if (subs) body.subreddits = subs;
+
+      const selectedProviders = $$('.chip-toggle.active').map((c) => c.dataset.provider);
+      if (selectedProviders.length > 0) body.providers = selectedProviders;
+
+      setProgress('research', true, 35, 'Menganalisis topik viral dengan AI…');
+      const data = await apiPost('/api/research', body);
+      setProgress('research', true, 90, 'Mencari video YouTube…');
+      await new Promise((r) => setTimeout(r, 300));
+      setProgress('research', false);
+      renderResearch(data);
+    } catch (error) {
+      setProgress('research', false);
+      $('#research-error').classList.remove('hidden');
+      $('#research-error-msg').textContent = error.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function renderResearch(data) {
+    const list = $('#research-list');
+    const trends = data.trends || [];
+    list.innerHTML = '';
+
+    $('#research-meta').textContent =
+      `${trends.length} topik dari ${data.signalCount ?? 0} sinyal` +
+      (data.skippedSources?.length
+        ? ` · dilewati: ${data.skippedSources.map((s) => s.source).join(', ')}`
+        : '');
+
+    trends.forEach((trend) => {
+      const card = document.createElement('div');
+      card.className = 'trend-card';
+
+      const videos = (trend.videos || []).map((v) => `
+        <div class="video-row">
+          ${v.thumbnailUrl
+            ? `<img class="video-thumb" src="${esc(v.thumbnailUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+            : `<div class="video-thumb"></div>`}
+          <div class="video-info">
+            <div class="video-title" title="${esc(v.title)}">${esc(v.title)}</div>
+            <div class="video-meta">${esc(v.channel || '')}${v.viewCount != null ? ` · ${fmtViews(v.viewCount)} views` : ''}${v.durationSeconds != null ? ` · ${fmtDuration(v.durationSeconds)}` : ''}</div>
+          </div>
+          <div class="video-actions">
+            <button class="btn ghost small" data-action="clip" data-url="${esc(v.url)}">Buat Klip</button>
+            <button class="btn ghost small" data-action="copy" data-url="${esc(v.url)}">Salin URL</button>
+          </div>
+        </div>`).join('') || '<p class="muted">Tidak ada video ditemukan.</p>';
+
+      card.innerHTML = `
+        <div class="trend-head">
+          <div class="score-badge">${trend.score ?? 0}</div>
+          <div style="flex:1; min-width:0">
+            <div class="trend-title">${esc(trend.title)}</div>
+            <span class="trend-cat">${esc(trend.category || 'other')}</span>
+          </div>
+        </div>
+        ${trend.summary ? `<p class="trend-summary">${esc(trend.summary)}</p>` : ''}
+        ${trend.keywords ? `<p class="trend-keywords">🔑 <code>${esc(trend.keywords)}</code></p>` : ''}
+        <div class="videos">${videos}</div>`;
+
+      list.appendChild(card);
+    });
+
+    $('#research-results').classList.remove('hidden');
+  }
+
   /* ---------- Transform Pipeline ---------- */
   $('#btn-transform').addEventListener('click', async () => {
     const url = $('#transform-url').value.trim();
@@ -175,7 +262,6 @@
     $('#transform-error').classList.add('hidden');
     $('#transform-stages').classList.remove('hidden');
 
-    // Reset stages
     ['transcript', 'angle', 'script', 'tts', 'plan', 'render'].forEach(s => setStageStatus(s, 'pending'));
     setProgress('transform', true, 5, 'Memulai transformasi…');
 
@@ -185,7 +271,7 @@
         url,
         template: $('#transform-template').value || undefined,
         engine: $('#transform-engine').value || 'ffmpeg-template',
-        language: $('#transform-language').value || 'id',
+        language: $('#transform-lang').value || 'id',
         voice: $('#transform-voice').value || undefined,
         channelName: $('#transform-channel').value.trim() || undefined,
         rightsGate: $('#transform-rights-gate').checked,
@@ -234,10 +320,8 @@
       return;
     }
 
-    // Show stages as done
     ['transcript', 'angle', 'script', 'tts', 'plan', 'render'].forEach(s => setStageStatus(s, 'done'));
 
-    // Create result card
     const card = document.createElement('div');
     card.className = 'transform-result';
 
@@ -441,6 +525,12 @@
       updateRights(id, 'AUTHORIZED');
     } else if (action === 'reject') {
       updateRights(id, 'REJECTED');
+    } else if (action === 'clip') {
+      if (url) {
+        $('#transform-url').value = url;
+        $$('.tab').find((t) => t.dataset.tab === 'transform')?.click();
+        toast('URL dimasukkan — klik Mulai Transform', 'success');
+      }
     }
   });
 
@@ -448,7 +538,6 @@
     try {
       await apiPost(`/api/rights/${videoId}`, { status, updatedBy: 'web-ui' });
       toast(`Rights updated to ${status}`, 'success');
-      // Refresh rights view if visible
       if (!$('#rights-result').classList.contains('hidden')) {
         const data = await apiGet(`/api/rights/${videoId}`);
         renderRightsResult(data);

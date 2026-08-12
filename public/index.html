@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Viral Clip Studio — Transformasi Konten Viral</title>
+  <title>Viral Clip Studio — Riset & Transformasi Konten</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
 </head>
@@ -13,7 +13,7 @@
       <span class="brand-logo">🎬</span>
       <div>
         <h1>Viral Clip Studio</h1>
-        <p class="tagline">YouTube URL → Script orisinal → TTS → Video 9:16 siap upload</p>
+        <p class="tagline">Riset topik viral → Transformasi konten → Buat short siap upload</p>
       </div>
     </div>
     <div class="status-pill" id="status-pill">
@@ -23,14 +23,74 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="transform" role="tab" aria-selected="true">✨ Transform</button>
+    <button class="tab active" data-tab="research" role="tab" aria-selected="true">🔍 Riset Viral</button>
+    <button class="tab" data-tab="transform" role="tab" aria-selected="false">✨ Transform</button>
     <button class="tab" data-tab="rights" role="tab" aria-selected="false">⚖️ Rights & Review</button>
     <button class="tab" data-tab="history" role="tab" aria-selected="false">🕘 Riwayat</button>
   </nav>
 
   <main>
+    <!-- ============ TAB: RISET VIRAL ============ -->
+    <section id="tab-research" class="tab-panel active">
+      <div class="card">
+        <div class="card-head">
+          <h2>🔍 Riset Topik Viral</h2>
+          <p class="muted">Kumpulkan sinyal dari RSS berita, Reddit, Google Trends & X, lalu ranking dengan AI.</p>
+        </div>
+        <div class="research-controls">
+          <label>
+            Jumlah topik
+            <input type="number" id="res-max-trends" min="1" max="25" value="10" />
+          </label>
+          <label>
+            Bahasa
+            <select id="res-language">
+              <option value="auto">Auto</option>
+              <option value="id">Indonesia</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <label class="wide">
+            Keyword pencarian (Google News)
+            <input type="text" id="res-keyword" placeholder="misal: teknologi AI, politik Indonesia, Piala Dunia" />
+          </label>
+          <label class="wide">
+            Subreddit (pisahkan koma)
+            <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
+          </label>
+          <label class="wide">
+            Provider riset
+            <div class="provider-chips" id="res-providers">
+              <button type="button" class="chip-toggle active" data-provider="rss">📰 RSS Berita</button>
+              <button type="button" class="chip-toggle active" data-provider="reddit">🤖 Reddit</button>
+              <button type="button" class="chip-toggle active" data-provider="trends">📈 Google Trends</button>
+              <button type="button" class="chip-toggle active" data-provider="x">🐦 X/Twitter</button>
+            </div>
+          </label>
+          <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
+        </div>
+        <div class="progress hidden" id="research-progress">
+          <div class="progress-bar"><div class="progress-fill" id="research-progress-fill"></div></div>
+          <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal…</span>
+        </div>
+      </div>
+
+      <div id="research-results" class="results hidden">
+        <div class="results-head">
+          <h2>📊 Topik Terdeteksi</h2>
+          <span class="muted" id="research-meta"></span>
+        </div>
+        <div id="research-list"></div>
+      </div>
+
+      <div class="card error-card hidden" id="research-error">
+        <h3>⚠️ Gagal Riset</h3>
+        <p id="research-error-msg"></p>
+      </div>
+    </section>
+
     <!-- ============ TAB: TRANSFORM ============ -->
-    <section id="tab-transform" class="tab-panel active">
+    <section id="tab-transform" class="tab-panel">
       <div class="card">
         <div class="card-head">
           <h2>✨ Transformasi Konten</h2>
@@ -63,7 +123,7 @@
           <div class="form-row">
             <label>
               Bahasa Script
-              <select id="transform-language">
+              <select id="transform-lang">
                 <option value="id" selected>Indonesia</option>
                 <option value="en">English</option>
               </select>
@@ -204,8 +264,8 @@
     <section id="tab-history" class="tab-panel">
       <div class="card">
         <div class="card-head">
-          <h2>🕘 Riwayat Transform</h2>
-          <p class="muted">Daftar job transform yang pernah dijalankan.</p>
+          <h2>🕘 Riwayat</h2>
+          <p class="muted">Daftar job riset dan transform yang pernah dijalankan.</p>
         </div>
         <div id="history-list" class="history-list">
           <p class="muted">Belum ada riwayat.</p>
