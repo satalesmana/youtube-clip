@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { statSync } from 'node:fs';
 import { env } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
 import { OllamaProvider } from '../providers/ollama.provider.js';
@@ -47,6 +48,24 @@ import type { AssStyleConfig } from '../types/subtitle.js';
 
 const rootDir = process.cwd();
 
+/**
+ * Resolves the whisper binary path: when the configured path is a bare name
+ * (e.g. "whisperx"), checks the project's `.venv/bin/` first — where
+ * `uv`/`pip` venvs place console-scripts — before falling back to PATH.
+ */
+function resolveWhisperBinary(configuredPath: string): string {
+  if (configuredPath.includes('/') || configuredPath.includes('\\')) {
+    return configuredPath; // already absolute / relative with separators
+  }
+  const venvBin = resolve(rootDir, '.venv', 'bin', configuredPath);
+  try {
+    if (statSync(venvBin).isFile()) return venvBin;
+  } catch {
+    // .venv/bin/<binary> doesn't exist — fall through to PATH
+  }
+  return configuredPath;
+}
+
 const paths = {
   outputs: resolve(rootDir, env.OUTPUTS_DIR),
   clips: resolve(rootDir, env.OUTPUTS_DIR, 'clips'),
@@ -80,7 +99,7 @@ const transcriptService = new TranscriptService(
 const whisperService = new WhisperService(
   {
     provider: env.WHISPER_PROVIDER,
-    binaryPath: env.WHISPER_BINARY_PATH,
+    binaryPath: resolveWhisperBinary(env.WHISPER_BINARY_PATH),
     model: env.WHISPER_MODEL,
     language: env.WHISPER_LANGUAGE,
     outputDir: resolve(rootDir, 'outputs', 'temp'),
@@ -208,9 +227,15 @@ registerDefaultLayers(layerRegistry, { reframeService });
 
 const validationService = new ValidationService(layerRegistry);
 const templateAssService = new TemplateAssService(assService, { fallbackStyle: assStyle });
-const filtergraphService = new FiltergraphService(layerRegistry, { frameRate: env.RENDER_FRAME_RATE });
+const filtergraphService = new FiltergraphService(layerRegistry, {
+  frameRate: env.RENDER_FRAME_RATE,
+});
 
-const templateService = new TemplateService(templateLoaderService, validationService, bindingService);
+const templateService = new TemplateService(
+  templateLoaderService,
+  validationService,
+  bindingService,
+);
 
 const templateRendererService = new TemplateRendererService(
   {

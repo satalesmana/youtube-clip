@@ -119,7 +119,17 @@ export class AppError extends Error {
     return AppError.internal(fallbackMessage, error);
   }
 
-  toJSON(): { message: string; code: ErrorCode; statusCode: number } {
-    return { message: this.message, code: this.code, statusCode: this.statusCode };
+  toJSON(): { message: string; code: ErrorCode; statusCode: number; cause?: string } {
+    const json: { message: string; code: ErrorCode; statusCode: number; cause?: string } = {
+      message: this.message,
+      code: this.code,
+      statusCode: this.statusCode,
+    };
+    if (this.cause instanceof Error) {
+      json.cause = this.cause.message;
+    } else if (typeof this.cause === 'string') {
+      json.cause = this.cause;
+    }
+    return json;
   }
 }

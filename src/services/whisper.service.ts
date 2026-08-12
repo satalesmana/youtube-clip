@@ -21,10 +21,7 @@ export interface WhisperServiceOptions {
 
 /** Transcribes audio into a timestamped transcript. */
 export interface IWhisperService {
-  transcribe(
-    audioPath: string,
-    workspace?: Pick<JobWorkspace, 'temp'>,
-  ): Promise<TranscriptResult>;
+  transcribe(audioPath: string, workspace?: Pick<JobWorkspace, 'temp'>): Promise<TranscriptResult>;
 }
 
 // ── Faster Whisper JSON shapes ──────────────────────────────────────────
@@ -132,7 +129,8 @@ export class WhisperService implements IWhisperService {
           return await this.transcribeWithFasterWhisper(audioPath, outputDir);
       }
     } catch (error) {
-      throw AppError.whisperFailed(`Failed to transcribe audio "${audioPath}".`, error);
+      const detail = error instanceof Error ? error.message : String(error);
+      throw AppError.whisperFailed(`Failed to transcribe audio "${audioPath}": ${detail}`, error);
     }
   }
 
@@ -140,15 +138,22 @@ export class WhisperService implements IWhisperService {
    * Uses a Faster Whisper CLI (e.g. `whisper-ctranslate2`) with JSON output
    * and word-level timestamps enabled.
    */
-  private async transcribeWithFasterWhisper(audioPath: string, outputDir: string): Promise<TranscriptResult> {
+  private async transcribeWithFasterWhisper(
+    audioPath: string,
+    outputDir: string,
+  ): Promise<TranscriptResult> {
     const { binaryPath, model, language } = this.options;
 
     const args = [
       audioPath,
-      '--model', model,
-      '--output_format', 'json',
-      '--output_dir', outputDir,
-      '--word_timestamps', 'True',
+      '--model',
+      model,
+      '--output_format',
+      'json',
+      '--output_dir',
+      outputDir,
+      '--word_timestamps',
+      'True',
       ...this.extraCliArgs(),
     ];
     if (language && language !== 'auto') args.push('--language', language);
@@ -162,14 +167,16 @@ export class WhisperService implements IWhisperService {
       start: segment.start,
       end: segment.end,
       text: segment.text.trim(),
-      words: segment.words?.map(
-        (word): WordTimestamp => ({ word: word.word.trim(), start: word.start, end: word.end }),
-      ),
+      words: segment.words?.map((word): WordTimestamp => ({
+        word: word.word.trim(),
+        start: word.start,
+        end: word.end,
+      })),
     }));
 
     return {
       language: raw.language ?? language,
-      durationSeconds: raw.duration ?? (segments.at(-1)?.end ?? 0),
+      durationSeconds: raw.duration ?? segments.at(-1)?.end ?? 0,
       segments,
     };
   }
@@ -179,11 +186,22 @@ export class WhisperService implements IWhisperService {
    * (full JSON output), which yields sentence-level segments each carrying
    * a nested `tokens` array with word-level timestamps.
    */
-  private async transcribeWithWhisperCpp(audioPath: string, outputDir: string): Promise<TranscriptResult> {
+  private async transcribeWithWhisperCpp(
+    audioPath: string,
+    outputDir: string,
+  ): Promise<TranscriptResult> {
     const { binaryPath, model, language } = this.options;
     const outputPrefix = join(outputDir, basename(audioPath, extname(audioPath)));
 
-    const args = ['-m', model, '-f', audioPath, '-oj', '-ojf', '-of', outputPrefix,
+    const args = [
+      '-m',
+      model,
+      '-f',
+      audioPath,
+      '-oj',
+      '-ojf',
+      '-of',
+      outputPrefix,
       ...this.extraCliArgs(),
     ];
     if (language && language !== 'auto') args.push('-l', language);
@@ -198,13 +216,11 @@ export class WhisperService implements IWhisperService {
       text: segment.text.trim(),
       words: segment.tokens
         ?.filter((token) => isRealWordToken(token.text))
-        .map(
-          (token): WordTimestamp => ({
-            word: token.text.trim(),
-            start: token.offsets.from / 1000,
-            end: token.offsets.to / 1000,
-          }),
-        ),
+        .map((token): WordTimestamp => ({
+          word: token.text.trim(),
+          start: token.offsets.from / 1000,
+          end: token.offsets.to / 1000,
+        })),
     }));
 
     return {
@@ -221,14 +237,20 @@ export class WhisperService implements IWhisperService {
    *
    * CLI: `whisperx audio.wav --model base --language en --output_format json`
    */
-  private async transcribeWithWhisperX(audioPath: string, outputDir: string): Promise<TranscriptResult> {
+  private async transcribeWithWhisperX(
+    audioPath: string,
+    outputDir: string,
+  ): Promise<TranscriptResult> {
     const { binaryPath, model, language } = this.options;
 
     const args = [
       audioPath,
-      '--model', model,
-      '--output_format', 'json',
-      '--output_dir', outputDir,
+      '--model',
+      model,
+      '--output_format',
+      'json',
+      '--output_dir',
+      outputDir,
       ...this.extraCliArgs(),
     ];
     if (language && language !== 'auto') args.push('--language', language);
@@ -242,14 +264,16 @@ export class WhisperService implements IWhisperService {
       start: segment.start,
       end: segment.end,
       text: segment.text.trim(),
-      words: segment.words?.map(
-        (w): WordTimestamp => ({ word: w.word.trim(), start: w.start, end: w.end }),
-      ),
+      words: segment.words?.map((w): WordTimestamp => ({
+        word: w.word.trim(),
+        start: w.start,
+        end: w.end,
+      })),
     }));
 
     return {
       language: raw.language ?? language,
-      durationSeconds: raw.duration ?? (segments.at(-1)?.end ?? 0),
+      durationSeconds: raw.duration ?? segments.at(-1)?.end ?? 0,
       segments,
     };
   }
