@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { extractAudio, probeDurationSeconds } from '../utils/ffmpeg.js';
 import { ensureDir } from '../utils/fs.js';
 import { estimateTokens } from '../utils/timestamp.js';
@@ -27,6 +27,7 @@ export interface TranscriptServiceOptions {
  * transcript into LLM-sized chunks with time-based overlap.
  */
 export interface ITranscriptService {
+  loadTranscript(videoId: string): Promise<TranscriptDocument | null>;
   extractAudio(
     videoPath: string,
     videoId: string,
@@ -72,6 +73,17 @@ export class TranscriptService implements ITranscriptService {
     });
 
     return { audioPath, durationSeconds };
+  }
+
+  /** Loads a saved transcript by video ID. */
+  async loadTranscript(videoId: string): Promise<TranscriptDocument | null> {
+    const transcriptPath = join(this.options.transcriptsDir, `${videoId}.json`);
+    try {
+      const data = await readFile(transcriptPath, 'utf-8');
+      return JSON.parse(data) as TranscriptDocument;
+    } catch {
+      return null;
+    }
   }
 
   /** Persists a transcript document as JSON under the transcripts directory. */

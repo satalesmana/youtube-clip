@@ -97,62 +97,65 @@
           <p class="muted">Masukkan URL YouTube — sistem akan generate script orisinal, narasi TTS, dan render video 9:16.</p>
         </div>
         <div class="transform-controls">
-          <label class="wide">
-            URL YouTube
+          <div class="input-group">
+            <label class="label-main">URL YouTube</label>
             <input type="url" id="transform-url" placeholder="https://www.youtube.com/watch?v=..." />
-          </label>
+          </div>
+
           <div class="form-row">
-            <label>
-              Template
-              <select id="transform-template">
-                <option value="">(default)</option>
-                <option value="commentary">Commentary (9:16)</option>
-                <option value="news">News</option>
-                <option value="podcast">Podcast</option>
-                <option value="sports">Sports</option>
-              </select>
-            </label>
-            <label>
-              Engine Render
+            <div class="input-group">
+              <label class="label-main">Engine</label>
               <select id="transform-engine">
-                <option value="ffmpeg-template" selected>FFmpeg Template</option>
+                <option value="ffmpeg-template">FFmpeg Template</option>
                 <option value="remotion">Remotion</option>
               </select>
-            </label>
+            </div>
+            <div class="input-group hidden" id="remotion-style-group">
+              <label class="label-main">Style</label>
+              <select id="transform-style">
+                <option value="commentary">Commentary</option>
+                <option value="sports">Sports News</option>
+                <option value="interview">Interview</option>
+              </select>
+            </div>
           </div>
+
           <div class="form-row">
-            <label>
-              Bahasa Script
+            <div class="input-group">
+              <label class="label-main">Bahasa</label>
               <select id="transform-lang">
                 <option value="id" selected>Indonesia</option>
                 <option value="en">English</option>
               </select>
-            </label>
-            <label>
-              TTS Voice
+            </div>
+            <div class="input-group">
+              <label class="label-main">TTS Voice</label>
               <select id="transform-voice">
                 <option value="id-ID-ArdiNeural" selected>Ardi (ID)</option>
                 <option value="id-ID-GadisNeural">Gadis (ID)</option>
                 <option value="en-US-GuyNeural">Guy (EN)</option>
                 <option value="en-US-AriaNeural">Aria (EN)</option>
               </select>
-            </label>
+            </div>
           </div>
-          <div class="form-row">
-            <label>
+
+          <div class="checkbox-row">
+            <label class="checkbox-item">
               <input type="checkbox" id="transform-rights-gate" checked />
-              Rights Gate
+              <span>Rights Gate</span>
             </label>
-            <label>
+            <label class="checkbox-item">
               <input type="checkbox" id="transform-quality-check" checked />
-              Quality Check
+              <span>Quality Check</span>
             </label>
           </div>
-          <label class="wide">
-            Nama Channel (opsional)
+
+          <div class="input-group">
+            <label class="label-main">Nama Channel <span class="optional">(opsional)</span></label>
             <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
-          </label>
-          <button class="btn primary" id="btn-transform">🚀 Mulai Transform</button>
+          </div>
+
+          <button class="btn primary full" id="btn-transform">🚀 Mulai Transform</button>
         </div>
         <div class="progress hidden" id="transform-progress">
           <div class="progress-bar"><div class="progress-fill" id="transform-progress-fill"></div></div>

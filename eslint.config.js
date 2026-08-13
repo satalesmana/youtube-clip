@@ -36,6 +36,8 @@ export default [
       'dist/**',
       'scripts/**',
       'public/**', // browser JS/CSS/HTML — not part of the Node/TS lint scope
+      'compositions/**', // Remotion compositions have their own tsconfig
+      '.venv/**', // Python venv files
     ],
   },
   prettier,

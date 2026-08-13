@@ -45,6 +45,9 @@ const envSchema = z.object({
 
   OUTPUTS_DIR: z.string().min(1).default('outputs'),
   TEMPLATES_DIR: z.string().min(1).default('templates'),
+  COMPOSITIONS_DIR: z.string().min(1).default('compositions'),
+  COMPOSITION_STYLE: z.enum(['commentary', 'sports', 'interview']).default('commentary'),
+  COMPOSITION_ENGINE: z.enum(['ffmpeg-template', 'remotion']).default('ffmpeg-template'),
 
   CHUNK_MAX_TOKENS: z.coerce.number().int().positive().default(2500),
   CHUNK_OVERLAP_SECONDS: z.coerce.number().int().min(0).default(18),
@@ -149,6 +152,22 @@ const envSchema = z.object({
   RESEARCH_LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   RESEARCH_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
   RESEARCH_LLM_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
+
+  // --- AI Viral Content Transformer: TTS ---
+  // edge-tts (default, free, local via CLI) | openai (OpenAI-compatible)
+  TTS_PROVIDER: z.enum(['edge-tts', 'openai']).default('edge-tts'),
+  // Voice name, e.g. "id-ID-ArdiNeural", "en-US-AndrewMultilingualNeural"
+  TTS_VOICE: z.string().min(1).default('id-ID-ArdiNeural'),
+  // Speaking-rate adjustment, e.g. "+10%"
+  TTS_RATE: z.string().default('+0%'),
+  // Optional language hint passed to the provider (e.g. "id", "en")
+  TTS_LANGUAGE: z.string().optional(),
+
+  // OpenAI-compatible TTS endpoint (only when TTS_PROVIDER=openai)
+  TTS_BASE_URL: z.string().optional(),
+  TTS_API_KEY: z.string().optional(),
+  TTS_MODEL: z.string().optional(),
+  TTS_BINARY_PATH: z.string().optional(),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 

@@ -18,6 +18,11 @@ import { ReframeService } from '../services/reframe.service.js';
 import { ThumbnailService } from '../services/thumbnail.service.js';
 import { RendererService } from '../services/renderer.service.js';
 import { ProcessController } from '../controllers/process.controller.js';
+import { ContentAngleService } from '../content/angle.service.js';
+import { ScriptService } from '../content/script.service.js';
+import { VideoPlanService } from '../content/video-plan.service.js';
+import { createTtsProvider } from '../providers/tts/tts.factory.js';
+import { TtsService } from '../services/tts.service.js';
 import { ResearchController } from '../controllers/research.controller.js';
 import { RssProvider } from '../research/rss.provider.js';
 import { RedditProvider } from '../research/reddit.provider.js';
@@ -38,6 +43,9 @@ import { TemplateAssService } from '../template/ass.service.js';
 import { FiltergraphService } from '../template/filtergraph.service.js';
 import { TemplateService } from '../template/template.service.js';
 import { TemplateRendererService } from '../template/renderer.service.js';
+import { RightsService } from '../rights/rights.service.js';
+import { QualityCheckService } from '../rights/quality.service.js';
+import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 
 /**
@@ -283,6 +291,115 @@ export const processController = new ProcessController({
   logger: createLogger('process.controller'),
 });
 
+// --- AI Viral Content Transformer: content pipeline (Sprint A) ---
+
+/**
+ * Content angle generator: proposes 3-5 editorial angles per viral moment
+ * using the same AI backend as highlight analysis. New module — the existing
+ * process pipeline above is untouched.
+ */
+export const contentAngleService = new ContentAngleService(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('content.angle'),
+);
+
+/**
+ * Script engine (Sprint B): turns a chosen content angle into an original
+ * short-form narration script. New module — the existing pipelines are
+ * untouched.
+ */
+export const scriptService = new ScriptService(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('content.script'),
+);
+
+// --- TTS (Sprint C) ---
+
+/**
+ * TTS provider selection: `edge-tts` (free local CLI) by default, or an
+ * OpenAI-compatible endpoint. Constructed lazily inside a function so tests
+ * and tools can override the provider without touching the container.
+ */
+export function createTtsService(overrides?: { provider?: ReturnType<typeof createTtsProvider> }): TtsService {
+  const logger = createLogger('tts.service');
+  const provider =
+    overrides?.provider ??
+    createTtsProvider({
+      kind: env.TTS_PROVIDER,
+      edge: {
+        outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+        binaryPath: env.TTS_BINARY_PATH,
+        rate: env.TTS_RATE,
+      },
+      openai: {
+        outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+        baseUrl: env.TTS_BASE_URL,
+        apiKey: env.TTS_API_KEY,
+        model: env.TTS_MODEL,
+        rate: env.TTS_RATE,
+      },
+      logger,
+    });
+
+  return new TtsService(
+    provider,
+    {
+      voice: env.TTS_VOICE,
+      rate: env.TTS_RATE,
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      language: env.TTS_LANGUAGE,
+    },
+    logger,
+  );
+}
+
+export const ttsService = createTtsService();
+
+// --- Video planner (Sprint D) ---
+
+/** Builds a scene plan (timeline) from a script + candidate timing. */
+export const videoPlanService = new VideoPlanService(
+  { targetDuration: 60, wordsPerMinute: 150 },
+  createLogger('content.video-plan'),
+);
+
+// --- Rights gate + Quality check (Sprint F) ---
+
+/** Filesystem-backed rights gate — stores per-video rights metadata. */
+export const rightsService = new RightsService(
+  paths.outputs,
+  createLogger('rights'),
+);
+
+/** Quality check service — validates output videos meet standards. */
+export const qualityCheckService = new QualityCheckService(
+  createLogger('quality'),
+);
+
+// --- Composition Engine (Sprint G) ---
+
+const compositionsDir = resolve(rootDir, env.COMPOSITIONS_DIR, 'studio');
+export const compositionEngine = createCompositionEngine({
+  templateService,
+  templateRendererService,
+  outputsDir: paths.outputs,
+  compositionsDir,
+  engine: env.COMPOSITION_ENGINE ?? 'ffmpeg-template',
+  logger: createLogger('composition'),
+});
+
 // --- Research pipeline ---
 
 const researchLogger = createLogger('research');
@@ -423,6 +540,14 @@ export const container = {
   templateRendererService,
   rendererService,
   processController,
+  contentAngleService,
+  scriptService,
+  ttsService,
+  videoPlanService,
+  rightsService,
+  qualityCheckService,
   researchService,
   researchController,
+  assStyle,
+  compositionEngine,
 };

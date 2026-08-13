@@ -14,6 +14,7 @@ export const ALLOWED_BINDING_PATHS = [
   'channel.name',
   'channel.logo',
   'thumbnail.path',
+  'commentary.text',
 ] as const;
 
 export type AllowedBindingPath = (typeof ALLOWED_BINDING_PATHS)[number];
@@ -68,6 +69,8 @@ export class BindingService implements IBindingService {
         return context.channel?.logo || undefined;
       case 'thumbnail.path':
         return context.thumbnail?.path || undefined;
+      case 'commentary.text':
+        return context.commentary?.text || undefined;
       default:
         return undefined;
     }

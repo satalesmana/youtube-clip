@@ -268,9 +268,10 @@
     try {
       const videoId = extractVideoId(url);
       const body = {
-        url,
-        template: $('#transform-template').value || undefined,
+        youtubeUrl: url,
+        template: $('#transform-template')?.value || undefined,
         engine: $('#transform-engine').value || 'ffmpeg-template',
+        style: $('#transform-style')?.value || undefined,
         language: $('#transform-lang').value || 'id',
         voice: $('#transform-voice').value || undefined,
         channelName: $('#transform-channel').value.trim() || undefined,
@@ -583,4 +584,14 @@
   /* ---------- Init ---------- */
   checkHealth();
   loadTemplates();
+
+  // Show/hide Remotion style selector based on engine selection
+  const engineSelect = $('#transform-engine');
+  const styleGroup = $('#remotion-style-group');
+  if (engineSelect && styleGroup) {
+    engineSelect.addEventListener('change', (e) => {
+      const isRemotion = e.target.value === 'remotion';
+      styleGroup.classList.toggle('hidden', !isRemotion);
+    });
+  }
 })();
