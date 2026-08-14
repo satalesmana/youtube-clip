@@ -1,4 +1,4 @@
-import { readFile, writeFile, rename } from 'node:fs/promises';
+import { rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { probeDurationSeconds } from '../utils/ffmpeg.js';
 import type { Logger } from '../utils/logger.js';
@@ -51,7 +51,7 @@ export class FfmpegTemplateCompositionEngine implements ICompositionEngine {
     };
 
     try {
-      const loaded = await templateService.load('commentary');
+      const loaded = await templateService.load(assets.templateId ?? 'commentary');
       const enriched = await templateService.resolveLayers(loaded, context);
       await templateRendererService.compose({
         context,

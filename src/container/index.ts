@@ -21,6 +21,7 @@ import { ProcessController } from '../controllers/process.controller.js';
 import { ContentAngleService } from '../content/angle.service.js';
 import { ScriptService } from '../content/script.service.js';
 import { VideoPlanService } from '../content/video-plan.service.js';
+import { StoryService } from '../content/story.service.js';
 import { createTtsProvider } from '../providers/tts/tts.factory.js';
 import { TtsService } from '../services/tts.service.js';
 import { ResearchController } from '../controllers/research.controller.js';
@@ -325,6 +326,18 @@ export const scriptService = new ScriptService(
   createLogger('content.script'),
 );
 
+/** Derives source-backed story beats before script writing and rendering. */
+export const storyService = new StoryService(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('content.story'),
+);
+
 // --- TTS (Sprint C) ---
 
 /**
@@ -542,6 +555,7 @@ export const container = {
   processController,
   contentAngleService,
   scriptService,
+  storyService,
   ttsService,
   videoPlanService,
   rightsService,

@@ -326,8 +326,8 @@
     const card = document.createElement('div');
     card.className = 'transform-result';
 
-    const videoUrl = result.outputVideo || '';
-    const narrationUrl = result.narration?.outputPath || '';
+    const videoUrl = result.outputVideo?.url || result.outputVideo || '';
+    const narrationUrl = result.narration?.url || '';
     const scriptData = result.script || {};
     const angleData = result.angle || {};
 

@@ -1,7 +1,7 @@
 import type { IYoutubeService } from '../services/youtube.service.js';
 import type { ITranscriptService } from '../services/transcript.service.js';
 import type { IWhisperService } from '../services/whisper.service.js';
-import { join, dirname } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { probeDurationSeconds } from '../utils/ffmpeg.js';
 import { extractVideoIdFromUrl } from '../utils/youtube-id.js';
@@ -12,13 +12,15 @@ import type { IContentAngleService, ContentAngleContext } from '../content/angle
 import type { IScriptService } from '../content/script.service.js';
 import type { ITtsService } from '../services/tts.service.js';
 import type { IVideoPlanService, VideoPlanBuildInput } from '../content/video-plan.service.js';
+import type { IStoryService } from '../content/story.service.js';
 import type { TranscriptDocument } from '../types/transcript.js';
+import type { TranscriptSegment } from '../types/transcript.js';
 import type { AngleGenerationResult, ContentAngle } from '../types/angle.js';
 import type { OriginalScript } from '../types/script.js';
 import type { VideoPlan } from '../types/video-plan.js';
 import type { TransformRequestInput } from '../schemas/transform.schema.js';
 import type { RenderContext } from '../types/template.js';
-import type { AssStyleConfig, SubtitleEvent } from '../types/subtitle.js';
+import type { AssStyleConfig } from '../types/subtitle.js';
 import type { ITemplateService } from '../template/template.service.js';
 import type { ITemplateRendererService } from '../template/renderer.service.js';
 import type { IAssService } from '../services/ass.service.js';
@@ -33,6 +35,7 @@ export interface TransformControllerDeps {
   scriptService: IScriptService;
   ttsService: ITtsService;
   videoPlanService: IVideoPlanService;
+  storyService: IStoryService;
   templateService: ITemplateService;
   templateRendererService: ITemplateRendererService;
   assService: IAssService;
@@ -90,11 +93,16 @@ export class TransformController {
     }
 
     // Stage 1: Generate angles
-    const clip = transcript.segments[0] ?? { start: 0, end: 30, text: '' };
+    const selection = this.selectMoment(transcript, request.candidateId);
+    const clip = {
+      start: selection.momentSegments[0]?.start ?? 0,
+      end: selection.momentSegments.at(-1)?.end ?? 30,
+      text: selection.momentSegments.map((segment) => segment.text).join(' '),
+    };
     const angleContext: ContentAngleContext = {
       candidateId: `candidate_${request.candidateId}`,
-      momentSegments: [clip],
-      contextSegments: [],
+      momentSegments: selection.momentSegments,
+      contextSegments: selection.contextSegments,
       candidateTitle: 'Viral Moment',
       candidateHook: '',
       candidateReason: '',
@@ -117,6 +125,21 @@ export class TransformController {
       (a) => a.id === request.selectedAngleId || a.id === angleResult.selectedAngleId,
     ) ?? angleResult.angles[0]!;
 
+    let story: Awaited<ReturnType<IStoryService['buildStory']>> | undefined;
+    try {
+      // Pass both moment and context segments for better story analysis
+      const storySegments = [
+        ...angleContext.contextSegments,
+        ...selection.momentSegments,
+      ];
+      story = await this.deps.storyService.buildStory(storySegments);
+      logger.info({ concept: story.concept, beatCount: story.beats.length }, 'Source story selected');
+    } catch (err) {
+      // The existing source-grounded script path remains available when the
+      // extra story-planning call is unavailable.
+      logger.warn({ err }, 'Source story planning failed; using compatibility script mode');
+    }
+
     // Stage 2: Script
     let script: OriginalScript;
     try {
@@ -128,6 +151,8 @@ export class TransformController {
         angleReason: selectedAngle.reason,
         angleType: selectedAngle.angleType,
         momentSegments: angleContext.momentSegments,
+        contextSegments: angleContext.contextSegments,
+        story,
         candidateTitle: angleContext.candidateTitle,
         candidateHook: angleContext.candidateHook,
         sourceTitle: angleContext.sourceTitle,
@@ -162,6 +187,8 @@ export class TransformController {
         clipStart: angleContext.clipStart,
         clipEnd: angleContext.clipEnd,
         narrationPath: ttsResult.outputPath,
+        narrationDurationSeconds: ttsResult.durationSeconds,
+        story,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
     } catch (err) {
@@ -177,6 +204,7 @@ export class TransformController {
         videoId,
         candidateId: request.candidateId,
         angle: selectedAngle,
+        story,
         script,
         narration: ttsResult,
         videoPlan,
@@ -191,38 +219,23 @@ export class TransformController {
       videoPath, videoId, jobId, request.template ?? 'commentary', videoPlan, ttsResult, request.channel, transcript,
     );
 
-    // Replace source audio with TTS narration for clean output
-    if (ttsResult.outputPath && outputVideo.path) {
-      try {
-        const { runCommand } = await import('../utils/exec.js');
-        const { rename } = await import('node:fs/promises');
-        const mutedVideo = join(dirname(outputVideo.path), 'muted.mp4');
-        await runCommand('ffmpeg', [
-          '-y', '-i', outputVideo.path,
-          '-i', ttsResult.outputPath,
-          '-c:v', 'copy',
-          '-c:a', 'aac', '-b:a', '192k',
-          '-map', '0:v', '-map', '1:a',
-          '-shortest',
-          mutedVideo,
-        ]);
-        await rename(outputVideo.path, `${outputVideo.path}.orig`);
-        await rename(mutedVideo, outputVideo.path);
-      } catch (audioMixError) {
-        logger.warn({ audioMixError }, 'Audio mix failed, keeping original output');
-      }
-    }
-
     return {
       success: true,
       jobId,
       videoId,
       candidateId: request.candidateId,
       angle: selectedAngle,
+      story,
       script,
-      narration: ttsResult,
+      narration: {
+        ...ttsResult,
+        url: ttsResult.outputPath ? this.toMediaUrl(ttsResult.outputPath) : undefined,
+      },
       videoPlan,
-      outputVideo,
+      outputVideo: {
+        ...outputVideo,
+        url: this.toMediaUrl(outputVideo.path),
+      },
       generatedAt: new Date().toISOString(),
       dryRun: false,
     };
@@ -237,7 +250,7 @@ export class TransformController {
     ttsResult: { outputPath: string; durationSeconds: number },
     channel: TransformRequestInput['channel'],
     transcript?: TranscriptDocument | null,
-  ): Promise<{ path: string; durationSeconds: number; sizeBytes: number }> {
+  ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(outputDir);
@@ -256,12 +269,20 @@ export class TransformController {
       narration: ttsResult.outputPath,
       channelName: channel?.name,
       videoId,
+      style: this.toCompositionStyle(templateId),
+      templateId,
     };
 
     try {
       // Try composition engine (Remotion or FFmpeg template)
       const result = await this.deps.compositionEngine.render(videoPlan, assets);
-      return { path: result.path, durationSeconds: result.durationSeconds ?? 0, sizeBytes: result.sizeBytes ?? 0 };
+      return {
+        path: result.path,
+        durationSeconds: result.durationSeconds ?? 0,
+        sizeBytes: result.sizeBytes ?? 0,
+        width: 1080,
+        height: 1920,
+      };
     } catch (engineError) {
       this.deps.logger.warn({ error: engineError }, 'Composition engine failed, falling back to direct template render');
       // Fallback: direct template render (existing behavior)
@@ -303,7 +324,7 @@ export class TransformController {
     const stats = await stat(outputPath);
     const durationSeconds = await probeDurationSeconds({ binaryPath: 'ffmpeg', inputPath: outputPath });
 
-    return { path: outputPath, durationSeconds, sizeBytes: stats.size };
+    return { path: outputPath, durationSeconds, sizeBytes: stats.size, width: 1080, height: 1920 };
   }
 
   private async renderFallback(input: string, output: string, duration: number, narrationPath?: string): Promise<void> {
@@ -356,12 +377,63 @@ export class TransformController {
   }
 
   private fallbackVideoPlan(script: OriginalScript, narrationPath: string): VideoPlan {
+    const sections = script.sections.filter((section) => section.text.trim());
+    const duration = Math.max(1, script.estimatedDurationSeconds);
+    const perScene = duration / Math.max(1, sections.length);
     return {
       candidateId: script.candidateId, angleId: script.angleId,
-      duration: script.estimatedDurationSeconds,
-      scenes: script.sections.map((s) => ({ type: s.type, start: 0, end: 10, narration: s.text, visual: 'speaker' })),
+      duration,
+      scenes: sections.map((s, index) => ({
+        type: s.type,
+        start: Number((index * perScene).toFixed(2)),
+        end: Number(((index + 1) * perScene).toFixed(2)),
+        narration: s.text,
+        visual: s.type === 'hook' || s.type === 'conclusion' ? 'graphic' : 'speaker',
+      })),
       captions: [],
-      audio: { narration: narrationPath, sourceUnderlay: false, ducking: false },
+      audio: { narration: narrationPath, sourceUnderlay: true, ducking: true },
     };
+  }
+
+  private toCompositionStyle(templateId: string): CompositionAssets['style'] {
+    return templateId === 'sports' || templateId === 'interview' ? templateId : 'commentary';
+  }
+
+  /**
+   * Builds a usable source moment around the chosen transcript segment. A
+   * single Whisper segment is commonly only 2–6 seconds long, which made
+   * every planned scene reuse the same few frames.
+   */
+  private selectMoment(transcript: TranscriptDocument, candidateId: number): {
+    momentSegments: TranscriptSegment[];
+    contextSegments: TranscriptSegment[];
+  } {
+    const segments = transcript.segments;
+    const firstIndex = Math.min(candidateId, Math.max(0, segments.length - 1));
+    const first = segments[firstIndex];
+    if (!first) return { momentSegments: [], contextSegments: [] };
+
+    const start = first.start;
+    const maxEnd = start + 35;
+    let lastIndex = firstIndex;
+    for (let index = firstIndex + 1; index < segments.length; index += 1) {
+      const segment = segments[index]!;
+      if (segment.start >= maxEnd) break;
+      lastIndex = index;
+    }
+    return {
+      momentSegments: segments.slice(firstIndex, lastIndex + 1),
+      contextSegments: [
+        ...segments.slice(Math.max(0, firstIndex - 2), firstIndex),
+        ...segments.slice(lastIndex + 1, lastIndex + 3),
+      ],
+    };
+  }
+
+  /** Maps an output file to the narrowly-scoped media endpoint used by the UI. */
+  private toMediaUrl(path: string): string {
+    const relativePath = relative(this.deps.outputsDir, path);
+    const safePath = relativePath.split(sep).map(encodeURIComponent).join('/');
+    return `/api/media/${safePath}`;
   }
 }

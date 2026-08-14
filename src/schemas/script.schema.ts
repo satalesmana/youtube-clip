@@ -16,6 +16,8 @@ export const scriptSectionSchema = z.object({
   type: scriptSectionTypeSchema,
   text: z.string().min(1),
   sourceQuote: z.string().optional(),
+  evidence: z.array(z.string().min(6)).max(3).optional(),
+  beatId: z.string().min(1).optional(),
 });
 
 /** Originality self-check embedded in the LLM response. */

@@ -45,6 +45,7 @@ async function main() {
     scriptService: container.scriptService,
     ttsService: container.ttsService,
     videoPlanService: container.videoPlanService,
+    storyService: container.storyService,
     templateService: container.templateService,
     templateRendererService: container.templateRendererService,
     outputsDir: join(process.cwd(), 'outputs'),

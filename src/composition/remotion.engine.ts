@@ -15,7 +15,7 @@ export interface RemotionEngineOptions {
   logger: Logger;
 }
 
-/** Maps COMPOSITION_STYLE env value to the registered Remotion composition id. */
+/** Maps a requested style to the registered Remotion composition id. */
 const STYLE_COMPOSITIONS: Record<string, string> = {
   sports: 'SportsShort',
   interview: 'InterviewShort',
@@ -91,8 +91,8 @@ export class RemotionCompositionEngine implements ICompositionEngine {
 
       logger.info({ path: propsPath }, 'Remotion props written');
 
-      // Get composition ID from env or default to CommentaryShort
-      const compositionId = STYLE_COMPOSITIONS[process.env.COMPOSITION_STYLE ?? ''] ?? 'CommentaryShort';
+      // The style belongs to the job, not to the long-running server process.
+      const compositionId = STYLE_COMPOSITIONS[assets.style ?? 'commentary'] ?? 'CommentaryShort';
 
       // Resolve the project-local CLI instead of relying on `npx` (which could
       // fetch from the npm registry if node_modules is missing).
@@ -116,7 +116,11 @@ export class RemotionCompositionEngine implements ICompositionEngine {
           '--image-format=jpeg',
           '--log=info',
         ],
-        { cwd: compositionsDir, logger },
+        {
+          cwd: compositionsDir,
+          logger,
+          env: { ...process.env, COMPOSITION_STYLE: assets.style ?? 'commentary' },
+        },
       );
       logger.info({ outputPath }, 'Remotion render complete');
 

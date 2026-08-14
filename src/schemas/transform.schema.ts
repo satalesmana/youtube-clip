@@ -55,6 +55,23 @@ export const transformResponseSchema = z.object({
     reason: z.string(),
     score: z.number(),
   }),
+  story: z.object({
+    concept: z.string(),
+    protagonist: z.string(),
+    premise: z.string(),
+    beats: z.array(z.object({
+      id: z.string(),
+      role: z.string(),
+      purpose: z.string(),
+      start: z.number(),
+      end: z.number(),
+      evidence: z.array(z.string()),
+      kondisiAwal: z.string().optional(),
+      konflik: z.string().optional(),
+      titikBalik: z.string().optional(),
+      hasil: z.string().optional(),
+    })),
+  }).optional(),
   script: z.object({
     language: z.string(),
     sections: z.array(
@@ -62,6 +79,7 @@ export const transformResponseSchema = z.object({
         type: z.string(),
         text: z.string(),
         sourceQuote: z.string().optional(),
+        evidence: z.array(z.string()).optional(),
       }),
     ),
     estimatedDurationSeconds: z.number(),
@@ -73,6 +91,7 @@ export const transformResponseSchema = z.object({
   narration: z.object({
     outputPath: z.string(),
     durationSeconds: z.number(),
+    url: z.string().optional(),
   }),
   videoPlan: z.object({
     duration: z.number(),
@@ -99,6 +118,7 @@ export const transformResponseSchema = z.object({
   }),
   outputVideo: z.object({
     path: z.string(),
+    url: z.string(),
     durationSeconds: z.number(),
     sizeBytes: z.number(),
     width: z.number(),

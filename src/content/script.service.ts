@@ -8,6 +8,7 @@ import {
   buildOriginalScript,
   type ScriptContext,
 } from './content.prompt.js';
+import { mapBeatRoleToSectionType } from '../types/story.js';
 import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { OriginalScript, ScriptSection } from '../types/script.js';
@@ -69,6 +70,8 @@ export class ScriptService implements IScriptService {
 
         const data = result.data;
         const sections = normalizeSections(data.sections);
+        validateTranscriptGrounding(sections, context, this.logger);
+        attachStorySources(sections, context);
 
         if (sections.length < 3) {
           throw AppError.llmInvalidResponse('Script response contained too few sections.');
@@ -129,6 +132,67 @@ export class ScriptService implements IScriptService {
       },
     );
   }
+}
+
+function attachStorySources(sections: ScriptSection[], context: ScriptContext): void {
+  if (!context.story) return;
+  const beats = new Map(context.story.beats.map((beat) => [beat.id, beat]));
+  for (const section of sections) {
+    // Hook section doesn't need a beat reference — it's just an attention-grabber
+    if (section.type === 'hook') continue;
+    // Allow sections without beatId (LLM may omit it for non-beat-mapped sections)
+    if (!section.beatId) continue;
+    const beat = beats.get(section.beatId);
+    if (!beat) throw AppError.llmInvalidResponse(`Script section references unknown story beat "${section.beatId}".`);
+    // Map story beat role to script section type for validation
+    const mappedSectionType = mapBeatRoleToSectionType(beat.role);
+    if (mappedSectionType !== section.type) throw AppError.llmInvalidResponse(`Story beat "${section.beatId}" with role "${beat.role}" doesn't match script section type "${section.type}".`);
+    section.source = { start: beat.start, end: beat.end };
+    if (!section.evidence?.length) section.evidence = beat.evidence;
+  }
+}
+
+/** Rejects generic drafts whose claimed evidence is absent from the supplied transcript. */
+function validateTranscriptGrounding(sections: ScriptSection[], context: ScriptContext, logger?: Logger): void {
+  const transcript = [...context.momentSegments, ...(context.contextSegments ?? [])]
+    .map((segment) => normalizeForMatch(segment.text))
+    .join(' ');
+  const groundedTypes = new Set(['context', 'source', 'commentary', 'analysis', 'supporting']);
+  const evidenceUsed = new Set<string>();
+
+  for (const section of sections) {
+    if (!groundedTypes.has(section.type)) continue;
+    const evidence = section.evidence ?? [];
+    if (evidence.length === 0) {
+      throw AppError.llmInvalidResponse(`Script section "${section.type}" is missing transcript evidence.`);
+    }
+    for (const quote of evidence) {
+      const normalizedQuote = normalizeForMatch(quote);
+      if (!transcript.includes(normalizedQuote)) {
+        throw AppError.llmInvalidResponse(
+          `Script section "${section.type}" contains evidence not found in the supplied transcript.`,
+        );
+      }
+      evidenceUsed.add(normalizedQuote);
+    }
+  }
+
+  const source = sections.find((section) => section.type === 'source');
+  if (!source?.sourceQuote || !transcript.includes(normalizeForMatch(source.sourceQuote))) {
+    throw AppError.llmInvalidResponse('The source section must include a verbatim sourceQuote from the transcript.');
+  }
+  // Note: source.text should naturally include sourceQuote, but we don't enforce
+  // strict inclusion here to avoid false negatives from minor formatting differences.
+  if (logger && source.text && !normalizeForMatch(source.text).includes(normalizeForMatch(source.sourceQuote))) {
+    logger.warn({ sourceQuote: source.sourceQuote }, 'Source section text does not include sourceQuote verbatim — TTS narration may be less specific');
+  }
+  if (evidenceUsed.size < 2) {
+    throw AppError.llmInvalidResponse('Script must use at least two distinct transcript details as evidence.');
+  }
+}
+
+function normalizeForMatch(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
 }
 
 /** Ensures required section types exist, defaulting missing ones gracefully. */

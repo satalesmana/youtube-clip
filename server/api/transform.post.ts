@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
     scriptService: container.scriptService,
     ttsService: container.ttsService,
     videoPlanService: container.videoPlanService,
+    storyService: container.storyService,
     templateService: container.templateService,
     templateRendererService: container.templateRendererService,
     assService: container.assService,

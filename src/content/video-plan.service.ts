@@ -3,6 +3,7 @@ import { videoPlanSchema } from '../schemas/video-plan.schema.js';
 import type { Logger } from '../utils/logger.js';
 import type { OriginalScript } from '../types/script.js';
 import type { VideoPlan, PlanScene, PlanCaption } from '../types/video-plan.js';
+import type { SourceStory } from '../types/story.js';
 
 export interface VideoPlanServiceOptions {
   /** Target duration in seconds (default 60). */
@@ -26,6 +27,10 @@ export interface VideoPlanBuildInput {
   clipEnd: number;
   /** Narration audio path (optional, already synthesized). */
   narrationPath?: string;
+  /** Measured narration length. When present it is the authoritative timeline length. */
+  narrationDurationSeconds?: number;
+  /** Optional source-grounded story with timestamped beats. */
+  story?: SourceStory;
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -51,8 +56,11 @@ const SECTION_VISUALS: Record<string, string> = {
 /**
  * Deterministic scene planner. Converts a script + candidate timing into a
  * video plan with real scene start/end offsets, source-clip trim ranges, and
- * caption events derived from the narration. No extra LLM call needed — the
- * script already carries the editorial structure.
+ * caption events derived from the narration.
+ *
+ * When a SourceStory is supplied, beats override the equal-slicing logic:
+ * each beat's source timestamps define the visual clip range for that scene,
+ * and the beat's purpose/narrative metadata enriches the scene output.
  */
 export class VideoPlanService implements IVideoPlanService {
   constructor(
@@ -61,8 +69,13 @@ export class VideoPlanService implements IVideoPlanService {
   ) {}
 
   async buildPlan(input: VideoPlanBuildInput): Promise<VideoPlan> {
-    const { script, clipStart, clipEnd, narrationPath } = input;
-    const targetDuration = this.options.targetDuration ?? 60;
+    const { script, clipStart, clipEnd, narrationPath, narrationDurationSeconds, story } = input;
+    const configuredTarget = this.options.targetDuration ?? 60;
+    // Never make a video longer than its narration: that produces a frozen
+    // tail and causes a later audio remux to truncate the video.
+    const targetDuration = narrationDurationSeconds && narrationDurationSeconds > 0
+      ? narrationDurationSeconds
+      : configuredTarget;
 
     const narrationSections = script.sections.filter((s) => s.text.trim().length > 0);
     if (narrationSections.length === 0) {
@@ -72,21 +85,21 @@ export class VideoPlanService implements IVideoPlanService {
     // Allocate timeline budget per section, weighted, capped to target.
     const weights = narrationSections.map((s) => SECTION_WEIGHTS[s.type] ?? 0.14);
     const weightSum = weights.reduce((a, b) => a + b, 0);
-    const durations = weights.map((w) =>
-      Math.max(2, Math.round((w / weightSum) * targetDuration)),
-    );
-
-    // Source scenes should reference real source timestamps: distribute the
-    // candidate's range across source-type sections.
-    const sourceSections = narrationSections
-      .map((s, i) => ({ section: s, index: i }))
-      .filter(({ section }) => section.type === 'source');
-    const sourceRange = clipEnd - clipStart;
+    // Preserve the measured narration length exactly. Rendering a longer
+    // sequence than the audio creates dead air (or a later truncation).
+    const durations = weights.map((w) => (w / weightSum) * targetDuration);
 
     const scenes: PlanScene[] = [];
     let cursor = 0;
-    let sourceCursor = clipStart;
-    const sourceCount = sourceSections.length;
+    const sourceRange = clipEnd - clipStart;
+
+    // Build a lookup: script section type → story beat (when story is available)
+    const beatByType = new Map<string, NonNullable<SourceStory['beats']>[number]>();
+    if (story?.beats) {
+      for (const beat of story.beats) {
+        if (!beatByType.has(beat.role)) beatByType.set(beat.role, beat);
+      }
+    }
 
     narrationSections.forEach((section, index) => {
       const duration = durations[index]!;
@@ -101,19 +114,35 @@ export class VideoPlanService implements IVideoPlanService {
         visual: SECTION_VISUALS[section.type] ?? 'speaker',
       };
 
-      if (section.type === 'source' && sourceCount > 0) {
-        const slice = sourceRange / sourceCount;
-        const srcStart = Math.min(clipEnd - slice, sourceCursor);
-        const srcEnd = Math.min(clipEnd, srcStart + slice);
-        scene.source = { start: srcStart, end: srcEnd };
-        sourceCursor = srcEnd;
+      // Story mode: use beat source timestamps directly
+      if (story) {
+        const beat = beatByType.get(section.type);
+        if (beat && beat.end > beat.start) {
+          scene.source = {
+            start: Math.max(clipStart, beat.start),
+            end: Math.min(clipEnd, beat.end),
+          };
+        }
       }
+
+      // Fallback: equal-slice the source range
+      if (!scene.source && sourceRange > 0) {
+        const sourceCount = narrationSections.filter((s) => SECTION_VISUALS[s.type] !== 'graphic').length;
+        if (sourceCount > 0) {
+          const slice = sourceRange / sourceCount;
+          const sourceCursor = clipStart + index * slice;
+          const srcStart = Math.min(clipEnd - slice, sourceCursor);
+          const srcEnd = Math.min(clipEnd, srcStart + slice);
+          scene.source = { start: srcStart, end: srcEnd };
+        }
+      }
+
       scenes.push(scene);
       cursor = end;
     });
 
     // Fix the final end to exactly the total planned duration.
-    const totalDuration = Math.max(cursor, targetDuration);
+    const totalDuration = targetDuration;
     scenes[scenes.length - 1]!.end = totalDuration;
 
     const captions = this.buildCaptions(scenes);
@@ -127,7 +156,7 @@ export class VideoPlanService implements IVideoPlanService {
       audio: {
         narration: narrationPath,
         sourceUnderlay: true,
-        ducking: false,
+        ducking: true,
       },
     };
 
@@ -137,7 +166,7 @@ export class VideoPlanService implements IVideoPlanService {
     }
 
     this.logger.info(
-      { candidateId: script.candidateId, sceneCount: scenes.length, duration: totalDuration },
+      { candidateId: script.candidateId, sceneCount: scenes.length, duration: totalDuration, hasStory: !!story },
       'Video plan built',
     );
 

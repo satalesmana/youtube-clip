@@ -1,3 +1,5 @@
+import type { VideoPlan } from '../types/video-plan.js';
+
 /** Shared types for the composition engine abstraction. */
 
 /** Engine type selector. */
@@ -8,6 +10,10 @@ export interface CompositionAssets {
   sourceVideo: string;
   narration: string;
   channelName?: string;
+  /** Requested visual treatment for this render, selected per request. */
+  style?: 'commentary' | 'sports' | 'interview';
+  /** Requested FFmpeg template id when that engine is active. */
+  templateId?: string;
   /** YouTube video id — render outputs land under `outputs/{videoId}/` when provided. */
   videoId?: string;
 }
@@ -25,5 +31,5 @@ export interface RenderOutput {
  */
 export interface ICompositionEngine {
   kind: CompositionEngineKind;
-  render(plan: import('../types/video-plan.js').VideoPlan, assets: CompositionAssets): Promise<RenderOutput>;
+  render(plan: VideoPlan, assets: CompositionAssets): Promise<RenderOutput>;
 }

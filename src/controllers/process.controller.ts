@@ -8,10 +8,8 @@ import type { IRendererService } from '../services/renderer.service.js';
 import type { HighlightClip, ProcessResult } from '../types/highlight.js';
 import type { TranscriptChunk, TranscriptDocument } from '../types/transcript.js';
 import type { RenderContext } from '../types/template.js';
-import type { JobWorkspace } from '../types/job.js';
 import { extractVideoIdFromUrl } from '../utils/youtube-id.js';
 import { createJobWorkspace } from '../utils/workspace.js';
-import { AppError } from '../utils/errors.js';
 
 export interface ProcessControllerDeps {
   youtubeService: IYoutubeService;

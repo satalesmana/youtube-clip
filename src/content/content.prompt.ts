@@ -1,5 +1,6 @@
 import type { ContentAngleContext } from './angle.service.js';
 import type { OriginalScript, ScriptSection } from '../types/script.js';
+import type { SourceStory } from '../types/story.js';
 
 /** System prompt for the content-angle generation stage. */
 export const CONTENT_ANGLE_SYSTEM_PROMPT = `You are a viral content strategist for short-form video (TikTok, YouTube Shorts, Instagram Reels).
@@ -66,7 +67,7 @@ You transform a viral moment + a chosen content angle into an ORIGINAL narration
 Structure the script in this order:
 1. "hook" — a strong curiosity-driven opening (1-2 sentences).
 2. "context" — briefly set up the situation (1-2 sentences).
-3. "source" — reference the source moment: quote the single most important line from the moment (verbatim) in "sourceQuote", and add one short bridging sentence in "text".
+3. "source" — reference the source moment: quote the single most important line from the moment verbatim in "sourceQuote" AND include that same quote naturally in "text" with one short bridging sentence. The "text" field is what the TTS reads.
 4. "commentary" — your original take on why this matters (2-4 sentences).
 5. "analysis" — deeper interpretation, implications, or explanation (2-4 sentences).
 6. "supporting" — an extra fact, comparison, or example that strengthens the analysis (1-3 sentences). Optional: omit if not needed.
@@ -75,6 +76,10 @@ Structure the script in this order:
 ORIGINALITY RULES (mandatory):
 - Write the narration in your OWN words. Never copy more than a short verbatim quote (the source section only).
 - Never invent facts, figures, or quotations. Only "sourceQuote" may quote the source, and it must be verbatim from the transcript.
+- Be SPECIFIC: name the people, actions, claims, sequence, numbers, and constraints actually present in the supplied transcript. Do not substitute vague phrases such as "perjuangan", "strategi", "fenomena", "kisah inspiratif", or "hal ini" unless you first identify the concrete transcript detail they refer to.
+- Every factual/editorial section (context, source, commentary, analysis, and supporting when present) MUST include an "evidence" array containing 1-2 short verbatim excerpts copied exactly from the supplied transcript. Evidence is internal grounding metadata: do not read it out in "text" unless it is the "sourceQuote".
+- Any interpretation must explicitly connect to its evidence (for example: "Saat X mengatakan Y, ini menunjukkan ..."). If the transcript does not establish a fact, omit it rather than guessing.
+- When STORY BEATS are supplied, write one section for each beat in chronological order and include its id in "beatId". Do not invent an extra event.
 - Never misrepresent what the speaker said. Do not remove important context.
 - Do not present speculation as fact — mark uncertainty with "mungkin", "sepertinya", "kemungkinan", etc. when speculating.
 - Do not mention "video ini", "di video", "pembicara", "narasumber", or any meta-reference to the video itself.
@@ -88,12 +93,12 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
 {
   "language": "id",
   "sections": [
-    { "type": "hook", "text": "..." },
-    { "type": "context", "text": "..." },
-    { "type": "source", "text": "...", "sourceQuote": "..." },
-    { "type": "commentary", "text": "..." },
-    { "type": "analysis", "text": "..." },
-    { "type": "supporting", "text": "..." },
+    { "type": "hook", "beatId": "beat_1", "text": "..." },
+    { "type": "context", "text": "...", "evidence": ["kutipan transkrip persis"] },
+    { "type": "source", "text": "...", "sourceQuote": "...", "evidence": ["kutipan transkrip persis"] },
+    { "type": "commentary", "text": "...", "evidence": ["kutipan transkrip persis"] },
+    { "type": "analysis", "text": "...", "evidence": ["kutipan transkrip persis"] },
+    { "type": "supporting", "text": "...", "evidence": ["kutipan transkrip persis"] },
     { "type": "conclusion", "text": "..." }
   ],
   "originality": { "status": "PASS", "notes": ["..."] }
@@ -109,6 +114,10 @@ export interface ScriptContext {
   angleType: string;
   /** The candidate moment, verbatim (for quoting). */
   momentSegments: TranscriptSegmentLike[];
+  /** Nearby segments, supplied only to resolve references and chronology. */
+  contextSegments?: TranscriptSegmentLike[];
+  /** Source-grounded story beats that determine the visual timeline. */
+  story?: SourceStory;
   candidateTitle: string;
   candidateHook: string;
   sourceTitle: string;
@@ -138,6 +147,22 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
     '',
     'Moment transcript (verbatim, with timestamps):',
     ...context.momentSegments.map((segment) => `[${segment.start.toFixed(2)} -> ${segment.end.toFixed(2)}] ${segment.text}`),
+    ...(context.contextSegments?.length
+      ? [
+          'Nearby transcript context (use only when it clarifies the moment):',
+          ...context.contextSegments.map((segment) => `[${segment.start.toFixed(2)} -> ${segment.end.toFixed(2)}] ${segment.text}`),
+        ]
+      : []),
+    ...(context.story
+      ? [
+          '',
+          `Selected source-story concept: ${context.story.concept}`,
+          `Protagonist/subject: ${context.story.protagonist}`,
+          `Story premise: ${context.story.premise}`,
+          'STORY BEATS — preserve order and use every beat id:',
+          ...context.story.beats.map((beat) => `[${beat.id}] ${beat.role}; ${beat.start.toFixed(2)}-${beat.end.toFixed(2)}s; ${beat.purpose}; evidence: ${beat.evidence.map((quote) => `"${quote}"`).join(' | ')}`),
+        ]
+      : []),
     '',
     'Chosen content angle:',
     `- title: ${context.angleTitle}`,
@@ -146,7 +171,7 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
     `- reason: ${context.angleReason}`,
     context.targetLanguage ? `- target language: ${context.targetLanguage}` : '',
     '',
-    'Task: write the original short-form script (60-90 seconds spoken, ~150-220 words) for this angle, following the structure and ORIGINALITY RULES.',
+    'Task: write a concise original short-form script grounded in this material. Use only as much duration as the available facts support; never pad it with generic motivational commentary. Follow the structure and ORIGINALITY RULES.',
   ].filter((line) => line !== '');
 
   return lines.join('\n');

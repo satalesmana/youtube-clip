@@ -17,6 +17,12 @@ export interface ScriptSection {
   text: string;
   /** Optional: the quoted source statement this section references (source section only). */
   sourceQuote?: string;
+  /** Verbatim transcript excerpts that ground this editorial claim. */
+  evidence?: string[];
+  /** Story beat that grounds this section and supplies its source visual. */
+  beatId?: string;
+  /** Timestamp range in the YouTube source selected for this section. */
+  source?: { start: number; end: number };
 }
 
 /** Result of the originality self-check embedded in the script generation. */

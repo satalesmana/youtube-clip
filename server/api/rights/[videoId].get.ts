@@ -1,7 +1,6 @@
-import { defineEventHandler, readBody } from 'h3';
+import { defineEventHandler } from 'h3';
 import { container } from '../../../src/container/index.js';
 import { createError } from 'h3';
-import type { RightsStatus } from '../../../src/rights/rights.types.js';
 
 /**
  * GET /api/rights/:videoId
