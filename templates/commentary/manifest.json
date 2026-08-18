@@ -1,0 +1,7 @@
+{
+  "id": "commentary",
+  "name": "Commentary",
+  "version": "1.0.0",
+  "description": "Editorial short-form template with source clip, animated caption, and scrolling commentary text band. Designed for AI-transformed content with original narration.",
+  "aspectRatio": "9:16"
+}

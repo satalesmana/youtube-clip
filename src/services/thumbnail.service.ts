@@ -11,7 +11,7 @@ export interface ThumbnailServiceOptions {
 
 /** Picks and saves a representative thumbnail frame for a rendered clip. */
 export interface IThumbnailService {
-  generateThumbnail(videoPath: string, durationSeconds: number, outputPath: string, id: number): Promise<void>;
+  generateThumbnail(videoPath: string, durationSeconds: number, outputPath: string, id: number, tempDir?: string): Promise<void>;
 }
 
 /**
@@ -35,13 +35,15 @@ export class ThumbnailService implements IThumbnailService {
     durationSeconds: number,
     outputPath: string,
     id: number,
+    tempDir?: string,
   ): Promise<void> {
+    const dir = tempDir ?? this.options.tempDir;
     const count = Math.max(1, this.options.candidateCount);
     const edgeMargin = durationSeconds * 0.1;
     const usableSpan = Math.max(0, durationSeconds - edgeMargin * 2);
 
     const candidates = Array.from({ length: count }, (_, i) => ({
-      path: join(this.options.tempDir, `thumb-candidate-${id}-${i}.jpg`),
+      path: join(dir, `thumb-candidate-${id}-${i}.jpg`),
       timestamp: count === 1 ? durationSeconds / 2 : edgeMargin + (usableSpan * i) / (count - 1),
     }));
 

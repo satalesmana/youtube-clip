@@ -143,4 +143,8 @@ export interface RenderContext {
     name?: string;
     logo?: string;
   };
+  /** Optional commentary text bound by templates (e.g. the commentary section of an AI script). */
+  commentary?: {
+    text?: string;
+  };
 }

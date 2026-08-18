@@ -21,6 +21,9 @@ export type ErrorCode =
   | 'TEMPLATE_DUPLICATE_LAYER_ID'
   | 'TEMPLATE_INVALID_COLOR'
   | 'TEMPLATE_INVALID_FONT'
+  | 'RESEARCH_SOURCE_FAILED'
+  | 'RESEARCH_ANALYSIS_FAILED'
+  | 'YOUTUBE_API_FAILED'
   | 'INTERNAL_ERROR';
 
 interface AppErrorParams {
@@ -94,6 +97,21 @@ export class AppError extends Error {
     return new AppError({ code: 'INTERNAL_ERROR', message, statusCode: 500, cause });
   }
 
+  /** A research data source (RSS, Reddit, Trends, X) failed while collecting signals. */
+  static researchSourceFailed(message: string, cause?: unknown): AppError {
+    return new AppError({ code: 'RESEARCH_SOURCE_FAILED', message, statusCode: 502, cause });
+  }
+
+  /** The LLM failed to analyze/rank research signals. */
+  static researchAnalysisFailed(message: string, cause?: unknown): AppError {
+    return new AppError({ code: 'RESEARCH_ANALYSIS_FAILED', message, statusCode: 502, cause });
+  }
+
+  /** The YouTube video search provider failed. */
+  static youtubeApiFailed(message: string, cause?: unknown): AppError {
+    return new AppError({ code: 'YOUTUBE_API_FAILED', message, statusCode: 502, cause });
+  }
+
   /** Normalizes any thrown value into an `AppError`, preserving existing ones as-is. */
   static from(error: unknown, fallbackMessage = 'Unexpected error.'): AppError {
     if (error instanceof AppError) return error;
@@ -101,7 +119,17 @@ export class AppError extends Error {
     return AppError.internal(fallbackMessage, error);
   }
 
-  toJSON(): { message: string; code: ErrorCode; statusCode: number } {
-    return { message: this.message, code: this.code, statusCode: this.statusCode };
+  toJSON(): { message: string; code: ErrorCode; statusCode: number; cause?: string } {
+    const json: { message: string; code: ErrorCode; statusCode: number; cause?: string } = {
+      message: this.message,
+      code: this.code,
+      statusCode: this.statusCode,
+    };
+    if (this.cause instanceof Error) {
+      json.cause = this.cause.message;
+    } else if (typeof this.cause === 'string') {
+      json.cause = this.cause;
+    }
+    return json;
   }
 }

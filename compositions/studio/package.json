@@ -1,0 +1,27 @@
+{
+  "name": "commentary-composition",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion composition for AI viral commentary shorts (9:16)",
+  "scripts": {
+    "build": "remotion render src/index.tsx CommentaryShort out/rendered.mp4 --props=props/input-props.json",
+    "serve": "remotion studio src/index.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/animation-utils": "4.0.509",
+    "@remotion/google-fonts": "4.0.509",
+    "@remotion/layout-utils": "4.0.509",
+    "@remotion/media": "4.0.509",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "^4.0.508"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.508",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.7.3"
+  }
+}

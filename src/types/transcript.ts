@@ -20,7 +20,7 @@ export interface TranscriptResult {
   segments: TranscriptSegment[];
 }
 
-/** Persisted transcript document, as stored under `transcripts/`. */
+/** Persisted transcript document, as stored under `outputs/{videoId}/transcripts/`. */
 export interface TranscriptDocument extends TranscriptResult {
   videoId: string;
   sourceUrl: string;

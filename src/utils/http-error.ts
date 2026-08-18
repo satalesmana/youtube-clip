@@ -5,7 +5,7 @@ export interface HttpErrorInput {
   statusCode: number;
   statusMessage: string;
   message: string;
-  data: { message: string; code: string; statusCode: number };
+  data: { message: string; code: string; statusCode: number; cause?: string };
 }
 
 /**

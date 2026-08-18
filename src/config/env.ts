@@ -22,15 +22,18 @@ const envSchema = z.object({
   // AI router (e.g. 9Router), an OpenAI-compatible `/v1/chat/completions` gateway.
   ROUTER_BASE_URL: z.url().optional(),
   ROUTER_API_KEY: z.string().min(1).optional(),
-  ROUTER_MODEL: z.string().min(1).default('FreeModel'),
+  ROUTER_MODEL: z.string().min(1).default('auto'),
   ROUTER_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   ROUTER_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   ROUTER_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
 
-  WHISPER_PROVIDER: z.enum(['faster-whisper', 'whisper-cpp']).default('faster-whisper'),
+  WHISPER_PROVIDER: z.enum(['faster-whisper', 'whisper-cpp', 'whisperx']).default('faster-whisper'),
   WHISPER_BINARY_PATH: z.string().min(1).default('whisper'),
   WHISPER_MODEL: z.string().min(1).default('base'),
   WHISPER_LANGUAGE: z.string().min(1).default('auto'),
+  // Extra CLI args passed straight through to the whisper binary, e.g.
+  // WHISPER_EXTRA_ARGS="--device cuda --compute_type float16"
+  WHISPER_EXTRA_ARGS: z.string().default(''),
 
   YT_DLP_BINARY_PATH: z.string().min(1).default('yt-dlp'),
   YT_DLP_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
@@ -40,11 +43,11 @@ const envSchema = z.object({
 
   FFMPEG_BINARY_PATH: z.string().min(1).default('ffmpeg'),
 
-  DOWNLOADS_DIR: z.string().min(1).default('downloads'),
-  TRANSCRIPTS_DIR: z.string().min(1).default('transcripts'),
   OUTPUTS_DIR: z.string().min(1).default('outputs'),
-  TEMP_DIR: z.string().min(1).default('temp'),
   TEMPLATES_DIR: z.string().min(1).default('templates'),
+  COMPOSITIONS_DIR: z.string().min(1).default('compositions'),
+  COMPOSITION_STYLE: z.enum(['commentary', 'sports', 'interview']).default('commentary'),
+  COMPOSITION_ENGINE: z.enum(['ffmpeg-template', 'remotion']).default('ffmpeg-template'),
 
   CHUNK_MAX_TOKENS: z.coerce.number().int().positive().default(2500),
   CHUNK_OVERLAP_SECONDS: z.coerce.number().int().min(0).default(18),
@@ -87,6 +90,84 @@ const envSchema = z.object({
   RENDER_PRESET: z.string().min(1).default('medium'),
   RENDER_CRF: z.coerce.number().min(0).max(51).default(18),
   RENDER_AUDIO_BITRATE_KBPS: z.coerce.number().int().positive().default(192),
+
+  // --- Research pipeline ---
+  // YouTube Data API v3 key for video search (primary). When missing, the
+  // research service falls back to `yt-dlp` search (`ytsearch`).
+  YOUTUBE_API_KEY: z.string().optional(),
+  // Max videos returned per topic by the YouTube search provider.
+  YOUTUBE_SEARCH_MAX_RESULTS: z.coerce.number().int().positive().default(5),
+  // Timeout per YouTube search request in milliseconds.
+  YOUTUBE_SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+
+  // News RSS feeds (comma-separated). Each entry may include an optional
+  // `[label]` prefix and a `:lang` suffix, e.g.
+  // `[cnn-indonesia]https://www.cnnindonesia.com/rss:lang=id`.
+  RESEARCH_RSS_FEEDS: z.string().default(
+    'https://www.cnnindonesia.com/rss,https://feeds.bbci.co.uk/news/rss.xml,https://www.kompas.com/feed,https://rss.detik.com',
+  ),
+
+  // Number of recent items to read per RSS feed.
+  RESEARCH_RSS_MAX_ITEMS_PER_FEED: z.coerce.number().int().positive().default(15),
+  // RSS fetch timeout in milliseconds.
+  RESEARCH_RSS_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  // Comma-separated list of subreddits to pull hot posts from (falls back to
+  // the global `/r/popular` feed when empty).
+  RESEARCH_REDDIT_SUBREDDITS: z.string().default('worldnews,indonesia,technology'),
+  // Max posts to read per subreddit.
+  RESEARCH_REDDIT_MAX_POSTS_PER_SUBREDDIT: z.coerce.number().int().positive().default(10),
+  // Reddit fetch timeout in milliseconds.
+  RESEARCH_REDDIT_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  // Google News RSS (trending headlines, no API key). Topic feeds are
+  // available per country, e.g. `topic/NATION` for Indonesia:
+  // https://news.google.com/rss/headlines/section/topic/NATION?hl=id&gl=ID&ceid=ID:id
+  RESEARCH_TRENDS_FEED_URL: z
+    .url()
+    .default('https://news.google.com/rss/headlines/section/topic/NATION?hl=id&gl=ID&ceid=ID:id'),
+  // Max headline items to collect per fetch.
+  RESEARCH_TRENDS_MAX_QUERIES: z.coerce.number().int().positive().default(20),
+  // Google News RSS fetch timeout in milliseconds.
+  RESEARCH_TRENDS_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  // X/Twitter: search query used with the `xurl` CLI. Empty disables the X source.
+  RESEARCH_X_SEARCH_QUERY: z.string().default(''),
+  // Max posts to fetch from X.
+  RESEARCH_X_MAX_POSTS: z.coerce.number().int().positive().default(10),
+
+  // Research pipeline controls.
+  RESEARCH_MAX_TRENDS: z.coerce.number().int().positive().default(10),
+  // Max signals sent to the LLM (keeps prompt size manageable for local models).
+  RESEARCH_MAX_SIGNALS_FOR_LLM: z.coerce.number().int().positive().default(80),
+  // Language for LLM-generated topic titles/summaries (`auto`, `en`, `id`, ...).
+  RESEARCH_LANGUAGE: z.string().min(1).default('auto'),
+  // Research LLM config. A dedicated OpenAI-compatible endpoint for the
+  // research LLM; when BASE_URL is empty, the main AI backend (router, then
+  // local Ollama) is used instead. API key falls back to ROUTER_API_KEY.
+  RESEARCH_LLM_BASE_URL: z.string().optional(),
+  RESEARCH_LLM_API_KEY: z.string().optional(),
+  // Research LLM model/temperature/timeout (used for the fallback backend too).
+  RESEARCH_LLM_MODEL: z.string().min(1).default('qwen3:14b'),
+  RESEARCH_LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
+  RESEARCH_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+  RESEARCH_LLM_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
+
+  // --- AI Viral Content Transformer: TTS ---
+  // edge-tts (default, free, local via CLI) | openai (OpenAI-compatible)
+  TTS_PROVIDER: z.enum(['edge-tts', 'openai']).default('edge-tts'),
+  // Voice name, e.g. "id-ID-ArdiNeural", "en-US-AndrewMultilingualNeural"
+  TTS_VOICE: z.string().min(1).default('id-ID-ArdiNeural'),
+  // Speaking-rate adjustment, e.g. "+10%"
+  TTS_RATE: z.string().default('+0%'),
+  // Optional language hint passed to the provider (e.g. "id", "en")
+  TTS_LANGUAGE: z.string().optional(),
+
+  // OpenAI-compatible TTS endpoint (only when TTS_PROVIDER=openai)
+  TTS_BASE_URL: z.string().optional(),
+  TTS_API_KEY: z.string().optional(),
+  TTS_MODEL: z.string().optional(),
+  TTS_BINARY_PATH: z.string().optional(),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 

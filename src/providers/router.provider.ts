@@ -33,6 +33,10 @@ export class RouterProvider implements IOllamaProvider {
           model: options.model,
           stream: false,
           // temperature: options.temperature ?? 0.2,
+          // Keep reasoning short: without this, deepseek-style reasoning models
+          // burn the whole budget thinking and return an empty `content`.
+          reasoning_effort: 'low',
+          max_tokens: 8192,
           messages: [
             // ...(options.system ? [{ role: 'system', content: options.system }] : []),
             { role: 'user', content: `${options.system} ${options.prompt}` },
@@ -48,6 +52,11 @@ export class RouterProvider implements IOllamaProvider {
           `AI router responded with HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
         );
       }
+
+      this.logger.debug(
+        { status: response.status, bodyPreview: bodyText.slice(0, 300) },
+        'AI router raw response',
+      );
 
       const data = parseResponseBody(bodyText);
       return data.choices?.[0]?.message?.content ?? '';

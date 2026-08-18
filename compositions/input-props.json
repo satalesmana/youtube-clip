@@ -1,0 +1,385 @@
+{
+  "plan": {
+    "candidateId": "candidate_0",
+    "angleId": "angle_01",
+    "duration": 61,
+    "scenes": [
+      {
+        "type": "hook",
+        "start": 0,
+        "end": 6,
+        "narration": "Satu sapaan sederhana mampu memecah internet — tapi mengapa 'Halo, Bro!' bisa menjadi fenomena budaya terbesar tahun ini?",
+        "visual": "graphic"
+      },
+      {
+        "type": "context",
+        "start": 6,
+        "end": 15,
+        "narration": "Di tengah banjir konten yang serba rumit dan dramatis, muncul sebuah momen sepele yang justru menjadi paling viral: sebuah salam singkat tanpa konteks apa pun.",
+        "visual": "speaker"
+      },
+      {
+        "type": "source",
+        "start": 15,
+        "end": 25,
+        "narration": "Itu semua bermula dari sebuah unggahan sederhana yang hanya berisi ungkapan ramah langsung kepada lawan bicaranya.",
+        "source": {
+          "start": 7.445,
+          "end": 8.026
+        },
+        "visual": "source-clip"
+      },
+      {
+        "type": "commentary",
+        "start": 25,
+        "end": 36,
+        "narration": "Fenomena ini mengungkap sesuatu yang menarik tentang psikologi internet: semakin simpel dan tanpa pretensi sebuah konten, semakin besar daya tariknya. Orang lelah pada drama dan overproduced content, mereka rindu keaslian yang tulus.",
+        "visual": "speaker"
+      },
+      {
+        "type": "analysis",
+        "start": 36,
+        "end": 47,
+        "narration": "'Halo, Bro!' berhasil karena ia tidak berusaha menjadi apa pun selain dirinya sendiri. Tidak ada naskah, tidak ada angle, tidak ada agenda tersembunyi — hanya energi positif yang langsung tersampaikan. Ini adalah format komunikasi paling manusiawi yang bisa dibayangkan, dan itu persis yang membuat orang ingin membagikannya berulang kali.",
+        "visual": "b-roll"
+      },
+      {
+        "type": "supporting",
+        "start": 47,
+        "end": 55,
+        "narration": "Pola serupa sudah pernah kita lihat sebelumnya, seperti viralnya tarian random atau suara lucu tanpa narasi. Konten yang paling bertahan di algoritma biasanya yang terasa paling natural dan sulit ditiru secara sempurna.",
+        "visual": "b-roll"
+      },
+      {
+        "type": "conclusion",
+        "start": 55,
+        "end": 61,
+        "narration": "Pelajaran besarnya? Kadang, hal paling sederhana lah yang paling beresonansi. Dan di dunia yang penuh kebisingan, keramahan tulus mungkin lebih viral dari apa pun yang Anda kira.",
+        "visual": "graphic"
+      }
+    ],
+    "captions": [
+      {
+        "start": 0,
+        "end": 1.33,
+        "text": "Satu sapaan sederhana mampu",
+        "highlightWords": []
+      },
+      {
+        "start": 1.33,
+        "end": 2.67,
+        "text": "memecah internet — tapi",
+        "highlightWords": []
+      },
+      {
+        "start": 2.67,
+        "end": 4,
+        "text": "mengapa 'Halo, Bro!' bisa",
+        "highlightWords": []
+      },
+      {
+        "start": 4,
+        "end": 5.33,
+        "text": "menjadi fenomena budaya terbesar",
+        "highlightWords": [
+          "terbesar"
+        ]
+      },
+      {
+        "start": 5.33,
+        "end": 6,
+        "text": "tahun ini?",
+        "highlightWords": []
+      },
+      {
+        "start": 6,
+        "end": 7.44,
+        "text": "Di tengah banjir konten",
+        "highlightWords": []
+      },
+      {
+        "start": 7.44,
+        "end": 8.88,
+        "text": "yang serba rumit dan",
+        "highlightWords": []
+      },
+      {
+        "start": 8.88,
+        "end": 10.32,
+        "text": "dramatis, muncul sebuah momen",
+        "highlightWords": []
+      },
+      {
+        "start": 10.32,
+        "end": 11.76,
+        "text": "sepele yang justru menjadi",
+        "highlightWords": []
+      },
+      {
+        "start": 11.76,
+        "end": 13.2,
+        "text": "paling viral: sebuah salam",
+        "highlightWords": []
+      },
+      {
+        "start": 13.2,
+        "end": 14.64,
+        "text": "singkat tanpa konteks apa",
+        "highlightWords": []
+      },
+      {
+        "start": 14.64,
+        "end": 15,
+        "text": "pun.",
+        "highlightWords": []
+      },
+      {
+        "start": 15,
+        "end": 17.5,
+        "text": "Itu semua bermula dari",
+        "highlightWords": []
+      },
+      {
+        "start": 17.5,
+        "end": 20,
+        "text": "sebuah unggahan sederhana yang",
+        "highlightWords": []
+      },
+      {
+        "start": 20,
+        "end": 22.5,
+        "text": "hanya berisi ungkapan ramah",
+        "highlightWords": []
+      },
+      {
+        "start": 22.5,
+        "end": 25,
+        "text": "langsung kepada lawan bicaranya.",
+        "highlightWords": []
+      },
+      {
+        "start": 25,
+        "end": 26.38,
+        "text": "Fenomena ini mengungkap sesuatu",
+        "highlightWords": []
+      },
+      {
+        "start": 26.38,
+        "end": 27.75,
+        "text": "yang menarik tentang psikologi",
+        "highlightWords": []
+      },
+      {
+        "start": 27.75,
+        "end": 29.13,
+        "text": "internet: semakin simpel dan",
+        "highlightWords": []
+      },
+      {
+        "start": 29.13,
+        "end": 30.5,
+        "text": "tanpa pretensi sebuah konten,",
+        "highlightWords": []
+      },
+      {
+        "start": 30.5,
+        "end": 31.88,
+        "text": "semakin besar daya tariknya.",
+        "highlightWords": []
+      },
+      {
+        "start": 31.88,
+        "end": 33.25,
+        "text": "Orang lelah pada drama",
+        "highlightWords": []
+      },
+      {
+        "start": 33.25,
+        "end": 34.63,
+        "text": "dan overproduced content, mereka",
+        "highlightWords": []
+      },
+      {
+        "start": 34.63,
+        "end": 36,
+        "text": "rindu keaslian yang tulus.",
+        "highlightWords": []
+      },
+      {
+        "start": 36,
+        "end": 36.9,
+        "text": "'Halo, Bro!' berhasil karena",
+        "highlightWords": []
+      },
+      {
+        "start": 36.9,
+        "end": 37.8,
+        "text": "ia tidak berusaha menjadi",
+        "highlightWords": []
+      },
+      {
+        "start": 37.8,
+        "end": 38.69,
+        "text": "apa pun selain dirinya",
+        "highlightWords": []
+      },
+      {
+        "start": 38.69,
+        "end": 39.59,
+        "text": "sendiri. Tidak ada naskah,",
+        "highlightWords": []
+      },
+      {
+        "start": 39.59,
+        "end": 40.49,
+        "text": "tidak ada angle, tidak",
+        "highlightWords": []
+      },
+      {
+        "start": 40.49,
+        "end": 41.39,
+        "text": "ada agenda tersembunyi —",
+        "highlightWords": []
+      },
+      {
+        "start": 41.39,
+        "end": 42.29,
+        "text": "hanya energi positif yang",
+        "highlightWords": []
+      },
+      {
+        "start": 42.29,
+        "end": 43.18,
+        "text": "langsung tersampaikan. Ini adalah",
+        "highlightWords": []
+      },
+      {
+        "start": 43.18,
+        "end": 44.08,
+        "text": "format komunikasi paling manusiawi",
+        "highlightWords": []
+      },
+      {
+        "start": 44.08,
+        "end": 44.98,
+        "text": "yang bisa dibayangkan, dan",
+        "highlightWords": []
+      },
+      {
+        "start": 44.98,
+        "end": 45.88,
+        "text": "itu persis yang membuat",
+        "highlightWords": []
+      },
+      {
+        "start": 45.88,
+        "end": 46.78,
+        "text": "orang ingin membagikannya berulang",
+        "highlightWords": []
+      },
+      {
+        "start": 46.78,
+        "end": 47,
+        "text": "kali.",
+        "highlightWords": []
+      },
+      {
+        "start": 47,
+        "end": 48,
+        "text": "Pola serupa sudah pernah",
+        "highlightWords": []
+      },
+      {
+        "start": 48,
+        "end": 49,
+        "text": "kita lihat sebelumnya, seperti",
+        "highlightWords": []
+      },
+      {
+        "start": 49,
+        "end": 50,
+        "text": "viralnya tarian random atau",
+        "highlightWords": []
+      },
+      {
+        "start": 50,
+        "end": 51,
+        "text": "suara lucu tanpa narasi.",
+        "highlightWords": []
+      },
+      {
+        "start": 51,
+        "end": 52,
+        "text": "Konten yang paling bertahan",
+        "highlightWords": []
+      },
+      {
+        "start": 52,
+        "end": 53,
+        "text": "di algoritma biasanya yang",
+        "highlightWords": []
+      },
+      {
+        "start": 53,
+        "end": 54,
+        "text": "terasa paling natural dan",
+        "highlightWords": []
+      },
+      {
+        "start": 54,
+        "end": 55,
+        "text": "sulit ditiru secara sempurna.",
+        "highlightWords": []
+      },
+      {
+        "start": 55,
+        "end": 55.89,
+        "text": "Pelajaran besarnya? Kadang, hal",
+        "highlightWords": []
+      },
+      {
+        "start": 55.89,
+        "end": 56.78,
+        "text": "paling sederhana lah yang",
+        "highlightWords": []
+      },
+      {
+        "start": 56.78,
+        "end": 57.67,
+        "text": "paling beresonansi. Dan di",
+        "highlightWords": []
+      },
+      {
+        "start": 57.67,
+        "end": 58.56,
+        "text": "dunia yang penuh kebisingan,",
+        "highlightWords": []
+      },
+      {
+        "start": 58.56,
+        "end": 59.44,
+        "text": "keramahan tulus mungkin lebih",
+        "highlightWords": []
+      },
+      {
+        "start": 59.44,
+        "end": 60.33,
+        "text": "viral dari apa pun",
+        "highlightWords": []
+      },
+      {
+        "start": 60.33,
+        "end": 61,
+        "text": "yang Anda kira.",
+        "highlightWords": []
+      }
+    ],
+    "audio": {
+      "narration": "/Users/aladin/Playground/youtube-clip/outputs/QyW1rOk-qqI/transform/09ada903-bcd4-4970-b81c-1aa88ec59f41/voice/voice/narration.mp3",
+      "sourceUnderlay": true,
+      "ducking": false
+    }
+  },
+  "narrationPath": "/Users/aladin/Playground/youtube-clip/outputs/QyW1rOk-qqI/transform/09ada903-bcd4-4970-b81c-1aa88ec59f41/voice/voice/narration.mp3",
+  "sourceVideoPath": "/Users/aladin/Playground/youtube-clip/outputs/downloads/QyW1rOk-qqI.mp4"
+}

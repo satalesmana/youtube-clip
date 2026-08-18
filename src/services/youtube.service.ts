@@ -6,6 +6,7 @@ import { ensureDir } from '../utils/fs.js';
 import { AppError } from '../utils/errors.js';
 import type { Logger } from '../utils/logger.js';
 import type { DownloadResult } from '../types/media.js';
+import type { JobWorkspace } from '../types/job.js';
 
 // Unlikely to appear in a video title; used to delimit fields printed by yt-dlp.
 const FIELD_SEPARATOR = '␟';
@@ -20,7 +21,7 @@ export interface YoutubeServiceOptions {
 
 /** Downloads YouTube videos to local disk. */
 export interface IYoutubeService {
-  downloadVideo(url: string): Promise<DownloadResult>;
+  downloadVideo(url: string, workspace?: Pick<JobWorkspace, 'downloads'>): Promise<DownloadResult>;
 }
 
 /** yt-dlp-backed implementation of {@link IYoutubeService}. */
@@ -35,14 +36,14 @@ export class YoutubeService implements IYoutubeService {
    * merging separate video/audio streams into a single file. Retries the
    * whole download (metadata + fetch) on transient failures.
    */
-  async downloadVideo(url: string): Promise<DownloadResult> {
-    const { downloadsDir, maxRetries } = this.options;
+  async downloadVideo(url: string, workspace?: Pick<JobWorkspace, 'downloads'>): Promise<DownloadResult> {
+    const downloadsDir = workspace?.downloads ?? this.options.downloadsDir;
     await ensureDir(downloadsDir);
 
     this.logger.info({ url }, 'Download started');
 
     const result = await retry(() => this.runDownload(url, downloadsDir), {
-      attempts: maxRetries,
+      attempts: this.options.maxRetries,
       onRetry: (error, attempt) => {
         this.logger.warn({ url, attempt, err: error }, 'Retrying video download');
       },

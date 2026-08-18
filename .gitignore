@@ -8,13 +8,9 @@ npm-debug.log*
 # whisper.cpp ggml model files (large binaries, download per-machine)
 models/*.bin
 
-downloads/*
-!downloads/.gitkeep
-transcripts/*
-!transcripts/.gitkeep
+# Per-video workspaces: outputs/{videoId}/... (downloads, temp, transcripts, clips, etc.)
 outputs/*
 !outputs/.gitkeep
-temp/*
-!temp/.gitkeep
 
 .DS_Store
+.hermes

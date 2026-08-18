@@ -3,6 +3,8 @@ import type { Logger } from './logger.js';
 
 export interface RunCommandOptions {
   cwd?: string;
+  /** Environment overrides for the spawned process. */
+  env?: Record<string, string | undefined>;
   logger?: Logger;
   /** Called with each stdout/stderr line as the process runs, for progress logging. */
   onLine?: (line: string, stream: 'stdout' | 'stderr') => void;
@@ -37,13 +39,13 @@ export function runCommand(
   args: string[],
   options: RunCommandOptions = {},
 ): Promise<RunCommandResult> {
-  const { cwd, logger, onLine } = options;
+  const { cwd, env, logger, onLine } = options;
 
   const argsLog = args.join(' ')
   logger?.info({ command, argsLog }, 'runCommand');
 
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd });
+    const child = spawn(command, args, { cwd, env });
 
     let stdout = '';
     let stderr = '';

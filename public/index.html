@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Viral Clip Studio — Riset & Transformasi Konten</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-logo">🎬</span>
+      <div>
+        <h1>Viral Clip Studio</h1>
+        <p class="tagline">Riset topik viral → Transformasi konten → Buat short siap upload</p>
+      </div>
+    </div>
+    <div class="status-pill" id="status-pill">
+      <span class="dot"></span>
+      <span id="status-text">Checking…</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="research" role="tab" aria-selected="true">🔍 Riset Viral</button>
+    <button class="tab" data-tab="transform" role="tab" aria-selected="false">✨ Transform</button>
+    <button class="tab" data-tab="rights" role="tab" aria-selected="false">⚖️ Rights & Review</button>
+    <button class="tab" data-tab="history" role="tab" aria-selected="false">🕘 Riwayat</button>
+  </nav>
+
+  <main>
+    <!-- ============ TAB: RISET VIRAL ============ -->
+    <section id="tab-research" class="tab-panel active">
+      <div class="card">
+        <div class="card-head">
+          <h2>🔍 Riset Topik Viral</h2>
+          <p class="muted">Kumpulkan sinyal dari RSS berita, Reddit, Google Trends & X, lalu ranking dengan AI.</p>
+        </div>
+        <div class="research-controls">
+          <label>
+            Jumlah topik
+            <input type="number" id="res-max-trends" min="1" max="25" value="10" />
+          </label>
+          <label>
+            Bahasa
+            <select id="res-language">
+              <option value="auto">Auto</option>
+              <option value="id">Indonesia</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <label class="wide">
+            Keyword pencarian (Google News)
+            <input type="text" id="res-keyword" placeholder="misal: teknologi AI, politik Indonesia, Piala Dunia" />
+          </label>
+          <label class="wide">
+            Subreddit (pisahkan koma)
+            <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
+          </label>
+          <label class="wide">
+            Provider riset
+            <div class="provider-chips" id="res-providers">
+              <button type="button" class="chip-toggle active" data-provider="rss">📰 RSS Berita</button>
+              <button type="button" class="chip-toggle active" data-provider="reddit">🤖 Reddit</button>
+              <button type="button" class="chip-toggle active" data-provider="trends">📈 Google Trends</button>
+              <button type="button" class="chip-toggle active" data-provider="x">🐦 X/Twitter</button>
+            </div>
+          </label>
+          <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
+        </div>
+        <div class="progress hidden" id="research-progress">
+          <div class="progress-bar"><div class="progress-fill" id="research-progress-fill"></div></div>
+          <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal…</span>
+        </div>
+      </div>
+
+      <div id="research-results" class="results hidden">
+        <div class="results-head">
+          <h2>📊 Topik Terdeteksi</h2>
+          <span class="muted" id="research-meta"></span>
+        </div>
+        <div id="research-list"></div>
+      </div>
+
+      <div class="card error-card hidden" id="research-error">
+        <h3>⚠️ Gagal Riset</h3>
+        <p id="research-error-msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ TAB: TRANSFORM ============ -->
+    <section id="tab-transform" class="tab-panel">
+      <div class="card">
+        <div class="card-head">
+          <h2>✨ Transformasi Konten</h2>
+          <p class="muted">Masukkan URL YouTube — sistem akan generate script orisinal, narasi TTS, dan render video 9:16.</p>
+        </div>
+        <div class="transform-controls">
+          <div class="input-group">
+            <label class="label-main">URL YouTube</label>
+            <input type="url" id="transform-url" placeholder="https://www.youtube.com/watch?v=..." />
+          </div>
+
+          <div class="form-row">
+            <div class="input-group">
+              <label class="label-main">Engine</label>
+              <select id="transform-engine">
+                <option value="ffmpeg-template">FFmpeg Template</option>
+                <option value="remotion">Remotion</option>
+              </select>
+            </div>
+            <div class="input-group hidden" id="remotion-style-group">
+              <label class="label-main">Style</label>
+              <select id="transform-style">
+                <option value="commentary">Commentary</option>
+                <option value="sports">Sports News</option>
+                <option value="interview">Interview</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="input-group">
+              <label class="label-main">Bahasa</label>
+              <select id="transform-lang">
+                <option value="id" selected>Indonesia</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label class="label-main">TTS Voice</label>
+              <select id="transform-voice">
+                <option value="id-ID-ArdiNeural" selected>Ardi (ID)</option>
+                <option value="id-ID-GadisNeural">Gadis (ID)</option>
+                <option value="en-US-GuyNeural">Guy (EN)</option>
+                <option value="en-US-AriaNeural">Aria (EN)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checkbox-row">
+            <label class="checkbox-item">
+              <input type="checkbox" id="transform-rights-gate" checked />
+              <span>Rights Gate</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="transform-quality-check" checked />
+              <span>Quality Check</span>
+            </label>
+          </div>
+
+          <div class="input-group">
+            <label class="label-main">Nama Channel <span class="optional">(opsional)</span></label>
+            <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
+          </div>
+
+          <button class="btn primary full" id="btn-transform">🚀 Mulai Transform</button>
+        </div>
+        <div class="progress hidden" id="transform-progress">
+          <div class="progress-bar"><div class="progress-fill" id="transform-progress-fill"></div></div>
+          <span class="progress-label" id="transform-progress-label">Mempersiapkan…</span>
+        </div>
+      </div>
+
+      <!-- Progress stages -->
+      <div id="transform-stages" class="stages hidden">
+        <div class="stage" data-stage="transcript">
+          <div class="stage-icon">🎙️</div>
+          <div class="stage-content">
+            <div class="stage-title">Transkripsi</div>
+            <div class="stage-desc">Whisper ekstraksi audio ke text</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="angle">
+          <div class="stage-icon">💡</div>
+          <div class="stage-content">
+            <div class="stage-title">Analisis Angle</div>
+            <div class="stage-desc">LLM identifikasi angle viral</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="script">
+          <div class="stage-icon">📝</div>
+          <div class="stage-content">
+            <div class="stage-title">Penulisan Script</div>
+            <div class="stage-desc">Generate script orisinal + LCS check</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="tts">
+          <div class="stage-icon">🔊</div>
+          <div class="stage-content">
+            <div class="stage-title">TTS Synthesis</div>
+            <div class="stage-desc">Edge TTS convert script ke audio</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="plan">
+          <div class="stage-icon">🎬</div>
+          <div class="stage-content">
+            <div class="stage-title">Video Plan</div>
+            <div class="stage-desc">Scene breakdown & timing</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="render">
+          <div class="stage-icon">⚡</div>
+          <div class="stage-content">
+            <div class="stage-title">Rendering</div>
+            <div class="stage-desc">FFmpeg/Remotion composition</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+      </div>
+
+      <div id="transform-results" class="results hidden">
+        <div class="results-head">
+          <h2>🎥 Transform Selesai</h2>
+          <span class="muted" id="transform-meta"></span>
+        </div>
+        <div id="transform-list"></div>
+      </div>
+
+      <div class="card error-card hidden" id="transform-error">
+        <h3>⚠️ Transform Gagal</h3>
+        <p id="transform-error-msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ TAB: RIGHTS & REVIEW ============ -->
+    <section id="tab-rights" class="tab-panel">
+      <div class="card">
+        <div class="card-head">
+          <h2>⚖️ Rights Gate & Review</h2>
+          <p class="muted">Verifikasi hak cipta source dan approve konten sebelum publish.</p>
+        </div>
+        <div class="rights-controls">
+          <label class="wide">
+            Video ID / URL
+            <input type="text" id="rights-video-id" placeholder="QyW1rOk-qqI atau URL YouTube" />
+          </label>
+          <button class="btn" id="btn-check-rights">🔍 Cek Rights</button>
+          <button class="btn" id="btn-check-quality">✅ Quality Check</button>
+        </div>
+      </div>
+
+      <div id="rights-result" class="results hidden">
+        <div class="results-head">
+          <h2>📋 Status Rights</h2>
+          <span class="muted" id="rights-meta"></span>
+        </div>
+        <div id="rights-content"></div>
+      </div>
+
+      <div id="quality-result" class="results hidden">
+        <div class="results-head">
+          <h2>📊 Quality Check</h2>
+          <span class="muted" id="quality-meta"></span>
+        </div>
+        <div id="quality-content"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: RIWAYAT ============ -->
+    <section id="tab-history" class="tab-panel">
+      <div class="card">
+        <div class="card-head">
+          <h2>🕘 Riwayat</h2>
+          <p class="muted">Daftar job riset dan transform yang pernah dijalankan.</p>
+        </div>
+        <div id="history-list" class="history-list">
+          <p class="muted">Belum ada riwayat.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Viral Clip Studio v0.1 — Sprint A-G Complete · FFmpeg Template + Remotion Engine</p>
+  </footer>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
