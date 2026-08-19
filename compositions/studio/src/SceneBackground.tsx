@@ -16,7 +16,10 @@ import type { PlanScene } from './types';
 
 /**
  * Full-bleed background for one scene.
- * - `graphic` scenes render a themed title card (template intro style).
+ * - `graphic` scenes render a themed title card (template intro style). When
+ *   the scene carries a `source` range (e.g. the story's hook moment) the
+ *   trimmed clip plays behind the card, dimmed, so the opening shows the
+ *   money shot behind the title.
  * - Other scenes render the source video with Ken Burns zoom and blur
  *   enter/exit transitions, synced to the scene's trim window.
  */
@@ -27,8 +30,6 @@ export const SceneBackground: React.FC<{
   isFirst: boolean;
   isLast: boolean;
   sceneDurationFrames: number;
-  sourceMuted: boolean;
-  sourceVolume: number;
 }> = ({
   scene,
   videoSrc,
@@ -36,18 +37,92 @@ export const SceneBackground: React.FC<{
   isFirst,
   isLast,
   sceneDurationFrames,
-  sourceMuted,
-  sourceVolume,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  const renderVideo = (
+    localFrame: number,
+    offset: number,
+    duration: number,
+    trimAfterOverride?: number,
+  ) => {
+    const blur = calculateBlur({
+      localFrame,
+      sceneDurationFrames: duration,
+      fps,
+      blurIn: !isFirst,
+      blurOut: !isLast,
+    });
+    const kbScale = kenBurnsScale(localFrame, duration);
+    return (
+      <Video
+        src={toAssetUrl(videoSrc)}
+        objectFit="cover"
+        muted
+        volume={0}
+        trimBefore={offset}
+        trimAfter={trimAfterOverride ?? offset + duration}
+        style={{
+          width: '100%',
+          height: '100%',
+          scale: kbScale,
+          ...(blur > 0
+            ? {
+                filter: `blur(${blur}px)`,
+                WebkitFilter: `blur(${blur}px)`,
+              }
+            : {}),
+        }}
+      />
+    );
+  };
+
+  /** Plays the trimmed source clip once, then freezes on its last frame. */
+  const renderSourceClip = (trimBefore: number, trimAfter: number) => {
+    const clipLen = Math.max(1, trimAfter - trimBefore);
+    return (
+      <>
+        <Sequence from={0} durationInFrames={clipLen}>
+          {renderVideo(frame, trimBefore, clipLen)}
+        </Sequence>
+        <Sequence from={clipLen}>
+          <Freeze frame={clipLen - 1}>
+            {renderVideo(clipLen - 1, trimBefore, clipLen)}
+          </Freeze>
+        </Sequence>
+      </>
+    );
+  };
+
   if (scene.visual === 'graphic') {
+    const source = scene.source;
+    const isHook = scene.type === 'hook';
+    const hasSourceClip = Boolean(source && source.end > source.start && videoSrc);
+    const trimBefore = source
+      ? Math.max(0, Math.round(source.start * fps))
+      : 0;
+    const trimAfter = source
+      ? Math.max(1, Math.round(source.end * fps))
+      : 1;
+
     return (
       <AbsoluteFill style={{ backgroundColor: theme.cardBg }}>
+        {hasSourceClip && source ? (
+          <>
+            {renderSourceClip(trimBefore, trimAfter)}
+            {/* Hook keeps the money shot more visible for silent scroll. */}
+            <AbsoluteFill
+              style={{
+                backgroundColor: isHook ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.45)',
+              }}
+            />
+          </>
+        ) : null}
         <AbsoluteFill
           style={{
             background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            opacity: hasSourceClip ? (isHook ? 0.55 : 0.85) : 1,
           }}
         />
         <div
@@ -100,64 +175,13 @@ export const SceneBackground: React.FC<{
     return <AbsoluteFill style={{ backgroundColor: theme.surface }} />;
   }
 
-  const renderVideo = (
-    localFrame: number,
-    offset: number,
-    duration: number,
-    trimAfterOverride?: number,
-  ) => {
-    const blur = calculateBlur({
-      localFrame,
-      sceneDurationFrames: duration,
-      fps,
-      blurIn: !isFirst,
-      blurOut: !isLast,
-    });
-    const kbScale = kenBurnsScale(localFrame, duration);
-    return (
-      <Video
-        src={toAssetUrl(videoSrc)}
-        objectFit="cover"
-        muted={sourceMuted}
-        volume={sourceMuted ? 0 : sourceVolume}
-        trimBefore={offset}
-        trimAfter={trimAfterOverride ?? offset + duration}
-        style={{
-          width: '100%',
-          height: '100%',
-          scale: kbScale,
-          ...(blur > 0
-            ? {
-                filter: `blur(${blur}px)`,
-                WebkitFilter: `blur(${blur}px)`,
-              }
-            : {}),
-        }}
-      />
-    );
-  };
-
   if (scene.source) {
     const trimBefore = Math.max(0, Math.round(scene.source.start * fps));
     const trimAfter = Math.max(1, Math.round(scene.source.end * fps));
-    const clipLen = Math.max(1, trimAfter - trimBefore);
-    return (
-      <AbsoluteFill>
-        <Sequence from={0} durationInFrames={clipLen}>
-          {renderVideo(frame, trimBefore, clipLen)}
-        </Sequence>
-        <Sequence from={clipLen}>
-          <Freeze frame={clipLen - 1}>
-            {renderVideo(clipLen - 1, trimBefore, clipLen)}
-          </Freeze>
-        </Sequence>
-      </AbsoluteFill>
-    );
+    return <AbsoluteFill>{renderSourceClip(trimBefore, trimAfter)}</AbsoluteFill>;
   }
 
   return (
-    <AbsoluteFill>
-      {renderVideo(frame, 0, sceneDurationFrames)}
-    </AbsoluteFill>
+    <AbsoluteFill>{renderVideo(frame, 0, sceneDurationFrames)}</AbsoluteFill>
   );
 };

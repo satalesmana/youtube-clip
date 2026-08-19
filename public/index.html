@@ -122,9 +122,10 @@
 
           <div class="form-row">
             <div class="input-group">
-              <label class="label-main">Bahasa</label>
+              <label class="label-main">Bahasa Output</label>
               <select id="transform-lang">
-                <option value="id" selected>Indonesia</option>
+                <option value="auto" selected>Auto (ikuti sumber)</option>
+                <option value="id">Indonesia</option>
                 <option value="en">English</option>
               </select>
             </div>
@@ -139,6 +140,17 @@
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="input-group">
+              <label class="label-main">Hook Badge <span class="optional">(opsional)</span></label>
+              <input type="text" id="transform-hook-badge" placeholder="misal: 10RB+ Views" />
+            </div>
+            <div class="input-group">
+              <label class="label-main">Nama Channel <span class="optional">(opsional)</span></label>
+              <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
+            </div>
+          </div>
+
           <div class="checkbox-row">
             <label class="checkbox-item">
               <input type="checkbox" id="transform-rights-gate" checked />
@@ -148,14 +160,13 @@
               <input type="checkbox" id="transform-quality-check" checked />
               <span>Quality Check</span>
             </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="transform-dry-run" />
+              <span>Dry Run</span>
+            </label>
           </div>
 
-          <div class="input-group">
-            <label class="label-main">Nama Channel <span class="optional">(opsional)</span></label>
-            <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
-          </div>
-
-          <button class="btn primary full" id="btn-transform">🚀 Mulai Transform</button>
+          <button class="btn primary full" id="btn-transform">🚀 Mulai Transformasi</button>
         </div>
         <div class="progress hidden" id="transform-progress">
           <div class="progress-bar"><div class="progress-fill" id="transform-progress-fill"></div></div>
@@ -165,35 +176,51 @@
 
       <!-- Progress stages -->
       <div id="transform-stages" class="stages hidden">
+        <div class="stage" data-stage="download">
+          <div class="stage-icon">📥</div>
+          <div class="stage-content">
+            <div class="stage-title">Download & Audio</div>
+            <div class="stage-desc">yt-dlp unduh video, FFmpeg ekstrak audio mono 16kHz</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
         <div class="stage" data-stage="transcript">
           <div class="stage-icon">🎙️</div>
           <div class="stage-content">
             <div class="stage-title">Transkripsi</div>
-            <div class="stage-desc">Whisper ekstraksi audio ke text</div>
+            <div class="stage-desc">Whisper transkrip audio ke teks + word timestamps</div>
           </div>
           <div class="stage-status"></div>
         </div>
         <div class="stage" data-stage="angle">
           <div class="stage-icon">💡</div>
           <div class="stage-content">
-            <div class="stage-title">Analisis Angle</div>
-            <div class="stage-desc">LLM identifikasi angle viral</div>
+            <div class="stage-title">Generate Angles</div>
+            <div class="stage-desc">ContentAngleService 3-5 angle editorial per momen</div>
+          </div>
+          <div class="stage-status"></div>
+        </div>
+        <div class="stage" data-stage="story">
+          <div class="stage-icon">📖</div>
+          <div class="stage-content">
+            <div class="stage-title">Story Beats</div>
+            <div class="stage-desc">StoryService derive narrative source-grounded</div>
           </div>
           <div class="stage-status"></div>
         </div>
         <div class="stage" data-stage="script">
           <div class="stage-icon">📝</div>
           <div class="stage-content">
-            <div class="stage-title">Penulisan Script</div>
-            <div class="stage-desc">Generate script orisinal + LCS check</div>
+            <div class="stage-title">Write Script</div>
+            <div class="stage-desc">ScriptService tulis narasi orisinal (hook, body, conclusion)</div>
           </div>
           <div class="stage-status"></div>
         </div>
         <div class="stage" data-stage="tts">
           <div class="stage-icon">🔊</div>
           <div class="stage-content">
-            <div class="stage-title">TTS Synthesis</div>
-            <div class="stage-desc">Edge TTS convert script ke audio</div>
+            <div class="stage-title">Synthesize TTS</div>
+            <div class="stage-desc">Edge TTS / OpenAI convert script ke narasi MP3</div>
           </div>
           <div class="stage-status"></div>
         </div>
@@ -201,15 +228,15 @@
           <div class="stage-icon">🎬</div>
           <div class="stage-content">
             <div class="stage-title">Video Plan</div>
-            <div class="stage-desc">Scene breakdown & timing</div>
+            <div class="stage-desc">VideoPlanService bangun timeline scenes + timing</div>
           </div>
           <div class="stage-status"></div>
         </div>
         <div class="stage" data-stage="render">
           <div class="stage-icon">⚡</div>
           <div class="stage-content">
-            <div class="stage-title">Rendering</div>
-            <div class="stage-desc">FFmpeg/Remotion composition</div>
+            <div class="stage-title">Render</div>
+            <div class="stage-desc">Composition engine: Remotion / FFmpeg Template</div>
           </div>
           <div class="stage-status"></div>
         </div>
@@ -273,6 +300,7 @@
         <div id="history-list" class="history-list">
           <p class="muted">Belum ada riwayat.</p>
         </div>
+        <video id="history-player" class="history-player hidden" controls preload="metadata"></video>
       </div>
     </section>
   </main>

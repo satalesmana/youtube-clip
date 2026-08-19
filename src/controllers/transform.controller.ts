@@ -13,6 +13,7 @@ import type { IScriptService } from '../content/script.service.js';
 import type { ITtsService } from '../services/tts.service.js';
 import type { IVideoPlanService, VideoPlanBuildInput } from '../content/video-plan.service.js';
 import type { IStoryService } from '../content/story.service.js';
+import type { TTSSectionTiming } from '../providers/tts/tts.types.js';
 import type { TranscriptDocument } from '../types/transcript.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { AngleGenerationResult, ContentAngle } from '../types/angle.js';
@@ -26,6 +27,8 @@ import type { ITemplateRendererService } from '../template/renderer.service.js';
 import type { IAssService } from '../services/ass.service.js';
 import type { ISubtitleService } from '../services/subtitle.service.js';
 import type { ICompositionEngine, CompositionAssets } from '../composition/composition.types.js';
+import type { ContentCache } from '../services/content-cache.service.js';
+import { hashSeed } from '../utils/seed.js';
 
 export interface TransformControllerDeps {
   youtubeService: IYoutubeService;
@@ -44,6 +47,8 @@ export interface TransformControllerDeps {
   logger: Logger;
   assStyle: AssStyleConfig;
   compositionEngine: ICompositionEngine;
+  /** Optional disk cache — regenerating the same video returns cached LLM stage outputs. */
+  contentCache?: ContentCache;
 }
 
 /** Main entry point for `POST /api/transform`. */
@@ -114,11 +119,19 @@ export class TransformController {
     };
 
     let angleResult: AngleGenerationResult;
-    try {
-      angleResult = await this.deps.contentAngleService.generateAngles(angleContext);
-    } catch (err) {
-      logger.warn({ err }, 'Angle generation failed');
-      angleResult = this.fallbackAngle(request.candidateId);
+    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId);
+    const cachedAngle = await this.deps.contentCache?.get<AngleGenerationResult>(angleCacheKey);
+    if (cachedAngle) {
+      logger.info({ cache: 'angle', videoId, candidateId: request.candidateId }, 'Angle generation served from cache');
+      angleResult = cachedAngle;
+    } else {
+      try {
+        angleResult = await this.deps.contentAngleService.generateAngles(angleContext);
+        await this.deps.contentCache?.set(angleCacheKey, angleResult);
+      } catch (err) {
+        logger.warn({ err }, 'Angle generation failed');
+        angleResult = this.fallbackAngle(request.candidateId);
+      }
     }
 
     const selectedAngle = angleResult.angles.find(
@@ -126,44 +139,67 @@ export class TransformController {
     ) ?? angleResult.angles[0]!;
 
     let story: Awaited<ReturnType<IStoryService['buildStory']>> | undefined;
-    try {
-      // Pass both moment and context segments for better story analysis
-      const storySegments = [
-        ...angleContext.contextSegments,
-        ...selection.momentSegments,
-      ];
-      story = await this.deps.storyService.buildStory(storySegments);
-      logger.info({ concept: story.concept, beatCount: story.beats.length }, 'Source story selected');
-    } catch (err) {
-      // The existing source-grounded script path remains available when the
-      // extra story-planning call is unavailable.
-      logger.warn({ err }, 'Source story planning failed; using compatibility script mode');
+    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId);
+    const cachedStory = await this.deps.contentCache?.get<Awaited<ReturnType<IStoryService['buildStory']>>>(storyCacheKey);
+    if (cachedStory) {
+      logger.info({ cache: 'story', videoId, candidateId: request.candidateId }, 'Story planning served from cache');
+      story = cachedStory;
+    } else {
+      try {
+        // Pass both moment and context segments for better story analysis
+        const storySegments = [
+          ...angleContext.contextSegments,
+          ...selection.momentSegments,
+        ];
+        story = await this.deps.storyService.buildStory(storySegments);
+        logger.info({ concept: story.concept, beatCount: story.beats.length }, 'Source story selected');
+        await this.deps.contentCache?.set(storyCacheKey, story);
+      } catch (err) {
+        // The existing source-grounded script path remains available when the
+        // extra story-planning call is unavailable.
+        logger.warn({ err }, 'Source story planning failed; using compatibility script mode');
+      }
     }
 
     // Stage 2: Script
     let script: OriginalScript;
-    try {
-      const scriptContext = {
-        candidateId: angleResult.candidateId,
-        angleId: selectedAngle.id,
-        angleTitle: request.customAngleTitle ?? selectedAngle.title,
-        angleHook: request.customHook ?? selectedAngle.hook,
-        angleReason: selectedAngle.reason,
-        angleType: selectedAngle.angleType,
-        momentSegments: angleContext.momentSegments,
-        contextSegments: angleContext.contextSegments,
-        story,
-        candidateTitle: angleContext.candidateTitle,
-        candidateHook: angleContext.candidateHook,
-        sourceTitle: angleContext.sourceTitle,
-        sourceChannel: angleContext.sourceChannel,
-        sourceLanguage: angleContext.sourceLanguage,
-        targetLanguage: request.language === 'auto' ? undefined : request.language,
-      };
-      script = await this.deps.scriptService.generateScript(scriptContext);
-    } catch (err) {
-      logger.warn({ err }, 'Script generation failed');
-      script = this.fallbackScript(selectedAngle, transcript.language);
+    const scriptCacheKey = this.cacheKey(
+      'script',
+      videoId,
+      request.candidateId,
+      selectedAngle.id,
+      request.customAngleTitle,
+      request.language,
+    );
+    const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
+    if (cachedScript) {
+      logger.info({ cache: 'script', videoId, candidateId: request.candidateId }, 'Script generation served from cache');
+      script = cachedScript;
+    } else {
+      try {
+        const scriptContext = {
+          candidateId: angleResult.candidateId,
+          angleId: selectedAngle.id,
+          angleTitle: request.customAngleTitle ?? selectedAngle.title,
+          angleHook: request.customHook ?? selectedAngle.hook,
+          angleReason: selectedAngle.reason,
+          angleType: selectedAngle.angleType,
+          momentSegments: angleContext.momentSegments,
+          contextSegments: angleContext.contextSegments,
+          story,
+          candidateTitle: angleContext.candidateTitle,
+          candidateHook: angleContext.candidateHook,
+          sourceTitle: angleContext.sourceTitle,
+          sourceChannel: angleContext.sourceChannel,
+          sourceLanguage: angleContext.sourceLanguage,
+          targetLanguage: request.language === 'auto' ? undefined : request.language,
+        };
+        script = await this.deps.scriptService.generateScript(scriptContext);
+        await this.deps.contentCache?.set(scriptCacheKey, script);
+      } catch (err) {
+        logger.warn({ err }, 'Script generation failed');
+        script = this.fallbackScript(selectedAngle, transcript.language);
+      }
     }
 
     // Stage 3: TTS
@@ -171,7 +207,7 @@ export class TransformController {
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(workspaceDir);
 
-    let ttsResult: { outputPath: string; durationSeconds: number };
+    let ttsResult: { outputPath: string; durationSeconds: number; sections?: TTSSectionTiming[] };
     try {
       ttsResult = await this.deps.ttsService.synthesizeScript(script, workspaceDir);
     } catch (err) {
@@ -188,6 +224,7 @@ export class TransformController {
         clipEnd: angleContext.clipEnd,
         narrationPath: ttsResult.outputPath,
         narrationDurationSeconds: ttsResult.durationSeconds,
+        ttsSections: ttsResult.sections,
         story,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
@@ -216,7 +253,7 @@ export class TransformController {
     // Stage 5: Render
     logger.info({ videoId, jobId }, 'Rendering commentary video');
     const outputVideo = await this.renderVideo(
-      videoPath, videoId, jobId, request.template ?? 'commentary', videoPlan, ttsResult, request.channel, transcript,
+      videoPath, videoId, jobId, request.template ?? 'commentary', videoPlan, ttsResult, request.channel, request.hookBadge, transcript,
     );
 
     return {
@@ -249,6 +286,7 @@ export class TransformController {
     videoPlan: VideoPlan,
     ttsResult: { outputPath: string; durationSeconds: number },
     channel: TransformRequestInput['channel'],
+    hookBadge: string | undefined,
     transcript?: TranscriptDocument | null,
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
@@ -268,6 +306,7 @@ export class TransformController {
       sourceVideo: videoPath,
       narration: ttsResult.outputPath,
       channelName: channel?.name,
+      hookBadge,
       videoId,
       style: this.toCompositionStyle(templateId),
       templateId,
@@ -435,5 +474,10 @@ export class TransformController {
     const relativePath = relative(this.deps.outputsDir, path);
     const safePath = relativePath.split(sep).map(encodeURIComponent).join('/');
     return `/api/media/${safePath}`;
+  }
+
+  /** Stable cache key (hex hash) from content identifiers — safe as a filename. */
+  private cacheKey(...parts: (string | number | undefined)[]): string {
+    return hashSeed(...parts).toString(16);
   }
 }

@@ -70,6 +70,7 @@ export default defineEventHandler(async (event) => {
     logger: createLogger('transform.with-rights'),
     assStyle: container.assStyle,
     compositionEngine: container.compositionEngine,
+    contentCache: container.contentCache,
   };
 
   const controller = new TransformController(deps);

@@ -23,6 +23,14 @@ export interface PlanScene {
   source?: { start: number; end: number };
   /** Visual hint for composition engines (e.g. "speaker", "b-roll", "graphic"). */
   visual?: string;
+  /** Engagement as short-form content (1-10), carried from the story beat. */
+  engagementScore?: number;
+  /** How keep-able this scene is in the final short. */
+  retentionRisk?: 'high' | 'medium' | 'low';
+  /** The curiosity gap / tension this scene opens. */
+  openLoop?: string;
+  /** The most caption-worthy verbatim line from the source beat. */
+  quotableLine?: string;
 }
 
 /** A caption event with word-level timing for the composition engines. */
@@ -32,6 +40,13 @@ export interface PlanCaption {
   text: string;
   /** Words to emphasize (keyword highlighting). */
   highlightWords?: string[];
+  /** 'quote' renders a larger money-line card instead of a narration caption. */
+  type?: 'narration' | 'quote';
+  /**
+   * Real word boundaries (absolute output seconds) when the TTS exposed them.
+   * Drives word-by-word highlight that stays in sync with the voice.
+   */
+  wordTimings?: Array<{ word: string; start: number; end: number }>;
 }
 
 /** The complete scene plan for one short-form video. */

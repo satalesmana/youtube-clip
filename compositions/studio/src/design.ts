@@ -1,4 +1,5 @@
 import { loadFont } from '@remotion/google-fonts/BreeSerif';
+import { loadFont as loadHookFont } from '@remotion/google-fonts/ArchivoBlack';
 
 export type Theme = {
   id: string;
@@ -110,5 +111,13 @@ export const selectTheme = (candidateId: string, angleId: string): Theme => {
 
 /** Display font shared across all compositions (signature of the template). */
 export const FONT = loadFont('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+/**
+ * Heavy sans-serif for hook headlines — the 2026 kinetic-typography trend:
+ * big, center-aligned, high-contrast sans for the opening claim.
+ */
+export const HOOK_FONT = loadHookFont('normal', {
   subsets: ['latin'],
 }).fontFamily;

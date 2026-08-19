@@ -26,6 +26,8 @@ export const transformRequestSchema = z.object({
       logo: z.string().optional(),
     })
     .optional(),
+  /** Social-proof badge for the first ~2s of the hook (e.g. "10RB+ Views"). */
+  hookBadge: z.string().optional(),
   /**
    * Output language override (`auto` falls back to the transcript language;
    * `id`, `en`, ... for explicit languages).

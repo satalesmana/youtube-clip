@@ -1,6 +1,7 @@
 import { retry } from '../utils/retry.js';
 import { AppError } from '../utils/errors.js';
 import { parseLlmJson } from '../utils/llm-json.js';
+import { hashSeed } from '../utils/seed.js';
 import { originalScriptResponseSchema } from '../schemas/script.schema.js';
 import {
   SCRIPT_SYSTEM_PROMPT,
@@ -56,6 +57,16 @@ export class ScriptService implements IScriptService {
           prompt: buildScriptUserPrompt(effectiveContext),
           temperature: this.options.temperature,
           timeoutMs: this.options.timeoutMs,
+          // Deterministic output: same moment + angle + language → same script.
+          seed: hashSeed(
+            'script',
+            effectiveContext.sourceTitle,
+            effectiveContext.candidateId,
+            effectiveContext.angleId,
+            effectiveContext.angleTitle,
+            effectiveContext.targetLanguage,
+            ...effectiveContext.momentSegments.map((segment) => `${segment.start}|${segment.end}|${segment.text}`),
+          ),
         });
 
         this.logger.debug({ candidateId: context.candidateId }, 'Validating script response');

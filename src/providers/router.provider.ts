@@ -22,6 +22,23 @@ export class RouterProvider implements IOllamaProvider {
 
     this.logger.debug({ model: options.model, baseUrl: this.baseUrl }, 'Calling AI router');
 
+    const requestBody = {
+      model: options.model,
+      stream: false,
+      temperature: options.temperature ?? 0.2,
+      ...(options.seed !== undefined ? { seed: options.seed } : {}),
+      // Keep reasoning short: without this, deepseek-style reasoning models
+      // burn the whole budget thinking and return an empty `content`.
+      reasoning_effort: 'low',
+      max_tokens: 8192,
+      messages: [
+        // ...(options.system ? [{ role: 'system', content: options.system }] : []),
+        { role: 'user', content: `${options.system} ${options.prompt}` },
+      ],
+    };
+
+    this.logger.info({ model: options.model, messages: requestBody.messages }, 'LLM request');
+
     try {
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
@@ -29,19 +46,7 @@ export class RouterProvider implements IOllamaProvider {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: options.model,
-          stream: false,
-          // temperature: options.temperature ?? 0.2,
-          // Keep reasoning short: without this, deepseek-style reasoning models
-          // burn the whole budget thinking and return an empty `content`.
-          reasoning_effort: 'low',
-          max_tokens: 8192,
-          messages: [
-            // ...(options.system ? [{ role: 'system', content: options.system }] : []),
-            { role: 'user', content: `${options.system} ${options.prompt}` },
-          ],
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
@@ -53,12 +58,13 @@ export class RouterProvider implements IOllamaProvider {
         );
       }
 
-      this.logger.debug(
-        { status: response.status, bodyPreview: bodyText.slice(0, 300) },
-        'AI router raw response',
+      const data = parseResponseBody(bodyText);
+
+      this.logger.info(
+        { status: response.status, content: data.choices?.[0]?.message?.content ?? '' },
+        'LLM response',
       );
 
-      const data = parseResponseBody(bodyText);
       return data.choices?.[0]?.message?.content ?? '';
     } catch (error) {
       if (error instanceof AppError) throw error;

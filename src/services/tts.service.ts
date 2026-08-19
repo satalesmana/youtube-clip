@@ -2,7 +2,8 @@ import { join } from 'node:path';
 import { ensureDir } from '../utils/fs.js';
 import type { Logger } from '../utils/logger.js';
 import type { ITTSProvider } from '../providers/tts/tts.provider.js';
-import type { TTSSynthesisResult } from '../providers/tts/tts.types.js';
+import type { TTSSectionTiming, TTSSynthesisResult } from '../providers/tts/tts.types.js';
+import type { IWordTimingService } from './word-timing.service.js';
 import type { OriginalScript } from '../types/script.js';
 
 export interface TtsServiceOptions {
@@ -11,6 +12,12 @@ export interface TtsServiceOptions {
   outputDir: string;
   /** Optional language hint passed to the provider. */
   language?: string;
+  /**
+   * Optional aligner used to recover per-word timings from providers that do
+   * not expose native word boundaries (e.g. OpenAI `tts-1`). Without it those
+   * providers fall back to estimated caption timing in the planner.
+   */
+  wordAligner?: IWordTimingService;
 }
 
 export interface ITtsService {
@@ -34,18 +41,21 @@ export class TtsService implements ITtsService {
     const voiceDir = join(workspaceDir, 'voice');
     await ensureDir(voiceDir);
 
-    const sections = script.sections.filter((s) => s.text.trim().length > 0);
-    if (sections.length === 0) {
+    const narrationSections = script.sections.filter((s) => s.text.trim().length > 0);
+    if (narrationSections.length === 0) {
       throw new Error('Script has no narration text to synthesize.');
     }
 
     this.logger.info(
-      { provider: this.provider.kind, voice: this.options.voice, sectionCount: sections.length },
+      { provider: this.provider.kind, voice: this.options.voice, sectionCount: narrationSections.length },
       'Synthesizing script narration',
     );
 
     const results: TTSSynthesisResult[] = [];
-    for (const section of sections) {
+    const sectionTimings: TTSSectionTiming[] = [];
+    const alignDir = join(voiceDir, '.align');
+    let offset = 0;
+    for (const section of narrationSections) {
       const safeName = section.type.replace(/[^a-z0-9]+/gi, '-');
       const outPath = join(voiceDir, `narration-${safeName}.mp3`);
       const result = await this.provider.synthesize({
@@ -56,6 +66,39 @@ export class TtsService implements ITtsService {
         language: this.options.language,
       });
       results.push(result);
+
+      // When the provider does not expose word boundaries natively (OpenAI
+      // tts-1), recover them by re-transcribing the audio with Whisper.
+      let wordTimings = result.wordTimings ?? [];
+      if (wordTimings.length === 0 && this.options.wordAligner) {
+        await ensureDir(alignDir);
+        wordTimings = await this.options.wordAligner.align(
+          outPath,
+          section.text,
+          alignDir,
+        );
+        if (wordTimings.length > 0) {
+          this.logger.info(
+            { type: section.type, words: wordTimings.length },
+            'Recovered narration word timings via Whisper alignment',
+          );
+        }
+      }
+
+      // Map each section's word boundaries onto the combined narration
+      // timeline so the composition can highlight words in sync with the
+      // voice instead of guessing with even distribution.
+      const absoluteTimings = wordTimings.map((w) => ({
+        word: w.word,
+        start: Number((offset + w.start).toFixed(3)),
+        end: Number((offset + w.end).toFixed(3)),
+      }));
+      sectionTimings.push({
+        type: section.type,
+        durationSeconds: result.durationSeconds,
+        wordTimings: absoluteTimings,
+      });
+      offset += result.durationSeconds;
     }
 
     // Concatenate all sections into a single narration file.
@@ -73,6 +116,7 @@ export class TtsService implements ITtsService {
       outputPath: combinedPath,
       durationSeconds: totalDuration,
       provider: this.provider.kind,
+      sections: sectionTimings,
     };
   }
 

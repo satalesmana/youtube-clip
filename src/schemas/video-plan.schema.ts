@@ -21,6 +21,14 @@ export const planSceneSchema = z.object({
     .object({ start: z.number().min(0), end: z.number().min(0) })
     .optional(),
   visual: z.string().optional(),
+  /** Engagement as short-form content (1-10), carried from the story beat. */
+  engagementScore: z.number().int().min(1).max(10).optional(),
+  /** How keep-able this scene is in the final short. */
+  retentionRisk: z.enum(['high', 'medium', 'low']).optional(),
+  /** The curiosity gap / tension this scene opens. */
+  openLoop: z.string().optional(),
+  /** The most caption-worthy verbatim line from the source beat. */
+  quotableLine: z.string().optional(),
 });
 
 /** A caption event with word-level timing. */
@@ -29,6 +37,12 @@ export const planCaptionSchema = z.object({
   end: z.number().min(0),
   text: z.string().min(1),
   highlightWords: z.array(z.string()).optional(),
+  /** 'quote' renders a larger money-line card instead of a narration caption. */
+  type: z.enum(['narration', 'quote']).optional(),
+  /** Real word boundaries (absolute seconds), for voice-synced highlighting. */
+  wordTimings: z
+    .array(z.object({ word: z.string(), start: z.number(), end: z.number() }))
+    .optional(),
 });
 
 /** Full video plan as validated. */

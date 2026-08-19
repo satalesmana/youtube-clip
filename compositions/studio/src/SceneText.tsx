@@ -4,7 +4,8 @@ import * as React from 'react';
 import { quickEnter } from './animation';
 import { FONT } from './design';
 import type { Theme } from './design';
-import type { PlanScene } from './types';
+import type { PlanCaption, PlanScene } from './types';
+import { HookHeadline } from './HookHeadline';
 
 export const SCENE_LABELS: Record<string, string> = {
   hook: 'PEMBUKAAN',
@@ -28,18 +29,36 @@ const fitTextSize = (text: string, withinWidth: number, cap: number): number => 
   return Math.min(fontSize, cap);
 };
 
-/** Per-scene text: big title card for `graphic`, label chip for video scenes. */
+/** Per-scene text: kinetic hook headline, title card, or label chip. */
 export const SceneText: React.FC<{
   scene: PlanScene;
   theme: Theme;
   labels?: Record<string, string>;
-}> = ({ scene, theme, labels }) => {
+  /** Absolute frame where this scene starts on the output timeline. */
+  absoluteStartFrame?: number;
+  /** Duration of this scene in frames. */
+  durationFrames?: number;
+  /** Real word boundaries for the scene's narration (concatenated from captions). */
+  wordTimings?: PlanCaption['wordTimings'];
+}> = ({ scene, theme, labels, absoluteStartFrame, durationFrames, wordTimings }) => {
   const frame = useCurrentFrame();
-  const { width, height, fps } = useVideoConfig();
+  const { width, fps } = useVideoConfig();
   const enter = quickEnter(frame, fps);
 
+  if (scene.visual === 'graphic' && scene.type === 'hook') {
+    return (
+      <HookHeadline
+        text={scene.quotableLine || scene.narration || ''}
+        theme={theme}
+        wordTimings={wordTimings}
+        absoluteStartFrame={absoluteStartFrame ?? 0}
+        durationFrames={durationFrames ?? Math.max(1, Math.round((scene.end - scene.start) * fps))}
+      />
+    );
+  }
+
   if (scene.visual === 'graphic') {
-    const text = scene.narration || '';
+    const text = scene.quotableLine || scene.narration || '';
     const fitted = fitTextSize(text, width * 0.76, 92);
     return (
       <AbsoluteFill
@@ -80,7 +99,7 @@ export const SceneText: React.FC<{
     <div
       style={{
         position: 'absolute',
-        top: 64,
+        top: 140,
         left: 56,
         opacity: interpolate(enter, [0, 1], [0, 1]),
         translate: interpolate(enter, [0, 1], ['0px 0px', '0px -30px']),

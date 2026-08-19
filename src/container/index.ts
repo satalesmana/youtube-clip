@@ -24,6 +24,7 @@ import { VideoPlanService } from '../content/video-plan.service.js';
 import { StoryService } from '../content/story.service.js';
 import { createTtsProvider } from '../providers/tts/tts.factory.js';
 import { TtsService } from '../services/tts.service.js';
+import { WordTimingService } from '../services/word-timing.service.js';
 import { ResearchController } from '../controllers/research.controller.js';
 import { RssProvider } from '../research/rss.provider.js';
 import { RedditProvider } from '../research/reddit.provider.js';
@@ -46,6 +47,7 @@ import { TemplateService } from '../template/template.service.js';
 import { TemplateRendererService } from '../template/renderer.service.js';
 import { RightsService } from '../rights/rights.service.js';
 import { QualityCheckService } from '../rights/quality.service.js';
+import { ContentCache } from '../services/content-cache.service.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 
@@ -366,6 +368,11 @@ export function createTtsService(overrides?: { provider?: ReturnType<typeof crea
       logger,
     });
 
+  // Recover per-word timings via Whisper when the TTS provider does not
+  // expose them natively (OpenAI tts-1). Kept optional so tests and tools can
+  // build TtsService without a whisper backend.
+  const wordAligner = new WordTimingService(whisperService, logger.child({ component: 'word-timing' }));
+
   return new TtsService(
     provider,
     {
@@ -373,6 +380,7 @@ export function createTtsService(overrides?: { provider?: ReturnType<typeof crea
       rate: env.TTS_RATE,
       outputDir: resolve(rootDir, env.OUTPUTS_DIR),
       language: env.TTS_LANGUAGE,
+      wordAligner,
     },
     logger,
   );
@@ -400,6 +408,14 @@ export const rightsService = new RightsService(
 export const qualityCheckService = new QualityCheckService(
   createLogger('quality'),
 );
+
+/**
+ * Disk cache for LLM pipeline stage outputs (angle/story/script), keyed by
+ * content hash. Regenerating the same video returns the identical narration.
+ */
+export const contentCache = new ContentCache({
+  dir: resolve(rootDir, 'outputs', 'transform-cache'),
+});
 
 // --- Composition Engine (Sprint G) ---
 
@@ -560,6 +576,7 @@ export const container = {
   videoPlanService,
   rightsService,
   qualityCheckService,
+  contentCache,
   researchService,
   researchController,
   assStyle,

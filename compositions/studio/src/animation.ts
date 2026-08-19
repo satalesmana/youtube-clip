@@ -42,3 +42,20 @@ export const kenBurnsScale = (
   sceneDurationFrames: number,
 ): number =>
   interpolate(clamp01(localFrame / Math.max(1, sceneDurationFrames)), [0, 1], [1, 1.12]);
+
+/** Fade in/out the whole scene content near scene boundaries (soft dip transition). */
+export const sceneOpacity = (
+  localFrame: number,
+  sceneDurationFrames: number,
+  opts: { fadeIn?: boolean; fadeOut?: boolean; fadeFrames?: number; min?: number },
+): number => {
+  const fadeFrames = opts.fadeFrames ?? Math.round(8);
+  const min = opts.min ?? 0;
+  if (opts.fadeIn && localFrame < fadeFrames) {
+    return Math.max(min, localFrame / fadeFrames);
+  }
+  if (opts.fadeOut && localFrame > sceneDurationFrames - fadeFrames) {
+    return Math.max(min, (sceneDurationFrames - localFrame) / fadeFrames);
+  }
+  return 1;
+};

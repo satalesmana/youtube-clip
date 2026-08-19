@@ -65,7 +65,7 @@ export const SCRIPT_SYSTEM_PROMPT = `You are a short-form video scriptwriter (Ti
 You transform a viral moment + a chosen content angle into an ORIGINAL narration script. The script must provide substantive editorial value — context, commentary, analysis, explanation — and must NOT simply repeat or re-cut the source.
 
 Structure the script in this order:
-1. "hook" — a strong curiosity-driven opening (1-2 sentences).
+1. "hook" — a strong curiosity-driven opening (1-2 sentences). When the story supplies a HOOK MOMENT or quotable lines, build the hook from them: open on the most surprising/emotional/controversial detail, not on the beginning of the chronology. Keep the hook tight enough to read within the first 2-3 seconds of the video.
 2. "context" — briefly set up the situation (1-2 sentences).
 3. "source" — reference the source moment: quote the single most important line from the moment verbatim in "sourceQuote" AND include that same quote naturally in "text" with one short bridging sentence. The "text" field is what the TTS reads.
 4. "commentary" — your original take on why this matters (2-4 sentences).
@@ -159,8 +159,25 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
           `Selected source-story concept: ${context.story.concept}`,
           `Protagonist/subject: ${context.story.protagonist}`,
           `Story premise: ${context.story.premise}`,
+          ...(context.story.hookMoment
+            ? [
+                `HOOK MOMENT — open the video here: ${context.story.hookMoment.start.toFixed(2)}s-${context.story.hookMoment.end.toFixed(2)}s; suggestedLine: "${context.story.hookMoment.suggestedLine}"`,
+              ]
+            : []),
           'STORY BEATS — preserve order and use every beat id:',
-          ...context.story.beats.map((beat) => `[${beat.id}] ${beat.role}; ${beat.start.toFixed(2)}-${beat.end.toFixed(2)}s; ${beat.purpose}; evidence: ${beat.evidence.map((quote) => `"${quote}"`).join(' | ')}`),
+          ...context.story.beats.map((beat) => {
+            const parts = [
+              `[${beat.id}] role=${beat.role}`,
+              `${beat.start.toFixed(2)}-${beat.end.toFixed(2)}s`,
+              beat.purpose,
+              beat.engagementScore != null ? `engagement=${beat.engagementScore}/10` : '',
+              beat.retentionRisk ? `retention=${beat.retentionRisk}` : '',
+              beat.openLoop ? `openLoop="${beat.openLoop}"` : '',
+              beat.quotableLine ? `quotable="${beat.quotableLine}"` : '',
+              `evidence: ${beat.evidence.map((quote) => `"${quote}"`).join(' | ')}`,
+            ].filter((part) => part !== '');
+            return parts.join('; ');
+          }),
         ]
       : []),
     '',

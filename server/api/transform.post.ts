@@ -42,6 +42,7 @@ export default defineEventHandler(async (event) => {
     logger: createLogger('transform.controller'),
     assStyle: container.assStyle,
     compositionEngine: container.compositionEngine,
+    contentCache: container.contentCache,
   };
 
   const controller = new TransformController(deps);

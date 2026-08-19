@@ -29,6 +29,19 @@ export type StoryBeatRole =
   | 'reflection'     // commentary/analysis
   | 'conclusion';    // closing takeaway
 
+/** How keep-able a beat is in a short-form clip — drives cut decisions. */
+export type RetentionRisk = 'high' | 'medium' | 'low';
+
+/** The single strongest opening cut: 1-3s range + a scroll-stopping on-screen line. */
+export interface HookMoment {
+  /** Start time in the source video (seconds). */
+  start: number;
+  /** End time in the source video (seconds). */
+  end: number;
+  /** Suggested on-screen opening line to make a viewer stop scrolling. */
+  suggestedLine: string;
+}
+
 /**
  * A single story beat — a time-bounded chunk of the source video with narrative metadata.
  * Each beat carries both the source timestamp (for visual clipping) and narrative structure.
@@ -53,6 +66,14 @@ export interface StoryBeat {
   titikBalik?: string;
   /** Optional: the result or outcome established by this beat. */
   hasil?: string;
+  /** Engagement as short-form content (1-10), not narrative importance alone. */
+  engagementScore?: number;
+  /** The most caption-worthy verbatim line in this beat ('' when none). */
+  quotableLine?: string;
+  /** The curiosity gap / tension this beat opens (answered by a later beat). */
+  openLoop?: string;
+  /** How keep-able this beat is in the final short. */
+  retentionRisk?: RetentionRisk;
 }
 
 /**
@@ -65,6 +86,8 @@ export interface SourceStory {
   protagonist: string;
   /** One-sentence premise: what the story is about. */
   premise: string;
+  /** Optional: the strongest 1-3s opening cut for a short-form clip. */
+  hookMoment?: HookMoment;
   /**
    * Chronological beats with source timestamps and narrative metadata.
    * 4-7 beats covering: setup → tension → turning point → outcome.
