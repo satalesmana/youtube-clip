@@ -1,4 +1,4 @@
-import { rename } from 'node:fs/promises';
+import { mkdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { probeDurationSeconds } from '../utils/ffmpeg.js';
 import type { Logger } from '../utils/logger.js';
@@ -35,6 +35,8 @@ export class FfmpegTemplateCompositionEngine implements ICompositionEngine {
       : join(outputsDir, 'render');
     const outputDir = join(renderRoot, jobId);
     const outputPath = join(outputDir, 'rendered.mp4');
+    const assPath = join(outputDir, 'subtitles.ass');
+    await mkdir(outputDir, { recursive: true });
 
     // Build RenderContext
     const commentaryText = plan.scenes
@@ -45,7 +47,7 @@ export class FfmpegTemplateCompositionEngine implements ICompositionEngine {
     const context: RenderContext = {
       clip: { title: 'AI Commentary', score: 99, duration: plan.duration, start: 0, end: plan.duration },
       video: { path: assets.sourceVideo },
-      subtitle: { ass: '', words: [] },
+      subtitle: { ass: assPath, words: [] },
       channel: assets.channelName ? { name: assets.channelName } : undefined,
       commentary: { text: commentaryText },
     };
@@ -58,7 +60,7 @@ export class FfmpegTemplateCompositionEngine implements ICompositionEngine {
         enrichedLayers: enriched,
         canvas: loaded.template.canvas,
         templateDir: loaded.templateDir,
-        assPath: '',
+        assPath,
         outputPath,
         hints: { sourceWidth: 1920, sourceHeight: 1080, focalPoint: { x: 0.5, y: 0.5 } },
         logger,
