@@ -86,6 +86,7 @@ export class RemotionCompositionEngine implements ICompositionEngine {
           narrationPath,
           sourceVideoPath,
           channelName: assets.channelName,
+          hookBadge: assets.hookBadge,
         }, null, 2),
       );
 

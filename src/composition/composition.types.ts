@@ -10,6 +10,8 @@ export interface CompositionAssets {
   sourceVideo: string;
   narration: string;
   channelName?: string;
+  /** Social-proof badge for the first ~2s of the hook (e.g. "10RB+ Views"). */
+  hookBadge?: string;
   /** Requested visual treatment for this render, selected per request. */
   style?: 'commentary' | 'sports' | 'interview';
   /** Requested FFmpeg template id when that engine is active. */

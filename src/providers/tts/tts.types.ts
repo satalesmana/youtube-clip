@@ -13,6 +13,25 @@ export interface TTSSynthesisRequest {
   language?: string;
 }
 
+/** One spoken word with its boundaries on the narration timeline (seconds). */
+export interface TTSWordTiming {
+  word: string;
+  /** Start offset in seconds (relative to the owning audio file). */
+  start: number;
+  /** End offset in seconds (relative to the owning audio file). */
+  end: number;
+}
+
+/** Timing info for one synthesized script section, mapped onto the combined narration. */
+export interface TTSSectionTiming {
+  /** Script section type, e.g. "hook", "commentary". */
+  type: string;
+  /** Measured duration of this section's audio in seconds. */
+  durationSeconds: number;
+  /** Word boundaries on the COMBINED narration timeline (already offset). */
+  wordTimings: TTSWordTiming[];
+}
+
 export interface TTSSynthesisResult {
   /** Absolute or project-relative path to the synthesized audio file. */
   outputPath: string;
@@ -20,4 +39,12 @@ export interface TTSSynthesisResult {
   durationSeconds: number;
   /** Provider identifier, for logging/debugging. */
   provider: string;
+  /** Word boundaries relative to this audio file, when the provider exposes them. */
+  wordTimings?: TTSWordTiming[];
+  /**
+   * Per-section timing on the combined narration timeline. Present when the
+   * provider can expose word boundaries (e.g. edge-tts VTT); drives accurate
+   * caption/word-highlight sync in the composition.
+   */
+  sections?: TTSSectionTiming[];
 }

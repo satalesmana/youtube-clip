@@ -7,6 +7,8 @@ export interface OllamaChatOptions {
   prompt: string;
   temperature?: number;
   timeoutMs?: number;
+  /** Fixed seed for deterministic output (same prompt + seed → same result). */
+  seed?: number;
 }
 
 interface OllamaChatResponseBody {
@@ -44,7 +46,10 @@ export class OllamaProvider implements IOllamaProvider {
             ...(options.system ? [{ role: 'system', content: options.system }] : []),
             { role: 'user', content: options.prompt },
           ],
-          options: { temperature: options.temperature ?? 0.2 },
+          options: {
+            temperature: options.temperature ?? 0.2,
+            ...(options.seed !== undefined ? { seed: options.seed } : {}),
+          },
         }),
         signal: controller.signal,
       });

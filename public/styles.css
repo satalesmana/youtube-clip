@@ -380,6 +380,8 @@ input[type="checkbox"] {
 }
 .history-item .h-title { font-size: 13.5px; font-weight: 600; }
 .history-item .h-meta { font-size: 12px; color: var(--muted); }
+.history-item .h-thumb { width: 52px; height: 92px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+.history-player { width: 100%; max-width: 360px; margin-top: 12px; border-radius: 10px; background: #000; }
 
 /* ---------- Error Card ---------- */
 .error-card { border-color: rgba(255, 59, 92, 0.5); background: rgba(255, 59, 92, 0.06); margin-top: 18px; }

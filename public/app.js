@@ -6,7 +6,6 @@
   const $$ = (sel) => [...document.querySelectorAll(sel)];
 
   const state = {
-    templates: [],
     currentJob: null,
   };
 
@@ -32,14 +31,6 @@
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${String(s).padStart(2, '0')}`;
-  }
-
-  function extractVideoId(input) {
-    if (input.startsWith('http')) {
-      const match = input.match(/[?&]v=([^&]+)/);
-      return match ? match[1] : null;
-    }
-    return input.length >= 10 ? input : null;
   }
 
   let toastTimer = null;
@@ -147,17 +138,6 @@
     }
   }
 
-  /* ---------- Templates ---------- */
-  async function loadTemplates() {
-    try {
-      const res = await apiGet('/api/templates');
-      state.templates = Array.isArray(res) ? res : res?.templates || [];
-      const sel = $('#transform-template');
-      sel.innerHTML = '<option value="">(default)</option>' +
-        state.templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name || t.id)}</option>`).join('');
-    } catch { /* templates optional */ }
-  }
-
   /* ---------- Provider chip toggles ---------- */
   $$('.chip-toggle').forEach((chip) => {
     chip.addEventListener('click', () => chip.classList.toggle('active'));
@@ -262,40 +242,46 @@
     $('#transform-error').classList.add('hidden');
     $('#transform-stages').classList.remove('hidden');
 
-    ['transcript', 'angle', 'script', 'tts', 'plan', 'render'].forEach(s => setStageStatus(s, 'pending'));
+    ['download', 'transcript', 'angle', 'story', 'script', 'tts', 'plan', 'render'].forEach(s => setStageStatus(s, 'pending'));
     setProgress('transform', true, 5, 'Memulai transformasi…');
 
     try {
-      const videoId = extractVideoId(url);
+      const engine = $('#transform-engine').value;
+      const template = engine === 'remotion'
+        ? ($('#transform-style')?.value || 'commentary')
+        : engine;
       const body = {
         youtubeUrl: url,
-        template: $('#transform-template')?.value || undefined,
-        engine: $('#transform-engine').value || 'ffmpeg-template',
-        style: $('#transform-style')?.value || undefined,
-        language: $('#transform-lang').value || 'id',
-        voice: $('#transform-voice').value || undefined,
-        channelName: $('#transform-channel').value.trim() || undefined,
-        rightsGate: $('#transform-rights-gate').checked,
-        qualityCheck: $('#transform-quality-check').checked,
+        template,
+        language: $('#transform-lang').value || 'auto',
+        hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
+        channel: { name: $('#transform-channel').value.trim() || undefined },
+        dryRun: $('#transform-dry-run')?.checked || false,
       };
 
+      setStageStatus('download', 'running');
+      setProgress('transform', true, 10, 'Mengunduh video & ekstrak audio…');
+
       setStageStatus('transcript', 'running');
-      setProgress('transform', true, 15, 'Mengunduh video & transkripsi (Whisper)…');
+      setProgress('transform', true, 20, 'Transkripsi audio dengan Whisper…');
 
       setStageStatus('angle', 'running');
-      setProgress('transform', true, 30, 'Analisis angle viral dengan AI…');
+      setProgress('transform', true, 35, 'Generate angle editorial dengan AI…');
+
+      setStageStatus('story', 'running');
+      setProgress('transform', true, 45, 'Derive story beats dari sumber…');
 
       setStageStatus('script', 'running');
-      setProgress('transform', true, 45, 'Menulis script orisinal…');
+      setProgress('transform', true, 55, 'Menulis script orisinal…');
 
       setStageStatus('tts', 'running');
-      setProgress('transform', true, 60, 'Synthesis TTS (narasi)…');
+      setProgress('transform', true, 65, 'Synthesize TTS narasi…');
 
       setStageStatus('plan', 'running');
-      setProgress('transform', true, 75, 'Membuat video plan…');
+      setProgress('transform', true, 78, 'Membangun video plan & timeline…');
 
       setStageStatus('render', 'running');
-      setProgress('transform', true, 90, 'Rendering video…');
+      setProgress('transform', true, 90, 'Rendering dengan composition engine…');
 
       const data = await apiPost('/api/transform', body);
 
@@ -321,7 +307,7 @@
       return;
     }
 
-    ['transcript', 'angle', 'script', 'tts', 'plan', 'render'].forEach(s => setStageStatus(s, 'done'));
+    ['download', 'transcript', 'angle', 'story', 'script', 'tts', 'plan', 'render'].forEach(s => setStageStatus(s, 'done'));
 
     const card = document.createElement('div');
     card.className = 'transform-result';
@@ -330,6 +316,8 @@
     const narrationUrl = result.narration?.url || '';
     const scriptData = result.script || {};
     const angleData = result.angle || {};
+    const storyData = result.story || {};
+    const planData = result.videoPlan || {};
 
     card.innerHTML = `
       <div class="transform-head">
@@ -337,14 +325,14 @@
           ${videoUrl ? `<video src="${esc(videoUrl)}" controls preload="metadata"></video>` : '<div class="video-placeholder">🎬</div>'}
         </div>
         <div class="transform-info">
-          <div class="transform-title">✨ Transform Berhasil</div>
+          <div class="transform-title">✨ Transformasi Berhasil</div>
           <div class="transform-meta">
             ${result.jobId ? `<span class="chip">Job: ${esc(result.jobId.slice(0, 8))}…</span>` : ''}
-            ${result.duration ? `<span class="chip">${fmtDuration(result.duration)}</span>` : ''}
-            ${result.engine ? `<span class="chip">${esc(result.engine)}</span>` : ''}
+            ${planData.duration ? `<span class="chip">${fmtDuration(planData.duration)}</span>` : ''}
+            ${result.dryRun ? '<span class="chip">Dry Run</span>' : ''}
           </div>
-          ${scriptData.title ? `<div class="transform-script-title">${esc(scriptData.title)}</div>` : ''}
-          ${angleData.selectedAngle ? `<div class="transform-angle">Angle: ${esc(angleData.selectedAngle.title || angleData.selectedAngle.id)}</div>` : ''}
+          ${angleData.title ? `<div class="transform-angle">Angle: ${esc(angleData.title)}</div>` : ''}
+          ${storyData.concept ? `<div class="transform-script-title" style="margin-top:6px;font-size:13px;color:var(--muted)">Concept: ${esc(storyData.concept)}</div>` : ''}
           <div class="transform-actions">
             ${videoUrl ? `<button class="btn ghost small" data-action="download" data-url="${esc(videoUrl)}" data-name="transformed.mp4">⬇️ Unduh MP4</button>` : ''}
             ${narrationUrl ? `<button class="btn ghost small" data-action="download" data-url="${esc(narrationUrl)}" data-name="narration.mp3">🔊 Unduh MP3</button>` : ''}
@@ -362,14 +350,13 @@
           </div>
         `).join('')}
       </div>` : ''}
-      ${angleData.candidates?.length ? `
+      ${storyData.beats?.length ? `
       <div class="transform-angles">
-        <div class="angles-header">💡 Angle Candidates</div>
-        ${angleData.candidates.slice(0, 3).map(a => `
-          <div class="angle-item ${a.id === angleData.selectedAngleId ? 'selected' : ''}">
-            <div class="angle-score">${a.score || '?'}</div>
-            <div class="angle-title">${esc(a.title || a.id)}</div>
-            ${a.id === angleData.selectedAngleId ? '<span class="angle-badge">✓ Selected</span>' : ''}
+        <div class="angles-header">📖 Story Beats</div>
+        ${storyData.beats.slice(0, 5).map(b => `
+          <div class="angle-item">
+            <div class="angle-score" style="font-size:11px">${esc(b.role || '?')}</div>
+            <div class="angle-title">${esc(b.purpose || b.id)}</div>
           </div>
         `).join('')}
       </div>` : ''}
@@ -492,16 +479,21 @@
         list.innerHTML = '<p class="muted">Belum ada riwayat.</p>';
         return;
       }
-      list.innerHTML = items.slice().reverse().map((c) => `
+      list.innerHTML = items.slice().reverse().map((c) => {
+        const clipUrl = c.videoUrl || c.outputVideo || '';
+        return `
         <div class="history-item">
+          ${c.thumbnailUrl ? `<img class="h-thumb" src="${esc(c.thumbnailUrl)}" alt="" loading="lazy">` : ''}
           <div>
             <div class="h-title">${esc(c.title || c.video || 'Transform')}</div>
             <div class="h-meta">${esc(c.video || c.outputVideo || '')}</div>
           </div>
           <div style="display:flex;gap:6px">
-            ${c.outputVideo ? `<button class="btn ghost small" data-action="download" data-url="${esc(c.outputVideo)}">⬇️</button>` : ''}
+            ${clipUrl ? `<button class="btn ghost small" data-action="download" data-url="${esc(clipUrl)}">⬇️</button>` : ''}
+            ${clipUrl ? `<button class="btn ghost small" data-action="play" data-url="${esc(clipUrl)}">▶️</button>` : ''}
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     } catch {
       list.innerHTML = '<p class="muted">Tidak bisa membaca riwayat.</p>';
     }
@@ -522,6 +514,17 @@
       }
     } else if (action === 'download') {
       downloadFile(url, name);
+    } else if (action === 'play') {
+      if (url) {
+        const player = $('#history-player');
+        if (player) {
+          player.src = url;
+          player.classList.remove('hidden');
+          player.play().catch(() => undefined);
+        } else {
+          window.open(url, '_blank');
+        }
+      }
     } else if (action === 'approve') {
       updateRights(id, 'AUTHORIZED');
     } else if (action === 'reject') {
@@ -583,7 +586,6 @@
 
   /* ---------- Init ---------- */
   checkHealth();
-  loadTemplates();
 
   // Show/hide Remotion style selector based on engine selection
   const engineSelect = $('#transform-engine');

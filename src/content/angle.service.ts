@@ -1,5 +1,6 @@
 import { retry } from '../utils/retry.js';
 import { AppError } from '../utils/errors.js';
+import { hashSeed } from '../utils/seed.js';
 import { angleGenerationResponseSchema } from '../schemas/angle.schema.js';
 import {
   CONTENT_ANGLE_SYSTEM_PROMPT,
@@ -69,6 +70,15 @@ export class ContentAngleService implements IContentAngleService {
           prompt: buildContentAngleUserPrompt(context),
           temperature: this.options.temperature,
           timeoutMs: this.options.timeoutMs,
+          // Deterministic output: same moment + same context → same angles.
+          seed: hashSeed(
+            'angle',
+            context.sourceTitle,
+            context.candidateId,
+            context.clipStart,
+            context.clipEnd,
+            ...context.momentSegments.map((segment) => `${segment.start}|${segment.end}|${segment.text}`),
+          ),
         });
 
         this.logger.debug({ candidateId: context.candidateId }, 'Validating angle response');

@@ -8,7 +8,7 @@ import { env } from '../../../src/config/env.js';
  * Streams only completed transform assets. Keeping this allowlist avoids
  * exposing downloaded source videos or arbitrary files under `outputs/`.
  */
-const allowedOutputPath = /^(?:[A-Za-z0-9_-]+\/(?:render\/[A-Za-z0-9-]+\/rendered\.mp4|transform\/[A-Za-z0-9-]+\/(?:clips\/transformed\.mp4|voice\/voice\/narration\.mp3)))$/;
+const allowedOutputPath = /^(?:[A-Za-z0-9_-]+\/(?:render\/[A-Za-z0-9-]+\/rendered\.mp4|transform\/[A-Za-z0-9-]+\/(?:clips\/transformed\.mp4|voice\/voice\/narration\.mp3)|clips\/clip-\d{3}\.mp4))$/;
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'path') ?? '';

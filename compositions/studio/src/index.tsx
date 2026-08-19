@@ -51,6 +51,7 @@ const defaultProps: CompositionProps = {
   narrationPath: '',
   sourceVideoPath: '',
   channelName: '',
+  hookBadge: '',
 };
 
 registerRoot(() => (
