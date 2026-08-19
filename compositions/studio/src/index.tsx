@@ -20,24 +20,12 @@ const makeSkinComponent =
   (skin: Skin): React.FC<CompositionProps> =>
   (props) => <AIShort {...props} skin={skin} />;
 
+/** Fixed composition ids so the render engine can request any style. */
 const STYLE_MAP: Record<string, React.ComponentType<CompositionProps>> = {
   commentary: makeSkinComponent(SKINS.commentary),
   sports: makeSkinComponent(SKINS.sports),
   interview: makeSkinComponent(SKINS.interview),
 };
-
-/** Get style from env, fallback to first available */
-function getActiveStyle(): string {
-  const envStyle = process.env.COMPOSITION_STYLE;
-  if (envStyle && STYLE_MAP[envStyle]) {
-    return envStyle;
-  }
-  return 'commentary';
-}
-
-const activeStyle = getActiveStyle();
-const ActiveComponent = STYLE_MAP[activeStyle] || STYLE_MAP.commentary;
-const compositionId = activeStyle.charAt(0).toUpperCase() + activeStyle.slice(1) + 'Short';
 
 const defaultProps: CompositionProps = {
   plan: {
@@ -54,17 +42,28 @@ const defaultProps: CompositionProps = {
   hookBadge: '',
 };
 
+/**
+ * Registers every style as its own composition (CommentaryShort, SportsShort,
+ * InterviewShort) so the engine can pick one per render. Relying on a build-time
+ * env var to decide the single composition id is fragile — the bundler strips
+ * process.env during evaluation, so the requested id never matches.
+ */
 registerRoot(() => (
-  <Composition
-    id={compositionId}
-    component={ActiveComponent}
-    fps={FPS}
-    width={1080}
-    height={1920}
-    durationInFrames={60 * FPS}
-    calculateMetadata={({ props }) => ({
-      durationInFrames: Math.max(1, Math.round((props.plan?.duration ?? 60) * FPS)),
-    })}
-    defaultProps={defaultProps}
-  />
+  <>
+    {Object.entries(STYLE_MAP).map(([name, Component]) => (
+      <Composition
+        key={name}
+        id={name.charAt(0).toUpperCase() + name.slice(1) + 'Short'}
+        component={Component}
+        fps={FPS}
+        width={1080}
+        height={1920}
+        durationInFrames={60 * FPS}
+        calculateMetadata={({ props }) => ({
+          durationInFrames: Math.max(1, Math.round((props.plan?.duration ?? 60) * FPS)),
+        })}
+        defaultProps={defaultProps}
+      />
+    ))}
+  </>
 ));
