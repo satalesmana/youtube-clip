@@ -46,6 +46,14 @@ import { TemplateRendererService } from '../template/renderer.service.js';
 import { RightsService } from '../rights/rights.service.js';
 import { QualityCheckService } from '../rights/quality.service.js';
 import { ContentCache } from '../services/content-cache.service.js';
+import { HookGenerator } from '../hooks/hook.generator.js';
+import { HookEvaluator } from '../hooks/hook.evaluator.js';
+import { HookScorer } from '../hooks/hook.scorer.js';
+import { HookRanker } from '../hooks/hook.ranker.js';
+import { HookService } from '../hooks/hook.service.js';
+import { HookController } from '../controllers/hook.controller.js';
+import { PreviewRendererService } from '../services/preview-renderer.service.js';
+import { StyledHookPreviewService } from '../hook-preview/styled-hook-preview.service.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 
@@ -307,6 +315,61 @@ export const storyService = new StoryService(
   createLogger('content.story'),
 );
 
+// --- Hook Recommendation Engine (Plan M1-M5) ---
+
+/**
+ * Hook Recommendation Engine: generates 10-15 hook candidates per video,
+ * guards them against the source transcript (accuracy), scores them on a
+ * 7-metric quality card, and ranks a diverse Top-5. Consumes the existing
+ * angle/story outputs — the editorial pipeline above is untouched.
+ */
+const hookGenerator = new HookGenerator(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('hooks.generator'),
+);
+
+const hookEvaluator = new HookEvaluator(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('hooks.evaluator'),
+);
+
+const hookScorer = new HookScorer(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('hooks.scorer'),
+);
+
+const hookRanker = new HookRanker(
+  { topN: 5, diversityPenalty: 8, duplicateSimilarityThreshold: 0.6 },
+  createLogger('hooks.ranker'),
+);
+
+export const hookService = new HookService(
+  hookGenerator,
+  hookEvaluator,
+  hookScorer,
+  hookRanker,
+  { durationMin: 1.5, durationMax: 5, topN: 5 },
+  createLogger('hooks.service'),
+);
+
 // --- TTS (Sprint C) ---
 
 /**
@@ -384,9 +447,46 @@ export const contentCache = new ContentCache({
   dir: resolve(rootDir, 'outputs', 'transform-cache'),
 });
 
-// --- Composition Engine (Sprint G) ---
+// --- Viral clip recommendation + reel composition (flow redesign) ---
 
 const compositionsDir = resolve(rootDir, env.COMPOSITIONS_DIR, 'studio');
+
+/** Cuts lightweight per-clip previews shown in the UI before selection. */
+export const previewRenderer = new PreviewRendererService(
+  {
+    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+    previewWidth: 360,
+  },
+  createLogger('preview-renderer'),
+);
+
+/**
+ * Renders styled hook previews (HookIntroShort Remotion composition) — the
+ * final clipper-style opening, reused by the reel as its intro segment.
+ */
+export const styledHookPreviewService = new StyledHookPreviewService({
+  compositionsDir,
+  ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+  logger: createLogger('styled-hook-preview'),
+});
+
+/** Entry point for `POST /api/hooks/generate` (Hook Recommendation Engine). */
+export const hookController = new HookController({
+  youtubeService,
+  transcriptService,
+  whisperService,
+  contentAngleService,
+  storyService,
+  hookService,
+  outputsDir: paths.outputs,
+  logger: createLogger('hooks.controller'),
+  contentCache,
+  previewRenderer,
+  styledPreviewRenderer: env.HOOK_PREVIEW_STYLED ? styledHookPreviewService : undefined,
+});
+
+// --- Composition Engine (Sprint G) ---
+
 export const compositionEngine = createCompositionEngine({
   templateService,
   templateRendererService,
@@ -537,6 +637,8 @@ export const container = {
   contentAngleService,
   scriptService,
   storyService,
+  hookService,
+  hookController,
   ttsService,
   videoPlanService,
   rightsService,
@@ -546,4 +648,5 @@ export const container = {
   researchController,
   assStyle,
   compositionEngine,
+  previewRenderer,
 };
