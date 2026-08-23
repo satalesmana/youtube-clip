@@ -97,76 +97,211 @@
           <p class="muted">Masukkan URL YouTube — sistem akan generate script orisinal, narasi TTS, dan render video 9:16.</p>
         </div>
         <div class="transform-controls">
-          <div class="input-group">
-            <label class="label-main">URL YouTube</label>
-            <input type="url" id="transform-url" placeholder="https://www.youtube.com/watch?v=..." />
-          </div>
 
-          <div class="form-row">
-            <div class="input-group">
-              <label class="label-main">Engine</label>
-              <select id="transform-engine">
-                <option value="ffmpeg-template">FFmpeg Template</option>
-                <option value="remotion">Remotion</option>
-              </select>
+          <!-- ═══ STEP 1: Sumber Video ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">1</span> Sumber Video
             </div>
-            <div class="input-group hidden" id="remotion-style-group">
-              <label class="label-main">Style</label>
-              <select id="transform-style">
-                <option value="commentary">Commentary</option>
-                <option value="sports">Sports News</option>
-                <option value="interview">Interview</option>
-              </select>
+            <div class="input-group">
+              <input type="url" id="transform-url" placeholder="Tempel URL YouTube di sini…" />
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="input-group">
-              <label class="label-main">Bahasa Output</label>
-              <select id="transform-lang">
-                <option value="auto" selected>Auto (ikuti sumber)</option>
-                <option value="id">Indonesia</option>
-                <option value="en">English</option>
-              </select>
+          <!-- ═══ STEP 2: Mesin Transkrip (STT) ═══ -->
+          <!-- Sengaja di langkah awal: download pertama pada SEMUA aksi
+               (Generate Hook, Generate Klip Viral, Transformasi) langsung
+               menjalankan transkripsi dengan engine ini, jadi pilihan harus
+               terlihat sebelum tombol aksi mana pun ditekan. -->
+          <div class="workflow-section" id="stt-engine-section">
+            <div class="workflow-label">
+              <span class="step-num">2</span> Mesin Transkrip (STT)
             </div>
-            <div class="input-group">
-              <label class="label-main">TTS Voice</label>
-              <select id="transform-voice">
-                <option value="id-ID-ArdiNeural" selected>Ardi (ID)</option>
-                <option value="id-ID-GadisNeural">Gadis (ID)</option>
-                <option value="en-US-GuyNeural">Guy (EN)</option>
-                <option value="en-US-AriaNeural">Aria (EN)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="input-group">
-              <label class="label-main">Hook Badge <span class="optional">(opsional)</span></label>
-              <input type="text" id="transform-hook-badge" placeholder="misal: 10RB+ Views" />
-            </div>
-            <div class="input-group">
-              <label class="label-main">Nama Channel <span class="optional">(opsional)</span></label>
-              <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
+            <div class="form-row">
+              <div class="input-group">
+                <select id="transform-stt-provider">
+                  <option value="" selected>Auto (ikuti server)</option>
+                  <option value="faster-whisper">Faster Whisper (lokal)</option>
+                  <option value="whisper-cpp">Whisper.cpp (lokal)</option>
+                  <option value="whisperx">WhisperX (lokal)</option>
+                  <option value="openai">OpenAI Transcribe</option>
+                </select>
+                <p class="stt-hint muted small">
+                  Dipakai saat video pertama kali diproses: Generate Hook,
+                  Generate Klip Viral, dan Transformasi sama-sama menranskrip
+                  audio dengan engine ini. Hasil transkrip tersimpan per video —
+                  ganti engine + <strong>Generate ulang</strong> untuk
+                  mentranskrip ulang video yang sama.
+                </p>
+              </div>
             </div>
           </div>
 
-          <div class="checkbox-row">
-            <label class="checkbox-item">
-              <input type="checkbox" id="transform-rights-gate" checked />
-              <span>Rights Gate</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" id="transform-quality-check" checked />
-              <span>Quality Check</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" id="transform-dry-run" />
-              <span>Dry Run</span>
-            </label>
+          <!-- ═══ STEP 3: Hook ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">3</span> Rekomendasi Hook
+              <span class="optional-label">(opsional)</span>
+            </div>
+            <button class="btn secondary" id="btn-gen-hooks">
+              ✨ Generate Hook Top-5
+              <span class="stt-badge" data-stt-badge></span>
+            </button>
+
+            <div class="hook-panel hidden" id="hook-panel">
+              <div class="hook-panel-head">
+                <span class="hook-panel-title">🎯 Hasil Hook</span>
+                <div style="display:flex;gap:6px">
+                  <button class="btn small ghost" id="btn-regen-hooks" title="Jalankan ulang pipeline hook (abaikan cache)">🔄 Generate ulang</button>
+                  <button class="btn small ghost" id="btn-clear-hook">✕ Bersihkan pilihan</button>
+                </div>
+              </div>
+              <p class="muted small" id="hook-meta"></p>
+              <div id="hook-list" class="preview-grid"></div>
+              <p class="muted small">Klik salah satu hook untuk memakainya — hook akan dipakai sebagai custom hook & range footage sumber.</p>
+            </div>
           </div>
 
-          <button class="btn primary full" id="btn-transform">🚀 Mulai Transformasi</button>
+          <!-- ═══ STEP 4: Rekomendasi Klip Viral ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">4</span> Rekomendasi Klip Viral
+              <span class="optional-label">(opsional — untuk mode Reel)</span>
+            </div>
+            <button class="btn secondary" id="btn-gen-clips">
+              🔥 Generate Klip Viral
+              <span class="stt-badge" data-stt-badge></span>
+            </button>
+
+            <div class="clip-panel hidden" id="clip-panel">
+              <div class="hook-panel-head">
+                <span class="hook-panel-title">🎬 Kandidat Klip</span>
+                <div style="display:flex;gap:6px">
+                  <button class="btn small ghost" id="btn-regen-clips" title="Analisis ulang seluruh transkrip (abaikan cache)">🔄 Generate ulang</button>
+                  <button class="btn small ghost" id="btn-clear-clips">✕ Bersihkan pilihan</button>
+                </div>
+              </div>
+              <p class="muted small" id="clip-meta"></p>
+              <div id="clip-list" class="preview-grid"></div>
+              <p class="muted small">Pilih satu atau beberapa klip — dalam mode <strong>Reel</strong>, klip terpilih digabung langsung menjadi satu video.</p>
+            </div>
+          </div>
+
+          <!-- ═══ STEP 5: Mode Output ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">5</span> Mode Output
+            </div>
+            <div class="form-row">
+              <div class="input-group">
+                <select id="transform-output-mode">
+                  <option value="narration" selected>Narasi — script + TTS (existing)</option>
+                  <option value="reel">Reel — gabungan langsung klip terpilih</option>
+                </select>
+              </div>
+            </div>
+            <!-- Hint khusus mode Reel: pengaturan narasi disembunyikan karena tidak dipakai. -->
+            <p class="muted small hidden" id="reel-mode-hint">
+              Mode Reel: klip terpilih digabung langsung dengan audio aslinya —
+              engine, STT, bahasa, dan TTS tidak dipakai.
+            </p>
+          </div>
+
+          <!-- Narasi-only settings (Step 6-7): tidak dipakai di mode Reel
+               (tanpa LLM/TTS/template). Wrapper ini di-toggle hidden oleh
+               applyOutputModeVisibility() sehingga kedua section ikut hilang. -->
+          <div id="narration-settings">
+            <!-- ═══ STEP 6: Engine & TTS ═══ -->
+            <div class="workflow-section">
+              <div class="workflow-label">
+                <span class="step-num">6</span> Engine &amp; TTS
+              </div>
+              <div class="form-row">
+                <div class="input-group">
+                  <label class="label-main">Engine</label>
+                  <select id="transform-engine">
+                    <option value="commentary" selected>FFmpeg — Commentary</option>
+                    <option value="sports">FFmpeg — Sports News</option>
+                    <option value="interview">FFmpeg — Interview</option>
+                    <option value="remotion">Remotion</option>
+                  </select>
+                </div>
+                <div class="input-group hidden" id="remotion-style-group">
+                  <label class="label-main">Style</label>
+                  <select id="transform-style">
+                    <option value="commentary">Commentary</option>
+                    <option value="sports">Sports News</option>
+                    <option value="interview">Interview</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row-3">
+                <div class="input-group">
+                  <label class="label-main">TTS Output</label>
+                  <select id="transform-lang">
+                    <option value="auto" selected>Auto (ikuti sumber)</option>
+                    <option value="id">Indonesia</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label class="label-main">TTS Provider</label>
+                  <select id="transform-tts-provider">
+                    <option value="edge-tts" selected>Edge TTS (gratis)</option>
+                    <option value="openai">OpenAI TTS</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label class="label-main">TTS Voice</label>
+                  <input type="text" id="transform-voice" placeholder="misal: id-ID-ArdiNeural (edge-tts) / nova (openai)" />
+                </div>
+              </div>
+            </div>
+
+            <!-- ═══ STEP 7: Branding ═══ -->
+            <div class="workflow-section">
+              <div class="workflow-label">
+                <span class="step-num">7</span> Branding
+                <span class="optional-label">(opsional)</span>
+              </div>
+              <div class="form-row">
+                <div class="input-group">
+                  <label class="label-main">Nama Channel</label>
+                  <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
+                </div>
+                <div class="input-group">
+                  <label class="label-main">Hook Badge</label>
+                  <input type="text" id="transform-hook-badge" placeholder="misal: 10RB+ Views" />
+                </div>
+              </div>
+            </div>
+          </div><!-- /narration-settings -->
+
+          <!-- ═══ STEP 8: Opsi Tambahan ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">8</span> Opsi Tambahan
+            </div>
+            <div class="checkbox-row">
+              <label class="checkbox-item">
+                <input type="checkbox" id="transform-rights-gate" checked />
+                <span>Rights Gate</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" id="transform-quality-check" checked />
+                <span>Quality Check</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" id="transform-dry-run" />
+                <span>Dry Run</span>
+              </label>
+            </div>
+          </div>
+
+          <button class="btn primary full" id="btn-transform">
+            🚀 Mulai Transformasi
+            <span class="stt-badge" data-stt-badge></span>
+          </button>
         </div>
         <div class="progress hidden" id="transform-progress">
           <div class="progress-bar"><div class="progress-fill" id="transform-progress-fill"></div></div>

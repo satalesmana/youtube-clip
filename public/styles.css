@@ -119,6 +119,11 @@ main { max-width: 1080px; margin: 0 auto; padding: 0 28px 60px; }
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
 
 input, select {
   background: var(--bg-soft);
@@ -147,6 +152,57 @@ input[type="checkbox"] {
   height: 18px;
   cursor: pointer;
   accent-color: var(--blue);
+}
+
+/* ---------- Workflow Steps ---------- */
+.workflow-section {
+  padding: 16px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.workflow-section:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.workflow-section:first-child {
+  padding-top: 0;
+}
+/* Section di dalam wrapper #narration-settings: pseudo-class di atas salah
+   sasaran karena mereka bukan anak pertama/terakhir kartu — kembalikan
+   spacing atas & garis pemisah bawah secara eksplisit. */
+#narration-settings .workflow-section:first-child {
+  padding-top: 16px;
+}
+#narration-settings .workflow-section:last-of-type {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.workflow-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.workflow-label .optional-label {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 0.7;
+}
+.step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .checkbox-row {
@@ -188,7 +244,37 @@ input[type="checkbox"] {
   background: var(--card-2); color: var(--text); border: 1px solid var(--border);
 }
 .btn.ghost:hover { border-color: var(--blue); }
+.btn.secondary {
+  background: var(--bg-soft); color: var(--text); border: 1px solid var(--border);
+}
+.btn.secondary:hover { border-color: var(--blue); }
 .btn.small { padding: 7px 13px; font-size: 12.5px; border-radius: 8px; }
+
+/* ---------- STT engine awareness ---------- */
+/* Badge engine di samping tombol aksi: netral saat Auto, highlight saat
+   engine eksplisit dipilih. Section meredup saat mode Reel (STT tak dipakai). */
+.stt-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(139, 148, 167, 0.14);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stt-badge.stt-custom {
+  background: rgba(77, 159, 255, 0.16);
+  color: var(--blue);
+}
+#stt-engine-section.reel-irrelevant {
+  opacity: 0.45;
+}
+#stt-engine-section.reel-irrelevant .stt-hint strong {
+  color: var(--accent-2);
+}
+.stt-hint {
+  line-height: 1.5;
+}
 
 /* ---------- Progress ---------- */
 .progress { margin-top: 18px; }
@@ -217,6 +303,7 @@ input[type="checkbox"] {
 .stage.active {
   border-color: var(--blue);
   background: rgba(77, 159, 255, 0.1);
+  animation: stage-pulse 1.5s ease-in-out infinite;
 }
 .stage.done {
   border-color: var(--green);
@@ -225,6 +312,10 @@ input[type="checkbox"] {
 .stage.error {
   border-color: var(--accent);
   background: rgba(255, 59, 92, 0.1);
+}
+@keyframes stage-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(77, 159, 255, 0.3); }
+  50% { box-shadow: 0 0 12px 2px rgba(77, 159, 255, 0.15); }
 }
 .stage-icon { font-size: 24px; }
 .stage-title { font-size: 13px; font-weight: 600; }
@@ -292,6 +383,64 @@ input[type="checkbox"] {
 }
 .angle-title { flex: 1; font-size: 13px; }
 .angle-badge { font-size: 11px; color: var(--green); font-weight: 600; }
+
+/* ---------- Hook Recommendation Panel ---------- */
+.hook-panel,
+.clip-panel {
+  margin-top: 16px; padding: 16px;
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.hook-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.hook-panel-title { font-size: 14px; font-weight: 700; }
+.hook-panel .small, .clip-panel .small { font-size: 12px; margin-bottom: 10px; }
+.hook-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* Preview grid — hook & clip cards with playable footage */
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.preview-grid .hook-item {
+  flex-direction: column;
+  align-items: stretch;
+}
+.preview-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+  border: 1px solid var(--border);
+}
+.preview-grid .hook-item {
+  position: relative;
+}
+.preview-grid .hook-clear-hint { align-self: flex-end; }
+.hook-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px; border-radius: 10px; cursor: pointer;
+  background: var(--bg-soft); border: 1px solid var(--border);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.hook-item:hover { border-color: var(--blue); }
+.hook-item.selected { border-color: var(--green); background: rgba(45, 212, 167, 0.1); }
+.hook-rank {
+  flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; background: var(--card); color: var(--blue);
+}
+.hook-item.selected .hook-rank { background: var(--green); color: #04251c; }
+.hook-body { flex: 1; min-width: 0; }
+.hook-headline { font-size: 14px; font-weight: 700; line-height: 1.3; }
+.hook-spoken { margin-top: 4px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+.hook-meta-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.hook-style {
+  padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700;
+  background: rgba(232, 121, 249, 0.15); color: #e879f9; text-transform: uppercase;
+}
+.hook-score { font-size: 11.5px; color: var(--green); font-weight: 700; }
+.hook-time { font-size: 11.5px; color: var(--muted); }
 
 /* ---------- Rights Card ---------- */
 .rights-card {
@@ -414,6 +563,6 @@ input[type="checkbox"] {
   .tabs { padding: 10px 16px 0; }
   .transform-video video, .video-placeholder { width: 100%; }
   .transform-head { flex-direction: column; }
-  .form-row { grid-template-columns: 1fr; }
+  .form-row, .form-row-3 { grid-template-columns: 1fr; }
   .stages { grid-template-columns: repeat(2, 1fr); }
 }
