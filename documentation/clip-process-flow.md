@@ -5,6 +5,11 @@ Diagram alur aktivitas lengkap dari input YouTube URL sampai video jadi siap dip
 > **Update:** pipeline lama `POST /api/process` (highlight extraction + batch clip render) sudah dihapus.
 > Alur aktif kini tiga tahap: **`/api/hooks/generate`** → **`/api/clips/recommend`** → **`/api/transform`**,
 > plus endpoint restore `GET /api/hooks` dan `GET /api/clips`.
+>
+> **Tanpa rekomendasi pun pipeline tetap jalan.** Rekomendasi Hook dan Klip Viral sama-sama opsional:
+> transform narasi tanpa hook memakai *momen otomatis* (`selectMoment`, `candidateId` 0 → window ±35
+> detik pertama transkrip, headline tetap dari LLM); Mode Reel tanpa klip terpilih ditolak rapi di
+> frontend (toast + auto-scroll ke panel klip) sekaligus di backend (refine Zod + guard `transformReel`).
 
 ## Activity Diagram — End-to-End
 
@@ -225,7 +230,8 @@ sequenceDiagram
     participant RC as ReelComposerService
     participant MEDIA as /api/media
 
-    Browser->>API: {youtubeUrl, template?, engine?, language?,\n ttsProvider?, ttsVoice?, outputMode?, candidateId?, clipRanges?}\nAccept: text/event-stream
+    Browser->>API: {youtubeUrl, template?, language?, sttProvider?,\n ttsProvider?, ttsVoice?, hookBadge?, channel?, outputMode?,\n selectedClips?, sourceRange?, customHook?, dryRun?}\nAccept: text/event-stream
+    Note over Browser,API: Tanpa pilihan hook/klip pun body tetap valid:\nfrontend hanya mengirim youtubeUrl+setting dasar\n(tanpa sourceRange/customHook/selectedClips).
 
     API->>API: fast-path: video + transcript existing?\n(stage download/transcript emitted skipped)
     opt Belum ada di workspace
@@ -240,6 +246,8 @@ sequenceDiagram
     API-->>Browser: event: stage {stage:"transcript"}
     API->>TS: loadTranscript(videoId)
 
+    Note over API,ANG: Pemilihan momen sumber:\nsourceRange ada (hook dipilih) → selectRange(range)\nsourceRange absen → selectMoment(candidateId default 0)\n= window ±35 detik pertama transkrip (momen otomatis)
+
     API-->>Browser: event: stage {stage:"angle"}
     API->>ANG: generateAngles(angleContext) (cache via ContentCache)
     ANG-->>API: AngleGenerationResult {angles[], selected}
@@ -253,6 +261,7 @@ sequenceDiagram
     SCR-->>API: OriginalScript {sections[], estimatedDuration}
 
     alt outputMode = "reel"
+        Note over API,RC: Guard dua lapis saat tidak ada klip terpilih:\nfrontend menolak dulu (toast + scroll ke panel klip),\nbackend menolak lagi (refine Zod + guard transformReel).\nTanpa hook: intro = undefined → hanya klip terpilih.
         API-->>Browser: event: stage {stage:"reel"}
         Note over API,RC: intro = file final-hook-{NN}.mp4 bila ada (WYSIWYG),\nelse potongan sourceRange. planReelSegments memangkas\ndetik yang tumpang tindih → tidak ada detik sumber diputar dua kali.
         API->>RC: compose(intro + selected ranges + subtitles)
@@ -386,6 +395,7 @@ outputs/{videoId}/
 | Data-Driven Templates | `TemplateService` → `TemplateRendererService` | Renderer tidak tahu layout — template yang define |
 | Real-Time SSE Progress | `TransformController.onStage` + `server/api/transform.post.ts` | Stream `stage`/`result`/`error` events; UI update tiap stage live |
 | Dual Output Mode | `outputMode: 'reel' \| 'narration'` | Reel = concat range terpilih (ReelComposerService); Narration = script → TTS → video plan → composition engine |
+| No-Selection Default | `TransformController.selectMoment` + guard `transformReel` | Transform tetap jalan tanpa rekomendasi: narasi pakai momen otomatis (35 detik pertama transkrip, headline dari LLM); reel tanpa klip ditolak rapi (toast frontend + refine Zod + guard controller) |
 | Accuracy Guard | `HookEvaluator` (hook engine stage 2) | Tolak hook yang tidak didukung sumber (anti-clickbait) |
 | 7-Metric Quality Card | `HookScorer` (hook engine stage 3) | Skor objektif 0-100: curiosity, retention, emotional, visual, clarity, relevance, accuracy → `final` |
 | Diversity Ranking | `HookRanker` (hook engine stage 4) | Dedup semantic (>60% overlap) + diversity penalty → Top-5 |
@@ -409,4 +419,6 @@ outputs/{videoId}/
 | `TTS_PROVIDER` | `edge-tts` | TTS backend: `edge-tts` or `openai` (bisa di-override per request via `ttsProvider`/`ttsVoice`) |
 | `AI_PROVIDER` | `ollama` | AI backend: `ollama` or `router` |
 
-> Konfigurasi hook engine (jumlah kandidat, top-N, batas durasi window) di-hardcode di `src/container/index.ts` / controller — tidak punya env vars sendiri. Hasil hook & klip kini dipersist ke disk (`hooks/`, `clips/recommendations.json`) dan dapat diumpankan ke `/api/transform` via `candidateId` + `clipRanges`.
+> Konfigurasi hook engine (jumlah kandidat, top-N, batas durasi window) di-hardcode di `src/container/index.ts` / controller — tidak punya env vars sendiri. Hasil hook & klip kini dipersist ke disk (`hooks/`, `clips/recommendations.json`) dan dapat diumpankan ke `/api/transform` via `candidateId` + `selectedClips`.
+>
+> Verifikasi perilaku "tanpa pilihan" (narasi jalan penuh dengan momen otomatis, reel ditolak rapi, fast-path tetap reuse): `npx tsx scripts/verify-no-selection-default.ts`.

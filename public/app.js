@@ -612,7 +612,7 @@
     // Reel mode needs at least one selected viral clip.
     if (($('#transform-output-mode')?.value || 'narration') === 'reel' && clipState.selected.size === 0) {
       btn.disabled = false;
-      toast('Mode Reel: pilih minimal 1 klip viral dulu (Step 3)', 'error');
+      toast('Mode Reel: pilih minimal 1 klip viral dulu (Step 4)', 'error');
       $('#clip-panel').classList.remove('hidden');
       $('#clip-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
