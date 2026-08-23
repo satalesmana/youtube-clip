@@ -45,12 +45,14 @@ export const Outro: React.FC<{
         <div
           style={{
             fontFamily: FONT,
-            fontSize: 108,
-            letterSpacing: 4,
+            fontSize: 80,
+            letterSpacing: 3,
             color: theme.accent,
             textTransform: 'uppercase',
             textAlign: 'center',
-            lineHeight: 1.1,
+            lineHeight: 1.2,
+            maxWidth: '88%',
+            whiteSpace: 'normal',
             textShadow: `0 6px 30px ${theme.stroke}`,
             opacity: accentPulse,
           }}

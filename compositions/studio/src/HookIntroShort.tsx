@@ -1,10 +1,10 @@
-import { AbsoluteFill, Sequence, Freeze, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Sequence, Freeze, useCurrentFrame, useVideoConfig, spring, interpolate } from 'remotion';
 import { Video } from '@remotion/media';
 import * as React from 'react';
 import { Badge } from './Badge';
 import { HookHeadline } from './HookHeadline';
 import { ProgressBar } from './ProgressBar';
-import { calculateBlur, kenBurnsScale } from './animation';
+import { kenBurnsScale } from './animation';
 import { toAssetUrl } from './assetUrl';
 import { selectTheme } from './design';
 import type { Theme } from './design';
@@ -14,10 +14,10 @@ import type { HookIntroProps } from './types';
 const BADGE_SECONDS = 2;
 
 /**
- * Standalone styled hook intro — the exact opening a full clipper render
- * produces (kinetic headline over the hook's source footage, badge, channel
- * watermark), as its own video. No narration, no captions, no outro: the
- * source clip plays once muted, then freezes on its last frame.
+ * Modern Viral Hook Intro Short.
+ * - Smart Ambient Blur: Background video covers 9:16 blurred, foreground video contained sharp in center.
+ * - Dynamic Pattern Interrupt: Smooth initial smash zoom on entry.
+ * - Title Card Card & Tag: High-converting headline container.
  */
 export const HookIntroShort: React.FC<HookIntroProps> = ({
   hook,
@@ -36,8 +36,16 @@ export const HookIntroShort: React.FC<HookIntroProps> = ({
   const trimAfter = Math.max(trimBefore + 1, toFrame(sourceEnd, fps));
   const clipLen = trimAfter - trimBefore;
 
-  /** Plays the trimmed source clip once, then freezes on its last frame. */
-  const backgroundVideo = (localFrame: number) => (
+  // Punch-in zoom on opening 0.5s for pattern interrupt
+  const punchSpring = spring({
+    frame,
+    fps,
+    config: { damping: 15, stiffness: 120, mass: 0.9 },
+  });
+  const zoomScale = interpolate(punchSpring, [0, 1], [1.12, 1]);
+
+  /** Ambient background video (fills the 9:16 vertical canvas with heavy blur). */
+  const renderAmbientBg = (localFrame: number) => (
     <Video
       src={toAssetUrl(sourceVideoPath)}
       objectFit="cover"
@@ -48,49 +56,60 @@ export const HookIntroShort: React.FC<HookIntroProps> = ({
       style={{
         width: '100%',
         height: '100%',
-        scale: kenBurnsScale(localFrame, durationFrames),
-        ...(localFrame < 8
-          ? {
-              filter: `blur(${calculateBlur({
-                localFrame,
-                sceneDurationFrames: durationFrames,
-                fps,
-                blurIn: true,
-                blurOut: false,
-              })}px)`,
-              WebkitFilter: `blur(${calculateBlur({
-                localFrame,
-                sceneDurationFrames: durationFrames,
-                fps,
-                blurIn: true,
-                blurOut: false,
-              })}px)`,
-            }
-          : {}),
+        transform: 'scale(1.25)',
+        filter: 'blur(32px) brightness(0.6)',
+        WebkitFilter: 'blur(32px) brightness(0.6)',
+      }}
+    />
+  );
+
+  /** Foreground main video (sharp, centered, beautifully framed without cutting tables/actions). */
+  const renderMainVideo = (localFrame: number) => (
+    <Video
+      src={toAssetUrl(sourceVideoPath)}
+      objectFit="contain"
+      muted
+      volume={0}
+      trimBefore={trimBefore}
+      trimAfter={trimAfter}
+      style={{
+        width: '100%',
+        height: '100%',
+        transform: `scale(${kenBurnsScale(localFrame, durationFrames) * zoomScale})`,
+        filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.85))',
       }}
     />
   );
 
   return (
-    <AbsoluteFill style={{ backgroundColor: theme.surface, fontFamily: 'sans-serif' }}>
-      {/* Source footage of the hook moment, play-once-then-freeze. */}
+    <AbsoluteFill style={{ backgroundColor: '#050508', fontFamily: 'sans-serif', overflow: 'hidden' }}>
+      {/* Layer 1: Ambient Blurred Background */}
       <Sequence from={0} durationInFrames={clipLen}>
-        {backgroundVideo(frame)}
+        {renderAmbientBg(frame)}
       </Sequence>
       <Sequence from={clipLen}>
-        <Freeze frame={clipLen - 1}>{backgroundVideo(clipLen - 1)}</Freeze>
+        <Freeze frame={clipLen - 1}>{renderAmbientBg(clipLen - 1)}</Freeze>
       </Sequence>
 
-      {/* Same dim + gradient treatment as the hook scene in AIShort. */}
-      <AbsoluteFill style={{ backgroundColor: 'rgba(0,0,0,0.28)' }} />
+      {/* Layer 2: Subtle theme gradient overlay */}
       <AbsoluteFill
         style={{
-          background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-          opacity: 0.55,
+          background: `radial-gradient(circle at 50% 30%, ${theme.gradient[0]}30, transparent 70%), linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 35%, transparent 65%, rgba(0,0,0,0.85) 100%)`,
+          pointerEvents: 'none',
         }}
       />
 
-      {/* Kinetic headline across the whole intro (no word timings → even pops). */}
+      {/* Layer 3: Foreground Sharp Video */}
+      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <Sequence from={0} durationInFrames={clipLen}>
+          {renderMainVideo(frame)}
+        </Sequence>
+        <Sequence from={clipLen}>
+          <Freeze frame={clipLen - 1}>{renderMainVideo(clipLen - 1)}</Freeze>
+        </Sequence>
+      </AbsoluteFill>
+
+      {/* Layer 4: Modern Hook Title Card (Static Quote Style, Bottom-Left) */}
       <HookHeadline
         text={hook.headlineText}
         theme={theme}

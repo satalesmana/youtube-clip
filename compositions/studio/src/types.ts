@@ -57,6 +57,8 @@ export type HookIntroProps = {
     duration: number;
     /** On-screen kinetic headline (= RankedHook.headline.text). */
     headlineText: string;
+    /** Category / pattern-interrupt pill tag (e.g. "🔥 MOMEN VIRAL"). */
+    tag?: string;
     /** Words rendered in the accent color inside the headline. */
     highlightWords?: string[];
     /** Social-proof badge shown for ~2s (e.g. "10RB+ Views"). */

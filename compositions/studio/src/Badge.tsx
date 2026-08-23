@@ -2,11 +2,12 @@ import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remo
 import * as React from 'react';
 import { HOOK_FONT } from './design';
 import type { Theme } from './design';
+import { SAFE_AREA } from './Caption';
 
 /**
  * Social-proof badge shown during the first ~2s of the hook. Builds instant
- * authority (e.g. "🔥 10RB+ Views"). Sits at the top of the safe area so
- * platform UI (Like button etc.) never covers it.
+ * authority (e.g. "🔥 10RB+ Views"). Sits inside the top safe area so
+ * platform UI (notch, dynamic island, status bar) never overlaps it.
  */
 export const Badge: React.FC<{
   text: string;
@@ -29,7 +30,7 @@ export const Badge: React.FC<{
 
   return (
     <AbsoluteFill
-      style={{ justifyContent: 'flex-start', alignItems: 'center', paddingTop: 300 }}
+      style={{ justifyContent: 'flex-start', alignItems: 'center', paddingTop: SAFE_AREA.top }}
     >
       <div
         style={{
@@ -43,13 +44,20 @@ export const Badge: React.FC<{
           paddingLeft: 32,
           paddingRight: 32,
           borderRadius: 999,
-          boxShadow: `0 0 40px ${theme.accent}`,
+          boxShadow: `0 0 40px ${theme.accent}, 0 4px 20px rgba(0,0,0,0.4)`,
           textTransform: 'uppercase',
           maxWidth: width * 0.86,
           textAlign: 'center',
           opacity: enter * exit,
-          scale: interpolate(enter, [0, 1], [0.7, 1]),
-          translate: interpolate(enter, [0, 1], ['0px 0px', '0px -16px']),
+          // Slides down from above on enter (more natural for top element)
+          scale: interpolate(enter, [0, 1], [0.7, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
+          translate: interpolate(enter, [0, 1], ['0px -24px', '0px 0px'], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
           rotate: '-2deg',
         }}
       >

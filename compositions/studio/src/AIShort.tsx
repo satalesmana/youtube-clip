@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion';
 import { Audio } from '@remotion/media';
 import * as React from 'react';
 import { Badge } from './Badge';
@@ -9,7 +9,6 @@ import { SceneBackground } from './SceneBackground';
 import { SceneText } from './SceneText';
 import { toAssetUrl } from './assetUrl';
 import { FONT, selectTheme } from './design';
-import { sceneOpacity } from './animation';
 import type { Theme } from './design';
 import { toFrame } from './timing';
 import type { CompositionProps, PlanCaption } from './types';
@@ -25,7 +24,6 @@ export const DEFAULT_SKIN: Skin = { id: 'default' };
 
 const OUTRO_SECONDS = 3;
 const BADGE_SECONDS = 2;
-const SCENE_FADE_FRAMES = 8;
 
 /** One scene: background + text, with a soft fade-in/out dip at boundaries. */
 const SceneLayer: React.FC<{
@@ -51,15 +49,8 @@ const SceneLayer: React.FC<{
   wordTimings,
   labels,
 }) => {
-  const frame = useCurrentFrame();
-  const opacity = sceneOpacity(frame, sceneDurationFrames, {
-    fadeIn: true,
-    fadeOut: true,
-    fadeFrames: SCENE_FADE_FRAMES,
-    min: 0.08,
-  });
   return (
-    <AbsoluteFill style={{ opacity }}>
+    <AbsoluteFill>
       <SceneBackground
         scene={scene}
         videoSrc={videoSrc}
@@ -137,20 +128,30 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
         );
       })}
 
-      {plan.captions.map((caption, index) => {
-        const startFrame = toFrame(caption.start, fps);
-        const capDur = Math.max(1, toFrame(caption.end, fps) - startFrame);
-        return (
-          <Sequence key={`cap-${index}`} from={startFrame} durationInFrames={capDur}>
-            <Caption
-              caption={caption}
-              theme={theme}
-              durationFrames={capDur}
-              absoluteStartFrame={startFrame}
-            />
-          </Sequence>
-        );
-      })}
+      {plan.captions
+        .filter((caption) => {
+          // Ignore quote cards to avoid overlapping with regular karaoke subtitles
+          if (caption.type === 'quote') return false;
+          // Hide subtitles during hook scenes to keep the visual clean and prevent double-text overlap
+          const isDuringHook = plan.scenes.some(
+            (scene) => scene.type === 'hook' && caption.start < scene.end - 0.05 && caption.end > scene.start + 0.05,
+          );
+          return !isDuringHook;
+        })
+        .map((caption, index) => {
+          const startFrame = toFrame(caption.start, fps);
+          const capDur = Math.max(1, toFrame(caption.end, fps) - startFrame);
+          return (
+            <Sequence key={`cap-${index}`} from={startFrame} durationInFrames={capDur}>
+              <Caption
+                caption={caption}
+                theme={theme}
+                durationFrames={capDur}
+                absoluteStartFrame={startFrame}
+              />
+            </Sequence>
+          );
+        })}
 
       <Sequence from={Math.max(0, durationFrames - outroFrames)}>
         <Outro theme={theme} channelName={channelName} durationFrames={outroFrames} />

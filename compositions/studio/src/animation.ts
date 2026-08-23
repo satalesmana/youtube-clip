@@ -7,8 +7,8 @@ export const quickEnter = (frame: number, fps: number): number =>
   spring({ frame, fps, config: { damping: 200 }, durationInFrames: 5 });
 
 /**
- * Blur transition between scenes: blurs in over the first `fadeFrames` frames
- * and blurs out over the last `fadeFrames` frames of a scene.
+ * Clean scene cut transition. Returns 0 to keep cuts crisp and immediate
+ * like modern TikTok/Reels clippers (avoiding sluggish 0.7s blur fog).
  */
 export const calculateBlur = ({
   localFrame,
@@ -16,8 +16,8 @@ export const calculateBlur = ({
   fps,
   blurIn,
   blurOut,
-  maxBlur = 25,
-  fadeFrames = Math.round(fps * 0.7),
+  maxBlur = 0,
+  fadeFrames = 0,
 }: {
   localFrame: number;
   sceneDurationFrames: number;
@@ -27,6 +27,7 @@ export const calculateBlur = ({
   maxBlur?: number;
   fadeFrames?: number;
 }): number => {
+  if (maxBlur <= 0 || fadeFrames <= 0) return 0;
   if (blurIn && localFrame < fadeFrames) {
     return (1 - localFrame / fadeFrames) * maxBlur;
   }
@@ -36,26 +37,17 @@ export const calculateBlur = ({
   return 0;
 };
 
-/** Subtle Ken Burns zoom applied to scene video. */
+/** Subtle, continuous Ken Burns zoom applied to scene video for visual momentum. */
 export const kenBurnsScale = (
   localFrame: number,
   sceneDurationFrames: number,
 ): number =>
-  interpolate(clamp01(localFrame / Math.max(1, sceneDurationFrames)), [0, 1], [1, 1.12]);
+  interpolate(clamp01(localFrame / Math.max(1, sceneDurationFrames)), [0, 1], [1, 1.06]);
 
-/** Fade in/out the whole scene content near scene boundaries (soft dip transition). */
+/** Crisp scene opacity: maintains full brightness without flickering black dips. */
 export const sceneOpacity = (
-  localFrame: number,
-  sceneDurationFrames: number,
-  opts: { fadeIn?: boolean; fadeOut?: boolean; fadeFrames?: number; min?: number },
-): number => {
-  const fadeFrames = opts.fadeFrames ?? Math.round(8);
-  const min = opts.min ?? 0;
-  if (opts.fadeIn && localFrame < fadeFrames) {
-    return Math.max(min, localFrame / fadeFrames);
-  }
-  if (opts.fadeOut && localFrame > sceneDurationFrames - fadeFrames) {
-    return Math.max(min, (sceneDurationFrames - localFrame) / fadeFrames);
-  }
-  return 1;
-};
+  _localFrame: number,
+  _sceneDurationFrames: number,
+  _opts?: { fadeIn?: boolean; fadeOut?: boolean; fadeFrames?: number; min?: number },
+): number => 1;
+
