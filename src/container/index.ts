@@ -54,6 +54,7 @@ import { HookService } from '../hooks/hook.service.js';
 import { HookController } from '../controllers/hook.controller.js';
 import { PreviewRendererService } from '../services/preview-renderer.service.js';
 import { StyledHookPreviewService } from '../hook-preview/styled-hook-preview.service.js';
+import { ClipController } from '../controllers/clip.controller.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 
@@ -485,6 +486,29 @@ export const hookController = new HookController({
   styledPreviewRenderer: env.HOOK_PREVIEW_STYLED ? styledHookPreviewService : undefined,
 });
 
+/** Entry point for `POST /api/clips/recommend` (viral clip recommendations). */
+export const clipController = new ClipController({
+  youtubeService,
+  transcriptService,
+  whisperService,
+  ollamaService,
+  highlightService,
+  previewRenderer,
+  outputsDir: paths.outputs,
+  logger: createLogger('clips.controller'),
+});
+
+/**
+ * Feedback loop for viral-clip recommendations: records which recommended
+ * clips the user actually takes into a transform (see
+ * ClipController.recordSelection). Exposed via the container so the transform
+ * route can call it without owning the clips workspace layout.
+ */
+export const recordClipSelection = (
+  videoId: string,
+  selectedClips: Array<{ start: number; end: number; title?: string }>,
+): Promise<void> => clipController.recordSelection(videoId, selectedClips);
+
 // --- Composition Engine (Sprint G) ---
 
 export const compositionEngine = createCompositionEngine({
@@ -639,6 +663,7 @@ export const container = {
   storyService,
   hookService,
   hookController,
+  clipController,
   ttsService,
   videoPlanService,
   rightsService,
