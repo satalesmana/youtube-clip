@@ -1,9 +1,10 @@
-import { defineEventHandler, readBody } from 'h3';
+import { defineEventHandler, readBody, getHeader, setResponseHeader } from 'h3';
 import { container } from '../../src/container/index.js';
 import { createError } from 'h3';
 import { z } from 'zod';
 import type { TransformRequestInput } from '../../src/schemas/transform.schema.js';
 import { TransformController } from '../../src/controllers/transform.controller.js';
+import type { TransformControllerDeps } from '../../src/controllers/transform.controller.js';
 import { createLogger } from '../../src/utils/logger.js';
 
 /** Request schema for transform with rights check. */
@@ -53,7 +54,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Build deps from container
-  const deps = {
+  const baseDeps = {
     youtubeService: container.youtubeService,
     transcriptService: container.transcriptService,
     whisperService: container.whisperService,
@@ -73,6 +74,33 @@ export default defineEventHandler(async (event) => {
     contentCache: container.contentCache,
   };
 
-  const controller = new TransformController(deps);
+  const wantsSSE = (getHeader(event, 'accept') ?? '').includes('text/event-stream');
+
+  if (wantsSSE) {
+    setResponseHeader(event, 'content-type', 'text/event-stream');
+    setResponseHeader(event, 'cache-control', 'no-cache');
+    setResponseHeader(event, 'connection', 'keep-alive');
+
+    return new ReadableStream({
+      start(streamController) {
+        const encoder = new TextEncoder();
+        const send = (eventName: string, data: unknown) => {
+          streamController.enqueue(encoder.encode(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`));
+        };
+
+        const deps: TransformControllerDeps = {
+          ...baseDeps,
+          onStage: (stage) => send('stage', { stage }),
+        };
+
+        const pipeline = new TransformController(deps);
+        pipeline.transform(request)
+          .then((result) => { send('result', result); streamController.close(); })
+          .catch((error) => { send('error', { message: error?.message ?? 'Transform failed' }); streamController.close(); });
+      },
+    });
+  }
+
+  const controller = new TransformController(baseDeps);
   return controller.transform(request);
 });

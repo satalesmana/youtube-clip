@@ -130,6 +130,13 @@ export interface RenderContext {
   /** The original source video; `clip.start`/`clip.end` are the trim points into it. */
   video: {
     path: string;
+    /**
+     * Optional absolute trim window into the source (e.g. the chosen hook's
+     * range). When present it overrides `clip.start`/`clip.end` as the
+     * input-level seek points so the footage matches the selected moment
+     * instead of always starting at second 0.
+     */
+    sourceTrim?: { start: number; end: number };
   };
   subtitle: {
     /** Destination path the ASS file is (or will be) written to. */

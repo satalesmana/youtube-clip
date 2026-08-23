@@ -34,6 +34,12 @@ export interface VideoPlanBuildInput {
   story?: SourceStory;
   /** Optional per-section narration timing (real word boundaries) from TTS. */
   ttsSections?: TTSSectionTiming[];
+  /**
+   * Hook text explicitly chosen by the user (from the hook recommendation).
+   * When set it becomes the on-screen hook headline, overriding the story's
+   * auto-detected hook moment line. Optional: absent when no hook was chosen.
+   */
+  customHook?: string;
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -72,7 +78,7 @@ export class VideoPlanService implements IVideoPlanService {
   ) {}
 
   async buildPlan(input: VideoPlanBuildInput): Promise<VideoPlan> {
-    const { script, clipStart, clipEnd, narrationPath, narrationDurationSeconds, story, ttsSections } = input;
+    const { script, clipStart, clipEnd, narrationPath, narrationDurationSeconds, story, ttsSections, customHook } = input;
     const configuredTarget = this.options.targetDuration ?? 60;
     // Never make a video longer than its narration: that produces a frozen
     // tail and causes a later audio remux to truncate the video.
@@ -167,11 +173,16 @@ export class VideoPlanService implements IVideoPlanService {
       cursor = end;
     });
 
-    // Hook-first: open the video on the strongest cut when the story provides
-    // one, so the first frames show the money shot behind the title card. The
-    // hook's suggestedLine becomes the on-screen title + quote card.
-    const hookMoment = story?.hookMoment;
+    // Hook-first: open the video on the strongest cut. A user-selected hook
+    // wins: its text becomes the on-screen headline and its source range is
+    // already clipStart..clipEnd, so the story's auto-detected hook moment
+    // must not override either. Without a selection, keep existing behaviour.
+    const selectedHook = customHook?.trim();
+    const hookMoment = selectedHook ? undefined : story?.hookMoment;
     const firstScene = scenes[0];
+    if (selectedHook && firstScene?.type === 'hook') {
+      firstScene.quotableLine = selectedHook;
+    }
     if (hookMoment && firstScene && hookMoment.end > hookMoment.start) {
       const hStart = Math.max(clipStart, hookMoment.start);
       const hEnd = Math.min(clipEnd, hookMoment.end);

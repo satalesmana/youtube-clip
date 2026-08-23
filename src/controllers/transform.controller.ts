@@ -2,7 +2,7 @@ import type { IYoutubeService } from '../services/youtube.service.js';
 import type { ITranscriptService } from '../services/transcript.service.js';
 import type { IWhisperService } from '../services/whisper.service.js';
 import { join, relative, sep } from 'node:path';
-import { stat } from 'node:fs/promises';
+import { stat, access } from 'node:fs/promises';
 import { probeDurationSeconds } from '../utils/ffmpeg.js';
 import { extractVideoIdFromUrl } from '../utils/youtube-id.js';
 import { createJobWorkspace } from '../utils/workspace.js';
@@ -28,7 +28,11 @@ import type { IAssService } from '../services/ass.service.js';
 import type { ISubtitleService } from '../services/subtitle.service.js';
 import type { ICompositionEngine, CompositionAssets } from '../composition/composition.types.js';
 import type { ContentCache } from '../services/content-cache.service.js';
+import type { ReelComposerService, ReelSegment, ReelSegmentSubtitle } from '../services/reel-composer.service.js';
+import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
+
+export type TransformStage = 'download' | 'transcript' | 'angle' | 'story' | 'script' | 'tts' | 'plan' | 'render';
 
 export interface TransformControllerDeps {
   youtubeService: IYoutubeService;
@@ -49,11 +53,24 @@ export interface TransformControllerDeps {
   compositionEngine: ICompositionEngine;
   /** Optional disk cache — regenerating the same video returns cached LLM stage outputs. */
   contentCache?: ContentCache;
+  /**
+   * Optional reel composer (flow redesign step 3, `outputMode: 'reel'`).
+   * When absent, reel requests fail with a clear validation error instead of
+   * silently falling back to the narration pipeline.
+   */
+  reelComposer?: ReelComposerService;
+  /** Optional real-time progress callback — called before each pipeline stage starts. */
+  onStage?: (stage: TransformStage, opts?: { skipped?: boolean }) => void;
 }
 
 /** Main entry point for `POST /api/transform`. */
 export class TransformController {
   constructor(private readonly deps: TransformControllerDeps) {}
+
+  /** Sends a progress event to the optional SSE callback. */
+  private emit(stage: TransformStage, opts?: { skipped?: boolean }): void {
+    this.deps.onStage?.(stage, opts);
+  }
 
   async transform(request: TransformRequestInput): Promise<Record<string, unknown>> {
     const { logger, outputsDir } = this.deps;
@@ -69,18 +86,44 @@ export class TransformController {
       if (!id) throw AppError.invalidUrl();
       videoId = id;
 
-      // Download video if not already present
-      const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl);
-      videoPath = download.videoPath;
-      videoId = download.videoId;
+      const videoWorkspaceDir = join(outputsDir, videoId);
+      const savedVideoPath = join(videoWorkspaceDir, 'downloads', `${videoId}.mp4`);
+      const savedTranscriptPath = join(videoWorkspaceDir, 'transcripts', `${videoId}.json`);
 
-      // Load or transcribe
-      transcript = await this.deps.transcriptService.loadTranscript(videoId);
-      if (!transcript) {
-        logger.info({ videoId }, 'No transcript found — extracting audio and transcribing');
+      // Fast path: use existing files if available
+      const hasVideo = await access(savedVideoPath).then(() => true).catch(() => false);
+      const hasTranscript = await access(savedTranscriptPath).then(() => true).catch(() => false);
+
+      if (hasVideo && hasTranscript) {
+        logger.info({ videoId }, 'Using existing video and transcript from workspace');
+        // Both stages already satisfied — tell the UI they're done (skipped).
+        this.emit('download', { skipped: true });
+        this.emit('transcript', { skipped: true });
+        videoPath = savedVideoPath;
+        // Also try loading from shared transcripts dir
+        transcript = await this.deps.transcriptService.loadTranscript(videoId);
+        if (!transcript) {
+          // Fall back to per-video workspace transcript
+          try {
+            const { readFile } = await import('node:fs/promises');
+            const raw = await readFile(savedTranscriptPath, 'utf-8');
+            transcript = JSON.parse(raw) as TranscriptDocument;
+          } catch {
+            // Ignore — will throw missing transcript error later
+          }
+        }
+      } else if (hasVideo && !hasTranscript) {
+        logger.info({ videoId }, 'Using existing video — transcribing');
+        this.emit('download', { skipped: true });
+        videoPath = savedVideoPath;
+        this.emit('transcript');
+        const { createWhisperServiceWith } = await import('../container/index.js');
+        const whisperService = request.sttProvider
+          ? createWhisperServiceWith(request.sttProvider)
+          : this.deps.whisperService;
         const job = await createJobWorkspace(this.deps.outputsDir, videoId);
         const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, job);
-        const whisperResult = await this.deps.whisperService.transcribe(audio.audioPath, job);
+        const whisperResult = await whisperService.transcribe(audio.audioPath, job);
         const transcriptDoc: TranscriptDocument = {
           ...whisperResult,
           videoId,
@@ -89,16 +132,85 @@ export class TransformController {
         };
         await this.deps.transcriptService.saveTranscript(transcriptDoc, job);
         transcript = transcriptDoc;
+      } else if (!hasVideo && hasTranscript) {
+        logger.info({ videoId }, 'Using existing transcript — downloading video');
+        this.emit('download');
+        // Land the file in the per-video workspace (same fast-path location)
+        // instead of the shared downloads dir.
+        const job = await createJobWorkspace(outputsDir, videoId);
+        const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
+        videoPath = download.videoPath;
+        videoId = download.videoId;
+        transcript = await this.deps.transcriptService.loadTranscript(videoId);
+        this.emit('transcript', { skipped: true });
+      } else {
+        // Full pipeline: download + transcribe
+        this.emit('download');
+        // Same as above — per-video workspace keeps the file where the
+        // hook pipeline and future re-runs expect it.
+        const job = await createJobWorkspace(outputsDir, videoId);
+        const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
+        videoPath = download.videoPath;
+        videoId = download.videoId;
+
+        transcript = await this.deps.transcriptService.loadTranscript(videoId);
+        if (!transcript) {
+          logger.info({ videoId }, 'No transcript found — extracting audio and transcribing');
+          this.emit('transcript');
+          const { createWhisperServiceWith } = await import('../container/index.js');
+          const whisperService = request.sttProvider
+            ? createWhisperServiceWith(request.sttProvider)
+            : this.deps.whisperService;
+          const job = await createJobWorkspace(this.deps.outputsDir, videoId);
+          const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, job);
+          const whisperResult = await whisperService.transcribe(audio.audioPath, job);
+          const transcriptDoc: TranscriptDocument = {
+            ...whisperResult,
+            videoId,
+            sourceUrl: request.youtubeUrl,
+            createdAt: new Date().toISOString(),
+          };
+          await this.deps.transcriptService.saveTranscript(transcriptDoc, job);
+          transcript = transcriptDoc;
+        } else {
+          this.emit('transcript', { skipped: true });
+        }
       }
     } else {
       videoId = request.videoId!;
+      // Re-transform by videoId: source video + transcript already on disk.
+      this.emit('download', { skipped: true });
+      this.emit('transcript', { skipped: true });
       transcript = await this.deps.transcriptService.loadTranscript(videoId);
       if (!transcript) throw AppError.missingSourceVideo(`No transcript for ${videoId}.`);
       videoPath = join(outputsDir, videoId, 'downloads', `${videoId}.mp4`);
     }
 
+    // Guard: transcript must be available for subsequent stages
+    if (!transcript) {
+      throw AppError.missingSourceVideo(`No transcript found for ${videoId}.`);
+    }
+
+    // Feedback loop: when this run carries user-selected recommended clips,
+    // append them to outputs/{videoId}/feedback/ so future ranking work can
+    // learn from real selections. Fire-and-forget — never blocks/breaks.
+    if (request.selectedClips?.length) {
+      void import('../container/index.js').then(({ recordClipSelection }) =>
+        recordClipSelection(videoId, request.selectedClips!),
+      );
+    }
+
+    // ── Reel mode (flow redesign): direct concatenation of user-selected
+    // clips with their original audio. No script, no TTS, no LLM stages —
+    // every narration-mode behaviour below stays untouched.
+    if (request.outputMode === 'reel') {
+      return this.transformReel(request, { videoId, videoPath });
+    }
+
     // Stage 1: Generate angles
-    const selection = this.selectMoment(transcript, request.candidateId);
+    const selection = request.sourceRange
+      ? this.selectRange(transcript, request.sourceRange.start, request.sourceRange.end)
+      : this.selectMoment(transcript, request.candidateId);
     const clip = {
       start: selection.momentSegments[0]?.start ?? 0,
       end: selection.momentSegments.at(-1)?.end ?? 30,
@@ -119,7 +231,13 @@ export class TransformController {
     };
 
     let angleResult: AngleGenerationResult;
-    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId);
+    this.emit('angle');
+    // The selected hook's source range changes the moment segments fed to the
+    // angle/story stages — include it so cached outputs always match it.
+    const rangeCacheKey = request.sourceRange
+      ? `${request.sourceRange.start}-${request.sourceRange.end}`
+      : undefined;
+    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey);
     const cachedAngle = await this.deps.contentCache?.get<AngleGenerationResult>(angleCacheKey);
     if (cachedAngle) {
       logger.info({ cache: 'angle', videoId, candidateId: request.candidateId }, 'Angle generation served from cache');
@@ -139,7 +257,8 @@ export class TransformController {
     ) ?? angleResult.angles[0]!;
 
     let story: Awaited<ReturnType<IStoryService['buildStory']>> | undefined;
-    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId);
+    this.emit('story');
+    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey);
     const cachedStory = await this.deps.contentCache?.get<Awaited<ReturnType<IStoryService['buildStory']>>>(storyCacheKey);
     if (cachedStory) {
       logger.info({ cache: 'story', videoId, candidateId: request.candidateId }, 'Story planning served from cache');
@@ -163,12 +282,14 @@ export class TransformController {
 
     // Stage 2: Script
     let script: OriginalScript;
+    this.emit('script');
     const scriptCacheKey = this.cacheKey(
       'script',
       videoId,
       request.candidateId,
       selectedAngle.id,
       request.customAngleTitle,
+      request.customHook,
       request.language,
     );
     const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
@@ -184,6 +305,7 @@ export class TransformController {
           angleHook: request.customHook ?? selectedAngle.hook,
           angleReason: selectedAngle.reason,
           angleType: selectedAngle.angleType,
+          fixedHook: request.customHook,
           momentSegments: angleContext.momentSegments,
           contextSegments: angleContext.contextSegments,
           story,
@@ -207,9 +329,18 @@ export class TransformController {
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(workspaceDir);
 
+    // Use per-request TTS provider/voice when specified, otherwise fall back
+    // to the env-configured default service. Voice↔language pairing is the
+    // frontend's responsibility (it syncs the dropdown on change).
+    const { createTtsServiceWith } = await import('../container/index.js');
+    const ttsService = (request.ttsProvider && request.ttsVoice)
+      ? createTtsServiceWith(request.ttsProvider, request.ttsVoice)
+      : this.deps.ttsService;
+
     let ttsResult: { outputPath: string; durationSeconds: number; sections?: TTSSectionTiming[] };
+    this.emit('tts');
     try {
-      ttsResult = await this.deps.ttsService.synthesizeScript(script, workspaceDir);
+      ttsResult = await ttsService.synthesizeScript(script, workspaceDir);
     } catch (err) {
       logger.warn({ err }, 'TTS failed');
       ttsResult = { outputPath: '', durationSeconds: script.estimatedDurationSeconds };
@@ -217,6 +348,7 @@ export class TransformController {
 
     // Stage 4: Video Plan
     let videoPlan: VideoPlan;
+    this.emit('plan');
     try {
       const planInput: VideoPlanBuildInput = {
         script,
@@ -226,6 +358,7 @@ export class TransformController {
         narrationDurationSeconds: ttsResult.durationSeconds,
         ttsSections: ttsResult.sections,
         story,
+        customHook: request.customHook,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
     } catch (err) {
@@ -242,6 +375,7 @@ export class TransformController {
         candidateId: request.candidateId,
         angle: selectedAngle,
         story,
+        storyApplied: story != null,
         script,
         narration: ttsResult,
         videoPlan,
@@ -251,9 +385,17 @@ export class TransformController {
     }
 
     // Stage 5: Render
+    this.emit('render');
     logger.info({ videoId, jobId }, 'Rendering commentary video');
+    // The chosen hook's range drives the footage: the fallback template path
+    // trims the source video to it (the Remotion engine already gets the same
+    // window through the plan's scene sources). Without a hook, keep the
+    // legacy full-video behaviour untouched.
+    const hookRange = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
+      ? { start: request.sourceRange.start, end: request.sourceRange.end }
+      : undefined;
     const outputVideo = await this.renderVideo(
-      videoPath, videoId, jobId, request.template ?? 'commentary', videoPlan, ttsResult, request.channel, request.hookBadge, transcript,
+      videoPath, videoId, jobId, request.template ?? 'commentary', videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange,
     );
 
     return {
@@ -263,6 +405,9 @@ export class TransformController {
       candidateId: request.candidateId,
       angle: selectedAngle,
       story,
+      // False when story planning failed and the plan fell back to equal
+      // slicing — lets the UI explain a "genericer" result honestly.
+      storyApplied: story != null,
       script,
       narration: {
         ...ttsResult,
@@ -278,6 +423,140 @@ export class TransformController {
     };
   }
 
+  /**
+   * Reel mode: joins the user-selected clip ranges back-to-back into one
+   * vertical short with its original audio, then (optionally) burns source
+   * subtitles per segment. Emits the standard stage events so the existing
+   * UI progress bar keeps working.
+   */
+  private async transformReel(
+    request: TransformRequestInput,
+    resolved: { videoId: string; videoPath: string },
+  ): Promise<Record<string, unknown>> {
+    const { logger, outputsDir } = this.deps;
+    const jobId = crypto.randomUUID();
+    const { videoId, videoPath } = resolved;
+
+    if (!request.selectedClips?.length) {
+      throw AppError.validation('outputMode "reel" requires at least one selected clip.');
+    }
+    if (!this.deps.reelComposer) {
+      throw AppError.internal('Reel composer is not configured on this server.');
+    }
+
+    const outputDir = join(outputsDir, videoId, 'transform', jobId, 'clips');
+    const { ensureDir } = await import('../utils/fs.js');
+    await ensureDir(outputDir);
+
+    // Ordered, anti-repeat plan: the chosen hook opens the reel, then every
+    // selected clip — with seconds the intro already plays trimmed/dropped so
+    // nothing is ever repeated when joined. When the hook's styled final
+    // intro file exists, it is used verbatim (WYSIWYG) and the anti-repeat
+    // guard still applies to the clips that follow.
+    const intro = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
+      ? { start: request.sourceRange.start, end: request.sourceRange.end }
+      : undefined;
+    let hookIntroFile: string | undefined;
+    if (request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
+      const { access } = await import('node:fs/promises');
+      hookIntroFile = await access(request.hookPreviewPath)
+        .then(() => request.hookPreviewPath)
+        .catch(() => undefined);
+    }
+    const segments = planReelSegments({
+      intro,
+      clips: request.selectedClips.map((clip) => ({ start: clip.start, end: clip.end })),
+    });
+    if (segments.length === 0) {
+      throw AppError.validation('All selected clips have an empty time range.');
+    }
+    // Swap the planned intro range for the styled file when available.
+    const composeSegments: ReelSegment[] = hookIntroFile
+      ? segments.map((segment) =>
+          segment.kind === 'intro'
+            ? { ...segment, filePath: hookIntroFile }
+            : segment,
+        )
+      : segments;
+
+    this.emit('angle', { skipped: true });
+    this.emit('story', { skipped: true });
+
+    const droppedCount = request.selectedClips.filter(
+      (clip) => !segments.some((s) => s.kind === 'clip' && s.start === clip.start),
+    ).length;
+    logger.info(
+      { jobId, videoId, hasIntro: Boolean(intro), introFromFile: Boolean(hookIntroFile), requestedClips: request.selectedClips.length, keptSegments: segments.length, droppedCount },
+      'Rendering reel (hook intro + direct clip join)',
+    );
+
+    // Burn-in source subtitles per segment when a transcript exists: each
+    // segment gets its own rebased ASS file so captions match the trimmed
+    // playback (same mechanism the clip renderer uses). Pre-made file segments
+    // (styled hook intro) already carry their own on-screen text — no burn-in.
+    let subtitles: Array<ReelSegmentSubtitle | undefined> | undefined;
+    const transcript = await this.loadTranscriptForVideoId(videoId);
+    if (transcript && transcript.segments.length > 0) {
+      const { writeFile } = await import('node:fs/promises');
+      subtitles = await Promise.all(composeSegments.map(async (segment, index) => {
+        if (segment.filePath) return undefined;
+        const events = this.deps.subtitleService.buildEvents(transcript, segment.start, segment.end);
+        const assPath = join(outputDir, `reel-sub-${String(index).padStart(3, '0')}.ass`);
+        await writeFile(assPath, this.deps.assService.render(events, this.deps.assStyle), 'utf-8');
+        return { assPath };
+      }));
+    }
+
+    this.emit('script', { skipped: true });
+    this.emit('tts', { skipped: true });
+    this.emit('plan', { skipped: true });
+
+    this.emit('render');
+    const reel = await this.deps.reelComposer.compose({
+      videoPath,
+      segments: composeSegments,
+      subtitles,
+      outputDir,
+      fileName: 'reel',
+    });
+
+    return {
+      success: true,
+      jobId,
+      videoId,
+      candidateId: request.candidateId,
+      outputMode: 'reel' as const,
+      reel: {
+        clipCount: segments.length,
+        segments,
+        durationSeconds: reel.durationSeconds,
+        sizeBytes: reel.sizeBytes,
+      },
+      outputVideo: {
+        path: reel.path,
+        url: this.toMediaUrl(reel.path),
+        durationSeconds: reel.durationSeconds,
+        sizeBytes: reel.sizeBytes,
+        width: 1080,
+        height: 1920,
+      },
+      generatedAt: new Date().toISOString(),
+      dryRun: false,
+    };
+  }
+
+  /** Loads the per-video transcript (workspace first, shared dir second). */
+  private async loadTranscriptForVideoId(videoId: string): Promise<TranscriptDocument | null> {
+    try {
+      const workspacePath = join(this.deps.outputsDir, videoId, 'transcripts', `${videoId}.json`);
+      const { readFile } = await import('node:fs/promises');
+      const raw = await readFile(workspacePath, 'utf-8');
+      return JSON.parse(raw) as TranscriptDocument;
+    } catch {
+      return this.deps.transcriptService.loadTranscript(videoId);
+    }
+  }
+
   private async renderVideo(
     videoPath: string,
     videoId: string,
@@ -288,6 +567,8 @@ export class TransformController {
     channel: TransformRequestInput['channel'],
     hookBadge: string | undefined,
     transcript?: TranscriptDocument | null,
+    /** The chosen hook's source range — drives the fallback path's footage trim. */
+    hookRange?: { start: number; end: number },
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
     const { ensureDir } = await import('../utils/fs.js');
@@ -329,7 +610,12 @@ export class TransformController {
       const assPath = join(outputDir, 'subtitles.ass');
       const context: RenderContext = {
         clip: { title: 'AI Commentary', score: 99, duration: videoPlan.duration, start: 0, end: videoPlan.duration },
-        video: { path: videoPath },
+        video: {
+          path: videoPath,
+          // Trim to the chosen hook's range so the footage opens on the
+          // selected moment (legacy behaviour — second 0 — when absent).
+          ...(hookRange ? { sourceTrim: hookRange } : {}),
+        },
         subtitle: { ass: assPath, words: [] },
         channel,
         commentary: { text: commentaryText },
@@ -459,6 +745,40 @@ export class TransformController {
       const segment = segments[index]!;
       if (segment.start >= maxEnd) break;
       lastIndex = index;
+    }
+    return {
+      momentSegments: segments.slice(firstIndex, lastIndex + 1),
+      contextSegments: [
+        ...segments.slice(Math.max(0, firstIndex - 2), firstIndex),
+        ...segments.slice(lastIndex + 1, lastIndex + 3),
+      ],
+    };
+  }
+
+  /**
+   * Selects the transcript segments overlapping an explicit source range
+   * (from a recommended hook), plus a small context window around it.
+   */
+  private selectRange(
+    transcript: TranscriptDocument,
+    start: number,
+    end: number,
+  ): {
+    momentSegments: TranscriptSegment[];
+    contextSegments: TranscriptSegment[];
+  } {
+    const segments = transcript.segments;
+    let firstIndex = -1;
+    let lastIndex = -1;
+    for (let index = 0; index < segments.length; index += 1) {
+      const segment = segments[index]!;
+      if (segment.end < start) continue;
+      if (segment.start > end) break;
+      if (firstIndex === -1) firstIndex = index;
+      lastIndex = index;
+    }
+    if (firstIndex === -1) {
+      return { momentSegments: [], contextSegments: [] };
     }
     return {
       momentSegments: segments.slice(firstIndex, lastIndex + 1),

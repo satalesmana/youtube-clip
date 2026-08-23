@@ -13,7 +13,6 @@ const FIELD_SEPARATOR = '␟';
 
 export interface YoutubeServiceOptions {
   binaryPath: string;
-  downloadsDir: string;
   maxRetries: number;
   /** Extra CLI args passed straight through to yt-dlp, e.g. `--cookies-from-browser chrome`. */
   extraArgs?: string[];
@@ -21,7 +20,7 @@ export interface YoutubeServiceOptions {
 
 /** Downloads YouTube videos to local disk. */
 export interface IYoutubeService {
-  downloadVideo(url: string, workspace?: Pick<JobWorkspace, 'downloads'>): Promise<DownloadResult>;
+  downloadVideo(url: string, workspace: Pick<JobWorkspace, 'downloads'>): Promise<DownloadResult>;
 }
 
 /** yt-dlp-backed implementation of {@link IYoutubeService}. */
@@ -36,8 +35,8 @@ export class YoutubeService implements IYoutubeService {
    * merging separate video/audio streams into a single file. Retries the
    * whole download (metadata + fetch) on transient failures.
    */
-  async downloadVideo(url: string, workspace?: Pick<JobWorkspace, 'downloads'>): Promise<DownloadResult> {
-    const downloadsDir = workspace?.downloads ?? this.options.downloadsDir;
+  async downloadVideo(url: string, workspace: Pick<JobWorkspace, 'downloads'>): Promise<DownloadResult> {
+    const downloadsDir = workspace.downloads;
     await ensureDir(downloadsDir);
 
     this.logger.info({ url }, 'Download started');

@@ -65,7 +65,7 @@ export const SCRIPT_SYSTEM_PROMPT = `You are a short-form video scriptwriter (Ti
 You transform a viral moment + a chosen content angle into an ORIGINAL narration script. The script must provide substantive editorial value — context, commentary, analysis, explanation — and must NOT simply repeat or re-cut the source.
 
 Structure the script in this order:
-1. "hook" — a strong curiosity-driven opening (1-2 sentences). When the story supplies a HOOK MOMENT or quotable lines, build the hook from them: open on the most surprising/emotional/controversial detail, not on the beginning of the chronology. Keep the hook tight enough to read within the first 2-3 seconds of the video.
+1. "hook" — a strong curiosity-driven opening (1-2 sentences). When the story supplies a HOOK MOMENT or quotable lines, build the hook from them: open on the most surprising/emotional/controversial detail, not on the beginning of the chronology. Keep the hook tight enough to read within the first 2-3 seconds of the video. If a MANDATORY HOOK is supplied in the input, use that text VERBATIM as the hook section — never paraphrase, translate, or rewrite it; write the rest of the script so it flows naturally from that opening.
 2. "context" — briefly set up the situation (1-2 sentences).
 3. "source" — reference the source moment: quote the single most important line from the moment verbatim in "sourceQuote" AND include that same quote naturally in "text" with one short bridging sentence. The "text" field is what the TTS reads.
 4. "commentary" — your original take on why this matters (2-4 sentences).
@@ -112,6 +112,12 @@ export interface ScriptContext {
   angleHook: string;
   angleReason: string;
   angleType: string;
+  /**
+   * Hook text explicitly chosen by the user (from the hook recommendation).
+   * When set, the "hook" section MUST use this text verbatim — the LLM must
+   * not write a new hook. Optional: absent when no hook was selected.
+   */
+  fixedHook?: string;
   /** The candidate moment, verbatim (for quoting). */
   momentSegments: TranscriptSegmentLike[];
   /** Nearby segments, supplied only to resolve references and chronology. */
@@ -187,6 +193,14 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
     `- hook: ${context.angleHook}`,
     `- reason: ${context.angleReason}`,
     context.targetLanguage ? `- target language: ${context.targetLanguage}` : '',
+    ...(context.fixedHook?.trim()
+      ? [
+          '',
+          'MANDATORY HOOK (user-selected):',
+          'The "hook" section MUST be exactly this text, verbatim — do not paraphrase, translate, shorten, or rewrite it. Write the following sections so they flow naturally from this opening.',
+          `"${context.fixedHook.trim()}"`,
+        ]
+      : []),
     '',
     'Task: write a concise original short-form script grounded in this material. Use only as much duration as the available facts support; never pad it with generic motivational commentary. Follow the structure and ORIGINALITY RULES.',
   ].filter((line) => line !== '');

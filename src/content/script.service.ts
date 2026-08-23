@@ -81,6 +81,7 @@ export class ScriptService implements IScriptService {
 
         const data = result.data;
         const sections = normalizeSections(data.sections);
+        enforceFixedHook(sections, context);
         validateTranscriptGrounding(sections, context, this.logger);
         attachStorySources(sections, context);
 
@@ -221,6 +222,28 @@ function normalizeSections(sections: ScriptSection[]): ScriptSection[] {
   }
 
   return sections;
+}
+
+/**
+ * When the user selected a recommended hook, the "hook" section must carry
+ * that exact text — the LLM only writes the rest of the script around it.
+ * Applied after validation so the fixed hook is never lost to LLM drift.
+ * No-op when no hook was selected (existing behaviour).
+ */
+function enforceFixedHook(sections: ScriptSection[], context: ScriptContext): void {
+  const fixedHook = context.fixedHook?.trim();
+  if (!fixedHook) return;
+  const hook = sections.find((section) => section.type === 'hook');
+  if (!hook) {
+    sections.unshift({ type: 'hook', text: fixedHook });
+    return;
+  }
+  hook.text = fixedHook;
+  // A user-selected hook is not a verbatim source quote — drop stale
+  // grounding metadata that no longer matches the replaced text.
+  delete hook.beatId;
+  delete hook.evidence;
+  delete hook.sourceQuote;
 }
 
 /** Length of the longest common substring between two strings (plain JS). */

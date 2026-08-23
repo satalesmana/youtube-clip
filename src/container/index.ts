@@ -55,6 +55,8 @@ import { HookController } from '../controllers/hook.controller.js';
 import { PreviewRendererService } from '../services/preview-renderer.service.js';
 import { StyledHookPreviewService } from '../hook-preview/styled-hook-preview.service.js';
 import { ClipController } from '../controllers/clip.controller.js';
+import type { WhisperProvider } from '../services/whisper.service.js';
+import { ReelComposerService } from '../services/reel-composer.service.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 
@@ -84,6 +86,20 @@ function resolveWhisperBinary(configuredPath: string): string {
   return configuredPath;
 }
 
+/**
+ * OpenAI-compatible STT endpoint config shared by all whisper services.
+ * Falls back to the TTS endpoint config so a single gateway (e.g. 9Router)
+ * that serves both `/audio/transcriptions` and `/audio/speech` works out of
+ * the box; `OPENAI_WHISPER_*` takes precedence when set explicitly.
+ */
+const openaiWhisperConfig = {
+  baseUrl: env.OPENAI_WHISPER_BASE_URL ?? env.TTS_BASE_URL ?? '',
+  apiKey: env.OPENAI_WHISPER_API_KEY ?? env.TTS_API_KEY ?? '',
+  model: env.OPENAI_WHISPER_MODEL,
+  maxUploadMb: env.OPENAI_WHISPER_MAX_UPLOAD_MB,
+  ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+};
+
 const paths = {
   outputs: resolve(rootDir, env.OUTPUTS_DIR),
   clips: resolve(rootDir, env.OUTPUTS_DIR, 'clips'),
@@ -96,7 +112,6 @@ const paths = {
 const youtubeService = new YoutubeService(
   {
     binaryPath: env.YT_DLP_BINARY_PATH,
-    downloadsDir: resolve(rootDir, 'outputs', 'downloads'),
     maxRetries: env.YT_DLP_MAX_RETRIES,
     extraArgs: parseShellArgs(env.YT_DLP_EXTRA_ARGS),
   },
@@ -122,9 +137,31 @@ const whisperService = new WhisperService(
     language: env.WHISPER_LANGUAGE,
     outputDir: resolve(rootDir, 'outputs', 'temp'),
     extraArgs: env.WHISPER_EXTRA_ARGS,
+    openai: openaiWhisperConfig,
   },
   createLogger('whisper.service'),
 );
+
+/**
+ * Creates a WhisperService with an explicit STT provider — used when the
+ * request overrides the env-configured STT engine (e.g. user picks OpenAI
+ * instead of faster-whisper from the UI).
+ */
+export function createWhisperServiceWith(kind: WhisperProvider): WhisperService {
+  return new WhisperService(
+    {
+      provider: kind,
+      binaryPath: resolveWhisperBinary(env.WHISPER_BINARY_PATH),
+      model: env.WHISPER_MODEL,
+      language: env.WHISPER_LANGUAGE,
+      outputDir: resolve(rootDir, 'outputs', 'temp'),
+      extraArgs: env.WHISPER_EXTRA_ARGS,
+      openai: openaiWhisperConfig,
+    },
+    createLogger(`whisper.${kind}`),
+  );
+}
+
 
 /**
  * `AI_PROVIDER` selects which AI agent backs highlight analysis: the local
@@ -417,6 +454,42 @@ export function createTtsService(overrides?: { provider?: ReturnType<typeof crea
   );
 }
 
+/**
+ * Creates a TtsService with an explicit provider kind and voice — used when
+ * the request overrides the env-configured TTS provider (e.g. user picks
+ * OpenAI instead of edge-tts from the UI).
+ */
+export function createTtsServiceWith(kind: 'edge-tts' | 'openai', voice: string): TtsService {
+  const logger = createLogger('tts.service');
+  const provider = createTtsProvider({
+    kind,
+    edge: {
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      binaryPath: env.TTS_BINARY_PATH,
+      rate: env.TTS_RATE,
+    },
+    openai: {
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      baseUrl: env.TTS_BASE_URL,
+      apiKey: env.TTS_API_KEY,
+      model: env.TTS_MODEL,
+      rate: env.TTS_RATE,
+    },
+    logger,
+  });
+
+  return new TtsService(
+    provider,
+    {
+      voice,
+      rate: env.TTS_RATE,
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      language: env.TTS_LANGUAGE,
+    },
+    logger,
+  );
+}
+
 export const ttsService = createTtsService();
 
 // --- Video planner (Sprint D) ---
@@ -508,6 +581,16 @@ export const recordClipSelection = (
   videoId: string,
   selectedClips: Array<{ start: number; end: number; title?: string }>,
 ): Promise<void> => clipController.recordSelection(videoId, selectedClips);
+
+/** Joins user-selected clip ranges into one reel (outputMode: 'reel'). */
+export const reelComposer = new ReelComposerService(
+  {
+    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+    canvasWidth: 1080,
+    canvasHeight: 1920,
+  },
+  createLogger('reel-composer'),
+);
 
 // --- Composition Engine (Sprint G) ---
 
@@ -674,4 +757,5 @@ export const container = {
   assStyle,
   compositionEngine,
   previewRenderer,
+  reelComposer,
 };

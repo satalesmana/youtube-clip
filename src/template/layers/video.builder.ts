@@ -46,10 +46,15 @@ export class VideoLayerBuilder implements ILayerFilterBuilder {
       );
     }
 
+    // Prefer the explicit source trim window (e.g. the chosen hook's range);
+    // fall back to the clip context so the footage always matches the moment.
+    const trimStart = context.video.sourceTrim?.start ?? context.clip.start;
+    const trimEnd = context.video.sourceTrim?.end ?? context.clip.end;
+
     return {
       inputs: [
         {
-          args: ['-ss', context.clip.start.toFixed(3), '-to', context.clip.end.toFixed(3), '-i', context.video.path],
+          args: ['-ss', trimStart.toFixed(3), '-to', trimEnd.toFixed(3), '-i', context.video.path],
           providesAudio: true,
         },
       ],

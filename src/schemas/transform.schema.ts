@@ -11,6 +11,17 @@ export const transformRequestSchema = z.object({
   videoId: z.string().optional(),
   /** A previously discovered candidate index (0-based) within the video. */
   candidateId: z.number().int().min(0).default(0),
+  /**
+   * Explicit source footage range (absolute seconds) from a recommended hook
+   * (e.g. `/api/hooks/generate` → hook.source). Overrides the moment selected
+   * by `candidateId`.
+   */
+  sourceRange: z
+    .object({
+      start: z.number().min(0),
+      end: z.number().min(0),
+    })
+    .optional(),
   /** The chosen content-angle id (from the angle generation stage). */
   selectedAngleId: z.string().optional(),
   /** A custom editorial angle, overriding LLM-generated angles. */
@@ -33,11 +44,48 @@ export const transformRequestSchema = z.object({
    * `id`, `en`, ... for explicit languages).
    */
   language: z.enum(['auto', 'id', 'en']).default('auto'),
+  /** TTS provider selection (`edge-tts` or `openai`). Falls back to env default. */
+  ttsProvider: z.enum(['edge-tts', 'openai']).optional(),
+  /** TTS voice identifier (provider-specific, e.g. "id-ID-ArdiNeural" or "nova"). */
+  ttsVoice: z.string().optional(),
+  /** STT engine selection. Falls back to env default (`WHISPER_PROVIDER`). */
+  sttProvider: z.enum(['faster-whisper', 'whisper-cpp', 'whisperx', 'openai']).optional(),
+  /**
+   * Output mode for the final video.
+   * - `narration` (default): existing pipeline — script + TTS narration over
+   *   the selected footage. Used whenever this field is absent.
+   * - `reel`: direct concatenation of the selected source ranges with their
+   *   original audio — no script, no TTS, no LLM stages.
+   */
+  outputMode: z.enum(['reel', 'narration']).optional(),
+  /**
+   * User-selected viral clips (from `/api/clips/recommend`) to join into the
+   * output. Required for `outputMode: 'reel'`; ignored in narration mode
+   * (which keeps using `sourceRange`/`candidateId`).
+   */
+  selectedClips: z.array(z.object({
+    start: z.number().min(0),
+    end: z.number().min(0),
+    title: z.string().optional(),
+  })).min(1).optional(),
+  /**
+   * Server path of the selected hook's styled final intro video
+   * (`hook.previewPath` from `/api/hooks/generate`). When provided and the
+   * file exists, the reel opens with that exact file (WYSIWYG) instead of
+   * re-cutting `sourceRange` from the source video.
+   */
+  hookPreviewPath: z.string().optional(),
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],
+}).refine((data) => !data.sourceRange || data.sourceRange.end > data.sourceRange.start, {
+  message: 'sourceRange.end must be greater than sourceRange.start.',
+  path: ['sourceRange'],
+}).refine((data) => data.outputMode !== 'reel' || (data.selectedClips?.length ?? 0) > 0, {
+  message: 'outputMode "reel" requires at least one selectedClips entry.',
+  path: ['selectedClips'],
 });
 
 export type TransformRequestInput = z.infer<typeof transformRequestSchema>;
