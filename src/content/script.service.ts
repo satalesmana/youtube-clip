@@ -4,7 +4,7 @@ import { parseLlmJson } from '../utils/llm-json.js';
 import { hashSeed } from '../utils/seed.js';
 import { originalScriptResponseSchema } from '../schemas/script.schema.js';
 import {
-  SCRIPT_SYSTEM_PROMPT,
+  buildScriptSystemPrompt,
   buildScriptUserPrompt,
   buildOriginalScript,
   type ScriptContext,
@@ -53,7 +53,7 @@ export class ScriptService implements IScriptService {
 
         const raw = await this.provider.chat({
           model: this.options.model,
-          system: SCRIPT_SYSTEM_PROMPT,
+          system: buildScriptSystemPrompt(effectiveContext.targetDurationSeconds ?? 60),
           prompt: buildScriptUserPrompt(effectiveContext),
           temperature: this.options.temperature,
           timeoutMs: this.options.timeoutMs,

@@ -8,11 +8,14 @@ export const CONTENT_ANGLE_SYSTEM_PROMPT = `You are a viral content strategist f
 Your job is to propose multiple EDITORIAL ANGLES for a single viral moment taken from a source video. An editorial angle is a fresh, original way to present the moment — the "point of view" that makes the new short content different from the raw source clip.
 
 Rules:
-- Generate 3 to 5 distinct angles per moment. Each must be a DIFFERENT angle type where possible (commentary, analysis, explainer, education, comparison, fact-check, storytelling, what-you-missed, news-explanation).
+- Generate 3 to 5 distinct angles per moment. Each must be a DIFFERENT angle type — no two angles may share the same angleType. Use types from: commentary, analysis, explainer, education, comparison, fact-check, storytelling, what-you-missed, news-explanation.
 - Each angle must add ORIGINAL editorial value: context, interpretation, explanation, or a new framing. Never propose an angle that simply re-cuts the source footage.
-- The hook must be a short, curiosity-driven opening line for a short-form video (max ~15 words).
+- The hook must be a short, curiosity-driven on-screen opening line for a short-form video (max 8 words). Favor concrete specifics over vague teases — a good hook names a real person, number, or claim.
 - The reason must explain concisely why this angle would perform well.
-- Score each angle 0-100 based on: hook strength, curiosity, information density, novelty, and how well it stands alone without the source.
+- Score each angle 0-100 using these three weighted criteria:
+  - Hook strength (50%): does the hook stop a scroll and create an immediate question?
+  - Curiosity and information density (30%): does the angle reveal something the viewer did not know?
+  - Standalone value (20%): can a viewer who has not seen the source still understand and enjoy it?
 - After listing all angles, choose the single strongest angle id in "selectedAngleId".
 - The source moment text may be in any language; write angles in the language of the moment unless a target language is explicitly requested.
 
@@ -23,7 +26,7 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
       "id": "angle_01",
       "title": "One-line editorial angle",
       "angleType": "commentary",
-      "hook": "Short curiosity hook (max 15 words)",
+      "hook": "Max 8-word on-screen hook",
       "reason": "Why this angle performs well",
       "score": 88
     }
@@ -59,10 +62,18 @@ export function buildContentAngleUserPrompt(context: ContentAngleContext): strin
 
 // ── Script generation ───────────────────────────────────────────────────
 
-/** System prompt for the original-script generation stage. */
-export const SCRIPT_SYSTEM_PROMPT = `You are a short-form video scriptwriter (TikTok, YouTube Shorts, Instagram Reels) specializing in original editorial content.
+/**
+ * Builds the system prompt for the original-script generation stage.
+ * @param targetSeconds Target video duration in seconds (default 60).
+ *   Injected so the LLM never writes more narration than the video can hold.
+ */
+export function buildScriptSystemPrompt(targetSeconds = 60): string {
+  const targetWords = Math.round((targetSeconds / 60) * 150);
+  return `You are a short-form video scriptwriter (TikTok, YouTube Shorts, Instagram Reels) specializing in original editorial content.
 
 You transform a viral moment + a chosen content angle into an ORIGINAL narration script. The script must provide substantive editorial value — context, commentary, analysis, explanation — and must NOT simply repeat or re-cut the source.
+
+Target narration length: approximately ${targetSeconds} seconds at 150 words per minute (~${targetWords} words total). Write only as much as the available facts support — never pad with generic commentary to reach the target.
 
 Structure the script in this order:
 1. "hook" — a strong curiosity-driven opening (1-2 sentences). When the story supplies a HOOK MOMENT or quotable lines, build the hook from them: open on the most surprising/emotional/controversial detail, not on the beginning of the chronology. Keep the hook tight enough to read within the first 2-3 seconds of the video. If a MANDATORY HOOK is supplied in the input, use that text VERBATIM as the hook section — never paraphrase, translate, or rewrite it; write the rest of the script so it flows naturally from that opening.
@@ -70,22 +81,22 @@ Structure the script in this order:
 3. "source" — reference the source moment: quote the single most important line from the moment verbatim in "sourceQuote" AND include that same quote naturally in "text" with one short bridging sentence. The "text" field is what the TTS reads.
 4. "commentary" — your original take on why this matters (2-4 sentences).
 5. "analysis" — deeper interpretation, implications, or explanation (2-4 sentences).
-6. "supporting" — an extra fact, comparison, or example that strengthens the analysis (1-3 sentences). Optional: omit if not needed.
+6. "supporting" — an extra fact, comparison, or example that strengthens the analysis (1-3 sentences). OPTIONAL: omit this section entirely (do not include the key at all) when the available transcript evidence does not support an additional point.
 7. "conclusion" — a memorable closing that lands the point (1-2 sentences).
 
 ORIGINALITY RULES (mandatory):
 - Write the narration in your OWN words. Never copy more than a short verbatim quote (the source section only).
 - Never invent facts, figures, or quotations. Only "sourceQuote" may quote the source, and it must be verbatim from the transcript.
-- Be SPECIFIC: name the people, actions, claims, sequence, numbers, and constraints actually present in the supplied transcript. Do not substitute vague phrases such as "perjuangan", "strategi", "fenomena", "kisah inspiratif", or "hal ini" unless you first identify the concrete transcript detail they refer to.
+- Be SPECIFIC: name the people, actions, claims, sequence, numbers, and constraints actually present in the supplied transcript. Do not substitute vague or filler phrases unless you first identify the concrete transcript detail they refer to.
 - Every factual/editorial section (context, source, commentary, analysis, and supporting when present) MUST include an "evidence" array containing 1-2 short verbatim excerpts copied exactly from the supplied transcript. Evidence is internal grounding metadata: do not read it out in "text" unless it is the "sourceQuote".
-- Any interpretation must explicitly connect to its evidence (for example: "Saat X mengatakan Y, ini menunjukkan ..."). If the transcript does not establish a fact, omit it rather than guessing.
+- Any interpretation must explicitly connect to its evidence (for example: "When X said Y, this shows ..."). If the transcript does not establish a fact, omit it rather than guessing.
 - When STORY BEATS are supplied, write one section for each beat in chronological order and include its id in "beatId". Do not invent an extra event.
 - Never misrepresent what the speaker said. Do not remove important context.
-- Do not present speculation as fact — mark uncertainty with "mungkin", "sepertinya", "kemungkinan", etc. when speculating.
-- Do not mention "video ini", "di video", "pembicara", "narasumber", or any meta-reference to the video itself.
+- Do not present speculation as fact — mark uncertainty with "maybe", "possibly", "likely" when speculating.
+- Do not mention the video itself ("in this video", "the speaker says", "the narrator") — the narration must read as original editorial content.
 - The narration must stand alone: a viewer who never saw the source must still understand and enjoy it.
 
-Language: write the script in the language of the source moment unless a target language is explicitly given.
+Language: write the script in the language of the source moment unless a target language is explicitly given. Write ALL field names, keys, and JSON structure in English regardless of content language.
 
 In "originality", assess your own output honestly: status PASS (fully original, no violations), WARNING (minor risks), or FAIL (violations found). List concrete notes.
 
@@ -94,15 +105,15 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
   "language": "id",
   "sections": [
     { "type": "hook", "beatId": "beat_1", "text": "..." },
-    { "type": "context", "text": "...", "evidence": ["kutipan transkrip persis"] },
-    { "type": "source", "text": "...", "sourceQuote": "...", "evidence": ["kutipan transkrip persis"] },
-    { "type": "commentary", "text": "...", "evidence": ["kutipan transkrip persis"] },
-    { "type": "analysis", "text": "...", "evidence": ["kutipan transkrip persis"] },
-    { "type": "supporting", "text": "...", "evidence": ["kutipan transkrip persis"] },
+    { "type": "context", "text": "...", "evidence": ["verbatim transcript excerpt"] },
+    { "type": "source", "text": "...", "sourceQuote": "...", "evidence": ["verbatim transcript excerpt"] },
+    { "type": "commentary", "text": "...", "evidence": ["verbatim transcript excerpt"] },
+    { "type": "analysis", "text": "...", "evidence": ["verbatim transcript excerpt"] },
     { "type": "conclusion", "text": "..." }
   ],
   "originality": { "status": "PASS", "notes": ["..."] }
 }`;
+}
 
 /** Context for the script generation stage. */
 export interface ScriptContext {
@@ -118,6 +129,8 @@ export interface ScriptContext {
    * not write a new hook. Optional: absent when no hook was selected.
    */
   fixedHook?: string;
+  /** Target video duration in seconds. Injected into the system prompt to cap script length. Defaults to 60. */
+  targetDurationSeconds?: number;
   /** The candidate moment, verbatim (for quoting). */
   momentSegments: TranscriptSegmentLike[];
   /** Nearby segments, supplied only to resolve references and chronology. */

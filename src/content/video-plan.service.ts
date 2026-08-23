@@ -234,19 +234,10 @@ export class VideoPlanService implements IVideoPlanService {
     const captions: PlanCaption[] = [];
     for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex += 1) {
       const scene = scenes[sceneIndex]!;
-      const quotable = scene.quotableLine?.trim();
-      // The hook scene already renders its money line as the kinetic headline,
-      // so a separate quote card would just duplicate the same text on screen.
-      if (quotable && scene.type !== 'hook') {
-        captions.push({
-          start: Number(scene.start.toFixed(2)),
-          // Cap the quote on-screen time so it never sits static for a whole
-          // long scene (retention killer) — it fades out shortly after.
-          end: Number(Math.min(scene.end, scene.start + 2.5).toFixed(2)),
-          text: quotable,
-          type: 'quote',
-          highlightWords: quotable.split(/\s+/).filter(Boolean),
-        });
+      // The hook scene already renders its money line as the kinetic HookHeadline/quote card,
+      // so subtitles and quote cards are omitted to avoid double-text clutter on screen.
+      if (scene.type === 'hook') {
+        continue;
       }
 
       const words = scene.narration.split(/\s+/).filter(Boolean);

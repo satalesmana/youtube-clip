@@ -44,7 +44,12 @@ Do NOT inflate every candidate; an honest spread makes ranking meaningful.
 
 For every clip also return "peak": the timestamp (in SECONDS, absolute video time) of the single most intense, surprising, or quotable sentence inside the clip — the moment viewers would screenshot.
 
-IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video). Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.`;
+IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video). Return start and end as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return start: 533.
+
+Return 1-5 clips per chunk maximum — only genuine candidates, never pad with weak moments.
+
+Return ONLY valid JSON matching this exact schema, no Markdown fences:
+{"clips":[{"start":100,"end":160,"peak":130,"score":85,"title":"One-line clip title","reason":"Why this moment is viral","hook":"Opening line that stops the scroll"}]}`;
 }
 
 /**
@@ -82,7 +87,10 @@ Consider for every candidate:
 - Distinctness: drop near-duplicates that cover the same moment or make the same point.
 - Honesty of the original claim: downgrade candidates whose "reason" oversells a boring stretch.
 
-Return ONLY the candidates you would publish — dropping weak ones is expected and desired. Give each survivor a fresh, calibrated score on the full 0-100 scale reflecting this global comparison. You may sharpen "title", "reason" and "hook" but never invent facts that are not supported by the excerpts.${languageMetadataInstruction(language)}`;
+Return ONLY the candidates you would publish — dropping weak ones is expected and desired. Return 3-8 of the strongest clips; dropping below 3 is acceptable only when the video genuinely lacks strong moments. Give each survivor a fresh, calibrated score on the full 0-100 scale reflecting this global comparison. You may sharpen "title", "reason" and "hook" but never invent facts that are not supported by the excerpts.${languageMetadataInstruction(language)}
+
+Return ONLY valid JSON matching this exact schema, no Markdown fences:
+{"clips":[{"id":"cand_01","score":88,"title":"Sharpened clip title","reason":"Why this is the best version of this moment","hook":"Opening line that stops the scroll"}]}`;
 }
 
 /** One candidate as presented to (and echoed back by) the rerank pass. */

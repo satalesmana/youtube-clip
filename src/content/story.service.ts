@@ -50,11 +50,11 @@ Return 4-7 chronological beats. Each beat MUST include:
 - "quotableLine": the single most caption-worthy verbatim line in this beat (the kind of line a short uses as on-screen text). Empty string ("") when the beat has none.
 - "openLoop": the question or tension this beat opens, answered by a later beat — or how it resolves the loop opened by the previous beat.
 - "retentionRisk": "high" = the money shot, must keep in the clip; "medium" = keep if length allows; "low" = safe to cut or skip.
-- Narrative metadata when the transcript establishes it:
-  - kondisiAwal: the state before this beat's events
-  - konflik: the conflict, tension, or obstacle
-  - titikBalik: the pivotal turning point moment
-  - hasil: the result or outcome
+- Narrative metadata when the transcript establishes it (include only the fields the transcript supports):
+  - kondisiAwal: the initial state or situation before the events of this beat
+  - konflik: the conflict, tension, or obstacle introduced or escalated in this beat
+  - titikBalik: the pivotal turning-point moment or key revelation within this beat
+  - hasil: the result, outcome, or consequence that this beat produces
 
 The beat sequence must form a complete arc: setup → tension/claim → turning point/evidence → resolution → conclusion.
 

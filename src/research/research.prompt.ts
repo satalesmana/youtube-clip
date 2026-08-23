@@ -38,7 +38,7 @@ export function buildResearchPrompt(
     `- title/summary: written in ${language === 'auto' ? 'the dominant language of the signals (usually en or id)' : language}.`,
     '- summary: 1-2 sentences on why it is hot and what angle makes a good short video.',
     '- score: integer 0-100, higher = more likely to go viral. Rank by score descending.',
-    '- keywords: comma-separated 2-4 YouTube search keywords, most specific first.',
+    '- keywords: a JSON array of 2-4 YouTube search keywords, most specific first. Example: ["elon musk layoffs", "twitter rebrand", "x platform"].',
     '- category: one of tech, politics, sports, entertainment, business, science, health, world, lifestyle, other.',
     '- Prefer topics backed by multiple sources and recent timestamps; drop obvious duplicates.',
     '- Do NOT invent topics that are not supported by the signals.',
@@ -103,7 +103,12 @@ export function parseResearchLlmResponse(raw: string): ResearchTrend[] {
 
       const score = clampScore(Number(t.score));
       const summary = typeof t.summary === 'string' ? t.summary : '';
-      const keywords = typeof t.keywords === 'string' ? t.keywords : t.title;
+      // Accept both array format (new) and comma-separated string (legacy).
+      const keywords = Array.isArray(t.keywords)
+        ? (t.keywords as unknown[]).filter((k) => typeof k === 'string').join(', ')
+        : typeof t.keywords === 'string'
+          ? t.keywords
+          : t.title;
 
       return {
         slug: t.slug,
