@@ -160,6 +160,8 @@ const ollamaService = new OllamaService(
     temperature: aiProvider.temperature,
     timeoutMs: aiProvider.timeoutMs,
     maxRetries: aiProvider.maxRetries,
+    minClipSeconds: env.HIGHLIGHT_MIN_SECONDS,
+    maxClipSeconds: env.HIGHLIGHT_MAX_SECONDS,
   },
   createLogger('ollama.service'),
 );

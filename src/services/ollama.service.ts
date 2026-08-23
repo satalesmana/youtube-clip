@@ -1,11 +1,16 @@
 import { retry } from '../utils/retry.js';
 import { AppError } from '../utils/errors.js';
-import { highlightChunkResponseSchema } from '../schemas/highlight.schema.js';
+import {
+  highlightChunkResponseSchema,
+  rerankResponseSchema,
+  type RerankedClip,
+} from '../schemas/highlight.schema.js';
 import {
   buildViralHighlightSystemPrompt,
   buildViralHighlightUserPrompt,
-  buildGoalHighlightSystemPrompt,
-  buildMotoGpSystemPrompt,
+  buildRerankSystemPrompt,
+  buildRerankUserPrompt,
+  type RerankCandidateInput,
 } from '../prompts/viral-highlight.prompt.js';
 import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
@@ -17,12 +22,29 @@ export interface OllamaServiceOptions {
   temperature: number;
   timeoutMs: number;
   maxRetries: number;
+  /** Clip duration bounds injected into the prompt so it matches the pipeline clamp. */
+  minClipSeconds: number;
+  maxClipSeconds: number;
 }
 
 /** Analyzes transcript chunks with an LLM to find candidate viral clips. */
 export interface IOllamaService {
-  analyzeChunk(chunk: TranscriptChunk, actingAs?: string, customPrompt?: string): Promise<HighlightClip[]>;
+  /** First pass: scan one transcript chunk for candidate viral clips. */
+  analyzeChunk(chunk: TranscriptChunk, language?: string): Promise<HighlightClip[]>;
+  /**
+   * Second pass: compare the pooled top candidates against each other and
+   * return only the publish-worthy ones with fresh, globally calibrated scores.
+   */
+  rerankCandidates(params: {
+    videoTitle: string;
+    candidates: RerankCandidateInput[];
+    excerptById: Record<string, string>;
+    language?: string;
+  }): Promise<RerankedClip[]>;
 }
+
+const JSON_ONLY_INSTRUCTION =
+  'Return ONLY valid JSON matching this schema, with no other text. Never return Markdown. Never explain. Return JSON only.';
 
 /**
  * Sends transcript chunks to Ollama using the viral-highlight prompt,
@@ -36,11 +58,16 @@ export class OllamaService implements IOllamaService {
   ) {}
 
   /** Analyzes one transcript chunk and returns its candidate viral clips. */
-  async analyzeChunk(chunk: TranscriptChunk, actingAs?: string, customPrompt?: string): Promise<HighlightClip[]> {
-    let systemPrompt = resolveSystemPrompt(actingAs, customPrompt);
-    systemPrompt +=`Return ONLY valid JSON matching this schema, with no other text: `
-    systemPrompt +=`{ "clips": [ {"start": 0, "end": 0, "score": 95, "title": "", "reason": "", "hook": ""} ]} `
-    systemPrompt +=`Never return Markdown. Never explain. Return JSON only. `
+  async analyzeChunk(chunk: TranscriptChunk, language?: string): Promise<HighlightClip[]> {
+    const systemPrompt = [
+      buildViralHighlightSystemPrompt({
+        minSeconds: this.options.minClipSeconds,
+        maxSeconds: this.options.maxClipSeconds,
+        language,
+      }),
+      JSON_ONLY_INSTRUCTION,
+      '{"clips": [{"start": 0, "end": 0, "score": 95, "title": "", "reason": "", "hook": "", "peak": 0}]}',
+    ].join(' ');
 
     const userPrompt = buildViralHighlightUserPrompt(chunk);
 
@@ -79,28 +106,53 @@ export class OllamaService implements IOllamaService {
       },
     );
   }
-}
 
-/** Resolves the system prompt: an explicit `customPrompt` wins over `actingAs`. */
-function resolveSystemPrompt(actingAs?: string, customPrompt?: string): string {
-  if (customPrompt?.trim()) return customPrompt.trim();
+  /**
+   * Second pass: global comparison of the pooled top candidates. A malformed
+   * or failed rerank is surfaced to the caller via `null` after exhausting
+   * retries — first-pass ranking remains usable in that case.
+   */
+  async rerankCandidates(params: {
+    videoTitle: string;
+    candidates: RerankCandidateInput[];
+    excerptById: Record<string, string>;
+    language?: string;
+  }): Promise<RerankedClip[]> {
+    if (params.candidates.length === 0) return [];
 
-  const normalized = actingAs?.trim().toLowerCase();
+    const systemPrompt = [
+      buildRerankSystemPrompt(params.language),
+      JSON_ONLY_INSTRUCTION,
+      '{"clips": [{"id": "", "score": 95, "title": "", "reason": "", "hook": ""}]}',
+    ].join(' ');
+    const userPrompt = buildRerankUserPrompt(params);
 
-  switch (normalized) {
-    case 'goal':
-    case 'football':
-      return buildGoalHighlightSystemPrompt();
-    case 'motogp':
-    case 'moto':
-    case 'moto-gp':
-    case 'moto_gp':
-      return buildMotoGpSystemPrompt();
-    case 'viral':
-    case '':
-    case undefined:
-    default:
-      return buildViralHighlightSystemPrompt();
+    return retry(
+      async () => {
+        this.logger.info({ candidateCount: params.candidates.length }, 'Reranking clip candidates');
+
+        const raw = await this.provider.chat({
+          model: this.options.model,
+          system: systemPrompt,
+          prompt: userPrompt,
+          temperature: this.options.temperature,
+          timeoutMs: this.options.timeoutMs,
+        });
+
+        const parsed = parseJsonLoosely(raw);
+        const result = rerankResponseSchema.safeParse(parsed);
+        if (!result.success) {
+          throw AppError.llmInvalidResponse(`Ollama returned an invalid rerank response: ${result.error.message}`);
+        }
+        return result.data.clips;
+      },
+      {
+        attempts: this.options.maxRetries,
+        onRetry: (error, attempt) => {
+          this.logger.warn({ attempt, err: error }, 'Retrying Ollama rerank');
+        },
+      },
+    );
   }
 }
 

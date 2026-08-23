@@ -1,268 +1,52 @@
 import type { TranscriptChunk } from '../types/transcript.js';
 
-const SYSTEM_PROMPT = `You are a viral content strategist specializing in history/education TikTok and YouTube Shorts.
+/**
+ * Generic, transcript-only system prompt for viral-clip detection.
+ *
+ * Deliberately NOT topic-specific: the same prompt must work for podcasts,
+ * vlogs, sports commentary, tutorials — anything. It is also honest about the
+ * input modality — the model only ever sees transcript text, never frames or
+ * audio, so asking it to "detect goals" or "spot replays" would invite
+ * hallucination. Duration bounds are injected from config so the prompt can
+ * never contradict the clamp/min-filter applied later in the pipeline.
+ */
+export function buildViralHighlightSystemPrompt(options: {
+  minSeconds: number;
+  maxSeconds: number;
+  language?: string;
+}): string {
+  return `You are a viral content strategist for short-form video (TikTok, YouTube Shorts, Instagram Reels).
 
-Your task is to identify moments with the highest probability of becoming viral also identify segments that would make compelling short-form clips (30-90 seconds each).
+You analyze a TRANSCRIPT ONLY — you cannot see video frames or hear audio. Judge every moment purely by what is said and how it reads as text. Never claim to detect visual events (goals, crashes, replays, gestures); when a moment seems visual, rely only on spoken words that describe it.
 
-A viral clip should:
-- Begin with a powerful hook.
-- Create curiosity immediately.
-- Be emotionally engaging.
-- Teach something valuable.
-- Include surprise.
-- Tell a complete story.
-- Avoid sponsorships.
-- Avoid repeated content.
-- Avoid long introductions.
-- Last between 20-60 seconds.
-- Surprising or counterintuitive historical facts
-- Dramatic storytelling moments
-- Mind-blowing connections between historical events
-- Controversial or thought-provoking claims
-- Quotable one-liners or powerful statements
+Your task: identify the moments with the highest probability of becoming viral short-form clips. Every clip you return must last between ${options.minSeconds} and ${options.maxSeconds} seconds.${languageMetadataInstruction(options.language)}
 
-IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video).
-Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.`;
+A strong clip:
+- Opens with a powerful hook within the first few seconds.
+- Creates curiosity immediately.
+- Is emotionally engaging, surprising, or counterintuitive.
+- Teaches something valuable or reframes how the viewer sees a topic.
+- Tells a complete mini-story: setup → tension → payoff.
+- Contains a quotable line worth captioning.
 
-const FOOTBALL_PROMPT =`You are an expert football video analyst.
+Avoid segments that:
+- Are sponsorships, promotions, or calls-to-action.
+- Repeat content that appears elsewhere in the video.
+- Open with long introductions or small talk.
+- Only work on screen (visual gags the transcript does not describe).
 
-Your task is to identify the exact moment when a goal is scored in a football match and extract the complete highlight sequence around that event.
+Scoring — use the full 0-100 scale consistently:
+- 90-100: exceptional, can't-scroll-past moment.
+- 70-89: strong clip, clear hook and payoff.
+- 50-69: good but flawed (slow open, missing payoff).
+- Below 50: weak; only return these if nothing better exists in the excerpt.
+Do NOT inflate every candidate; an honest spread makes ranking meaningful.
 
-## Objective
-Detect every legitimate goal and return the timestamps covering the entire goal moment.
+For every clip also return "peak": the timestamp (in SECONDS, absolute video time) of the single most intense, surprising, or quotable sentence inside the clip — the moment viewers would screenshot.
 
-A goal moment should include:
-1. The attacking build-up (5-15 seconds before the shot).
-2. The shot or finishing action.
-3. The ball completely crossing the goal line.
-4. Immediate player celebration.
-5. Crowd reaction (if available).
-6. Replay(s) (if available).
-7. Scoreboard update showing the new score (if visible).
-
-## Detection Signals
-
-A goal is likely when multiple signals occur together:
-
-### Visual
-- Ball enters the goal.
-- Net movement.
-- Goalkeeper fails to stop the ball.
-- Players celebrate.
-- Referee points to the center circle.
-- Scoreboard changes.
-- Replay transition appears.
-
-### Audio
-- Crowd suddenly becomes much louder.
-- Commentator raises excitement.
-- Words such as:
-  - Goal!
-  - It's in!
-  - What a finish!
-  - Scores!
-  - Incredible!
-  - Equalizer!
-  - Winner!
-
-### Context
-- Multiple camera angle changes.
-- Slow-motion replay.
-- Celebration lasting several seconds.
-
-## Ignore
-
-Do NOT detect:
-- Near misses.
-- Shots hitting the post.
-- Saved penalties.
-- Offside goals later disallowed.
-- Fouls without a goal.
-- Goal kicks.
-- Corner kicks without a goal.
-- Crowd cheering unrelated to a goal.
-
-IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video).
-Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.`;
-
-const MOTOGP_PROMT = `
-You are an expert Moto3 race video analyst.
-
-Analyze the video and identify the most exciting and important moments involving Veda Ega Pratama.
-Veda Ega Pratama is the PRIMARY SUBJECT.
-Prioritize moments where Veda Ega Pratama:
-
-- Overtakes another rider.
-- Is overtaken during an important battle.
-- Fights closely with other riders.
-- Rides side-by-side.
-- Makes a dramatic save.
-- Crashes or has a major incident.
-- Recovers from a difficult race position.
-- Gains or loses multiple positions.
-- Fights for the top 10, top 5, podium, or victory.
-- Makes a last-lap or final-corner move.
-- Experiences a mechanical problem.
-- Receives a penalty.
-- Is involved in a controversial incident.
-- Crosses the finish line in a significant position.
-- Celebrates a victory, podium, or important result.
-
-Do not classify normal riding or insignificant position changes as highlights.
-
-EVENT TYPES
-
-Classify important moments using one of these event types:
-
-"overtake"
-"close_battle"
-"crash"
-"dramatic_save"
-"final_lap"
-"race_winning_moment"
-"position_recovery"
-"mechanical_failure"
-"penalty"
-"controversial_incident"
-"celebration"
-"podium"
-DETECTION SIGNALS
-
-Use visual, audio, and broadcast signals together.
-
-Visual
-
-Look for:
-
-Veda Ega Pratama overtaking or being overtaken.
-Side-by-side battles.
-Very close gaps.
-Repeated overtaking attempts.
-Aggressive defensive riding.
-Crash, contact, or motorcycle sliding.
-Near-crash recovery.
-Major position changes.
-Yellow or red flags.
-Checkered flag.
-Finish-line crossing.
-Podium or celebration.
-Audio
-
-Pay attention to:
-
-Commentator mentioning Veda Ega Pratama.
-Excited commentary.
-Crowd reactions.
-Crash sounds.
-Commentary such as:
-"What an overtake!"
-"Unbelievable!"
-"Contact!"
-"Incredible save!"
-"Last lap!"
-"Final corner!"
-"He's won the race!"
-Broadcast
-
-Increase importance when:
-
-The camera focuses on Veda Ega Pratama.
-A replay or slow motion is shown.
-The same event is shown from multiple angles.
-Timing graphics show a major position change.
-Race direction or penalty graphics appear.
-CLIP TIMING
-
-Use these timing rules:
-Overtake
-Start 8-15 seconds before the overtake.
-End 5-10 seconds after the overtake.
-
-Crash
-
-Start 5-10 seconds before the incident.
-
-End 10-20 seconds after the incident.
-
-Dramatic Save
-
-Start 5-10 seconds before the save.
-
-End 5-10 seconds after the save.
-
-Close Battle
-
-Start 10-20 seconds before the most important action.
-
-End 5-15 seconds after the battle or decisive action.
-
-Final-Lap Battle
-
-Start 10-30 seconds before the decisive action.
-
-End 10-20 seconds after the finish or decisive moment.
-
-Celebration or Podium
-
-Start 10-20 seconds before the finish.
-
-End 15-30 seconds after the celebration begins.
-
-IMPORTANCE SCORE
-
-Calculate a score from 0.0 to 1.0.
-
-Consider:
-
-Importance to Veda Ega Pratama.
-Race position.
-Battle intensity.
-Risk level.
-Viewer excitement.
-Race outcome.
-Championship relevance.
-Commentator reaction.
-Crowd reaction.
-Replay or slow-motion coverage.
-
-Scoring:
-
-0.90-1.00: Legendary or race-defining moment.
-0.75-0.89: Major highlight.
-0.50-0.74: Interesting moment.
-<0.50: Minor event.
-
-Only return moments that are suitable for short-form video clips.
-
-DUPLICATE HANDLING
-
-If the same event appears from multiple camera angles or replays:
-
-Treat it as one event.
-Merge the full event duration into one clip.
-Do not create duplicate clips.
-RIDER IDENTIFICATION
-
-The primary rider should be:
-
-"Veda Ega Pratama"
-
-Use "unknown" when another rider cannot be identified.`
-
-/** Builds the system prompt sent to Ollama for every transcript chunk. */
-export function buildViralHighlightSystemPrompt(): string {
-  return SYSTEM_PROMPT;
+IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video). Return startTime and endTime as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return startTime: 533.`;
 }
 
-/** Builds the system prompt sent to Ollama for every transcript chunk. */
-export function buildGoalHighlightSystemPrompt(): string {
-  return FOOTBALL_PROMPT;
-}
-
-/** Builds the system prompt sent to Ollama for every transcript chunk. */
-export function buildMotoGpSystemPrompt(): string {
-  return MOTOGP_PROMT;
-}
 /**
  * Builds the user-turn prompt for a single transcript chunk: a timestamped
  * transcript excerpt the model must scan for candidate viral clips.
@@ -277,4 +61,79 @@ export function buildViralHighlightUserPrompt(chunk: TranscriptChunk): string {
     '',
     ...lines,
   ].join('\n');
+}
+
+// ── Second pass: global rerank of the top candidates ────────────────────────
+
+/**
+ * System prompt for the rerank pass. First-pass analysis judges each chunk in
+ * isolation; this pass sees ALL surviving candidates side by side and picks
+ * the true best-of-the-video set.
+ */
+export function buildRerankSystemPrompt(language?: string): string {
+  return `You are a senior short-form video editor selecting the final clip lineup for a video.
+
+You are given candidate clips that were found by scanning a long transcript chunk-by-chunk. Each candidate was judged in isolation, so scores are NOT comparable yet. Your job: compare all candidates against EACH OTHER and return only the ones strong enough to publish, ordered by real potential.
+
+Consider for every candidate:
+- Hook strength: does the opening line stop a scroll?
+- Complete arc: setup → tension → payoff within the clip.
+- Quotability and emotional punch.
+- Distinctness: drop near-duplicates that cover the same moment or make the same point.
+- Honesty of the original claim: downgrade candidates whose "reason" oversells a boring stretch.
+
+Return ONLY the candidates you would publish — dropping weak ones is expected and desired. Give each survivor a fresh, calibrated score on the full 0-100 scale reflecting this global comparison. You may sharpen "title", "reason" and "hook" but never invent facts that are not supported by the excerpts.${languageMetadataInstruction(language)}`;
+}
+
+/** One candidate as presented to (and echoed back by) the rerank pass. */
+export interface RerankCandidateInput {
+  id: string;
+  start: number;
+  end: number;
+  title: string;
+  reason: string;
+  hook: string;
+}
+
+/**
+ * Builds the user-turn prompt for the rerank pass: the candidate list plus the
+ * verbatim transcript text under each clip, so the model can judge substance
+ * instead of trusting the earlier summaries.
+ */
+export function buildRerankUserPrompt(params: {
+  videoTitle: string;
+  candidates: RerankCandidateInput[];
+  /** Verbatim transcript lines per candidate id. */
+  excerptById: Record<string, string>;
+}): string {
+  const blocks = params.candidates.map((candidate) => {
+    const excerpt = params.excerptById[candidate.id]?.trim() || '(transcript excerpt unavailable)';
+    return [
+      `[${candidate.id}] ${candidate.start.toFixed(2)}s-${candidate.end.toFixed(2)}s`,
+      `title: ${candidate.title}`,
+      `hook: ${candidate.hook}`,
+      `reason: ${candidate.reason}`,
+      'transcript:',
+      excerpt,
+    ].join('\n');
+  });
+
+  return [
+    `Video: ${params.videoTitle}`,
+    '',
+    `Candidates (${params.candidates.length}):`,
+    '',
+    ...blocks.flatMap((block, index) =>
+      index === 0 ? [block] : ['', '---', '', block],
+    ),
+  ].join('\n');
+}
+
+/**
+ * Metadata-language instruction shared by both passes. Empty when the output
+ * language is automatic — the model then matches the transcript naturally.
+ */
+function languageMetadataInstruction(language?: string): string {
+  if (!language || language === 'auto') return '';
+  return `\n\nWrite every "title", "reason" and "hook" in this language: ${language}.`;
 }
