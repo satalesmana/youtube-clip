@@ -16,8 +16,6 @@ import { AssService } from '../services/ass.service.js';
 import { NoOpFaceDetectionService } from '../services/face-detection.service.js';
 import { ReframeService } from '../services/reframe.service.js';
 import { ThumbnailService } from '../services/thumbnail.service.js';
-import { RendererService } from '../services/renderer.service.js';
-import { ProcessController } from '../controllers/process.controller.js';
 import { ContentAngleService } from '../content/angle.service.js';
 import { ScriptService } from '../content/script.service.js';
 import { VideoPlanService } from '../content/video-plan.service.js';
@@ -260,39 +258,6 @@ const templateRendererService = new TemplateRendererService(
   templateAssService,
   filtergraphService,
 );
-
-const rendererService = new RendererService(
-  {
-    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
-    clipsDir: paths.clips,
-    subtitlesDir: paths.subtitles,
-    thumbnailsDir: paths.thumbnails,
-    metadataDir: paths.clipMetadata,
-    tempDir: resolve(rootDir, 'outputs', 'temp'),
-    minDurationSeconds: env.CLIP_MIN_SECONDS,
-    maxDurationSeconds: env.CLIP_MAX_SECONDS,
-    maxConcurrency: env.CLIP_MAX_CONCURRENCY,
-    maxRetries: env.CLIP_MAX_RETRIES,
-  },
-  clipRefinementService,
-  subtitleService,
-  templateService,
-  templateRendererService,
-  reframeService,
-  thumbnailService,
-  createLogger('renderer.service'),
-);
-
-export const processController = new ProcessController({
-  youtubeService,
-  transcriptService,
-  whisperService,
-  ollamaService,
-  highlightService,
-  rendererService,
-  outputsDir: paths.outputs,
-  logger: createLogger('process.controller'),
-});
 
 // --- AI Viral Content Transformer: content pipeline (Sprint A) ---
 
@@ -567,8 +532,6 @@ export const container = {
   filtergraphService,
   templateService,
   templateRendererService,
-  rendererService,
-  processController,
   contentAngleService,
   scriptService,
   storyService,
