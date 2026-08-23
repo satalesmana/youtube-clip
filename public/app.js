@@ -212,7 +212,8 @@
   /** Builds one playable preview <video> element (or a placeholder). */
   function buildPreviewVideo(previewUrl, label) {
     if (!previewUrl) return '';
-    return `<video class="preview-video" src="${esc(previewUrl)}" controls preload="metadata" ${label ? `aria-label="${esc(label)}"` : ''}></video>`;
+    const cacheBusted = previewUrl + (previewUrl.includes('?') ? '&' : '?') + '_v=' + Date.now();
+    return `<video class="preview-video" src="${esc(cacheBusted)}" controls preload="metadata" ${label ? `aria-label="${esc(label)}"` : ''}></video>`;
   }
 
   function renderHooks(data) {
@@ -237,6 +238,7 @@
       item.dataset.hookId = hook.id;
 
       const headline = hook.headline?.text || '';
+      const tag = hook.headline?.tag || '';
       const spoken = hook.spokenHook?.text || '';
       const duration = hook.spokenHook?.duration;
       const score = hook.rankScore ?? hook.score?.final;
@@ -246,6 +248,7 @@
         buildPreviewVideo(hook.previewUrl, `Preview hook ${hook.rank}`) +
         `<div class="hook-rank">${hook.rank}</div>` +
         `<div class="hook-body">` +
+          `${tag ? `<div class="hook-tag" style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(255,225,53,0.18);color:#ffe135;margin-bottom:4px;border:1px solid rgba(255,225,53,0.3)">${esc(tag)}</div>` : ''}` +
           `<div class="hook-headline">${esc(headline)}</div>` +
           `${spoken && spoken !== headline ? `<div class="hook-spoken">“${esc(spoken)}”</div>` : ''}` +
           `<div class="hook-meta-row">` +
@@ -271,6 +274,38 @@
       item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } });
       list.appendChild(item);
     });
+  }
+
+  /**
+   * Fast design testing: Re-renders preview MP4s using the latest Remotion
+   * composition code without re-running any LLM calls.
+   */
+  async function rerenderHooks() {
+    const url = $('#transform-url').value.trim();
+    if (!url) {
+      toast('Masukkan URL YouTube dulu', 'error');
+      $('#transform-url').focus();
+      return;
+    }
+    const btn = $('#btn-rerender-hooks');
+    if (!btn) return;
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = '⏳ Rendering preview…';
+
+    try {
+      const data = await apiPost('/api/hooks/rerender', {
+        youtubeUrl: url,
+        candidateId: 0,
+      });
+      renderHooks(data);
+      toast('Preview video hook berhasil di-render ulang dengan desain terbaru!', 'success');
+    } catch (error) {
+      toast(`Gagal render ulang: ${error.message}`, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
   }
 
   /**
@@ -316,6 +351,7 @@
 
   $('#btn-gen-hooks').addEventListener('click', () => generateHooks(false));
   $('#btn-regen-hooks')?.addEventListener('click', () => generateHooks(true));
+  $('#btn-rerender-hooks')?.addEventListener('click', rerenderHooks);
 
   /** Hides the hook panel and drops any selection (URL changed / no cache). */
   function hideHookPanel() {
@@ -511,12 +547,26 @@
   });
 
   /* ---------- Research ---------- */
+  // Preset chip event handlers in Research tab
+  $$('.preset-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const kw = chip.dataset.keyword;
+      const subs = chip.dataset.subs;
+      if (kw) $('#res-keyword').value = kw;
+      if (subs) $('#res-subreddits').value = subs;
+      toast(`Preset "${chip.textContent.trim()}" diterapkan`, 'success');
+      // Highlight briefly
+      chip.classList.add('preset-active');
+      setTimeout(() => chip.classList.remove('preset-active'), 1200);
+    });
+  });
+
   $('#btn-research').addEventListener('click', async () => {
     const btn = $('#btn-research');
     btn.disabled = true;
     $('#research-results').classList.add('hidden');
     $('#research-error').classList.add('hidden');
-    setProgress('research', true, 8, 'Mengumpulkan sinyal dari RSS, Reddit, Trends & X…');
+    setProgress('research', true, 12, '📡 Mengumpulkan sinyal dari RSS, Reddit, Trends & X…');
 
     try {
       const body = {
@@ -531,10 +581,10 @@
       const selectedProviders = $$('.chip-toggle.active').map((c) => c.dataset.provider);
       if (selectedProviders.length > 0) body.providers = selectedProviders;
 
-      setProgress('research', true, 35, 'Menganalisis topik viral dengan AI…');
+      setProgress('research', true, 45, '🤖 Menganalisis & merangking topik viral dengan AI…');
       const data = await apiPost('/api/research', body);
-      setProgress('research', true, 90, 'Mencari video YouTube…');
-      await new Promise((r) => setTimeout(r, 300));
+      setProgress('research', true, 90, '🎬 Menemukan rekomendasi video YouTube…');
+      await new Promise((r) => setTimeout(r, 350));
       setProgress('research', false);
       renderResearch(data);
     } catch (error) {
@@ -551,51 +601,157 @@
     const trends = data.trends || [];
     list.innerHTML = '';
 
+    const countBadge = $('#research-count-badge');
+    if (countBadge) {
+      countBadge.textContent = `${trends.length} Topik`;
+    }
+
     $('#research-meta').textContent =
       `${trends.length} topik dari ${data.signalCount ?? 0} sinyal` +
       (data.skippedSources?.length
         ? ` · dilewati: ${data.skippedSources.map((s) => s.source).join(', ')}`
         : '');
 
-    trends.forEach((trend) => {
+    if (trends.length === 0) {
+      list.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px 20px;">
+          <div style="font-size: 36px; margin-bottom: 8px;">🔍</div>
+          <h3>Tidak Ada Topik Ditemukan</h3>
+          <p class="muted">Coba ganti kata kunci pencarian atau aktifkan lebih banyak provider sinyal.</p>
+        </div>`;
+      $('#research-results').classList.remove('hidden');
+      return;
+    }
+
+    trends.forEach((trend, idx) => {
       const card = document.createElement('div');
       card.className = 'trend-card';
 
-      const videos = (trend.videos || []).map((v) => `
-        <div class="video-row">
-          ${v.thumbnailUrl
-            ? `<img class="video-thumb" src="${esc(v.thumbnailUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`
-            : `<div class="video-thumb"></div>`}
-          <div class="video-info">
-            <div class="video-title" title="${esc(v.title)}">${esc(v.title)}</div>
-            <div class="video-meta">${esc(v.channel || '')}${v.viewCount != null ? ` · ${fmtViews(v.viewCount)} views` : ''}${v.durationSeconds != null ? ` · ${fmtDuration(v.durationSeconds)}` : ''}</div>
-          </div>
-          <div class="video-actions">
-            <button class="btn ghost small" data-action="clip" data-url="${esc(v.url)}">Buat Klip</button>
-            <button class="btn ghost small" data-action="copy" data-url="${esc(v.url)}">Salin URL</button>
-          </div>
-        </div>`).join('') || '<p class="muted">Tidak ada video ditemukan.</p>';
+      // Virality Score styling
+      const score = Number(trend.score ?? 0);
+      let scoreClass = 'score-high';
+      let scoreEmoji = '🔥';
+      if (score < 60) {
+        scoreClass = 'score-low';
+        scoreEmoji = '📈';
+      } else if (score < 80) {
+        scoreClass = 'score-mid';
+        scoreEmoji = '⚡';
+      }
+
+      // Keywords list
+      const kwList = (trend.keywords || '')
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean);
+
+      const kwHtml = kwList.length
+        ? `<div class="trend-keywords-wrap">
+            <span class="kw-label">🏷️ Keyword:</span>
+            <div class="trend-keywords-list">
+              ${kwList.map((kw) => `<span class="trend-kw-chip" title="Gunakan keyword ini">${esc(kw)}</span>`).join('')}
+            </div>
+           </div>`
+        : '';
+
+      // Sources badges
+      const sourcesSet = new Set((trend.sources || []).map((s) => s.source).filter(Boolean));
+      const sourceIcons = {
+        rss: '📰 RSS',
+        reddit: '🤖 Reddit',
+        trends: '📈 Trends',
+        x: '🐦 X',
+      };
+      const sourceBadges = Array.from(sourcesSet)
+        .map((src) => `<span class="trend-source-pill">${sourceIcons[src] || esc(src)}</span>`)
+        .join('');
+
+      // Videos grid
+      const videos = trend.videos || [];
+      const videosHtml = videos.length
+        ? `<div class="trend-videos-container">
+            <div class="trend-videos-header">
+              <span class="trend-videos-title">🎬 Rekomendasi Video YouTube (${videos.length})</span>
+              <span class="trend-videos-subtitle">Pilih video untuk ditransformasikan jadi klip 9:16</span>
+            </div>
+            <div class="videos-grid">
+              ${videos.map((v) => `
+                <div class="video-card">
+                  <div class="video-card-thumb-wrap">
+                    ${v.thumbnailUrl
+                      ? `<img class="video-card-thumb" src="${esc(v.thumbnailUrl)}" alt="" loading="lazy" onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\\\'video-card-placeholder\\\'>🎬</div>'">`
+                      : `<div class="video-card-placeholder">🎬</div>`}
+                    ${v.durationSeconds != null ? `<span class="video-card-duration">${fmtDuration(v.durationSeconds)}</span>` : ''}
+                  </div>
+                  <div class="video-card-body">
+                    <div class="video-card-title" title="${esc(v.title)}">${esc(v.title)}</div>
+                    <div class="video-card-meta">
+                      ${v.channel ? `<span class="video-card-channel" title="${esc(v.channel)}">👤 ${esc(v.channel)}</span>` : ''}
+                      ${v.viewCount != null ? `<span class="video-card-views">👁️ ${fmtViews(v.viewCount)}</span>` : ''}
+                    </div>
+                    <div class="video-card-actions">
+                      <button type="button" class="btn primary small" data-action="clip" data-url="${esc(v.url)}" title="Pakai video ini di tab Transform">
+                        ⚡ Buat Klip
+                      </button>
+                      <button type="button" class="btn ghost small" data-action="copy" data-url="${esc(v.url)}" title="Salin URL YouTube">
+                        📋 Salin
+                      </button>
+                      <a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer" class="btn ghost small icon-only-btn" title="Buka di YouTube">
+                        ↗️
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>`
+        : `<div class="trend-no-videos">
+            <p class="muted">Belum ada video YouTube yang otomatis cocok untuk topik ini.</p>
+           </div>`;
 
       card.innerHTML = `
         <div class="trend-head">
-          <div class="score-badge">${trend.score ?? 0}</div>
-          <div style="flex:1; min-width:0">
+          <div class="trend-rank">#${idx + 1}</div>
+          <div class="trend-title-box">
             <div class="trend-title">${esc(trend.title)}</div>
-            <span class="trend-cat">${esc(trend.category || 'other')}</span>
+            <div class="trend-meta-badges">
+              <span class="trend-cat">${esc(trend.category || 'Trending')}</span>
+              ${sourceBadges}
+            </div>
+          </div>
+          <div class="score-badge ${scoreClass}">
+            <span class="score-val">${scoreEmoji} ${score}</span>
+            <span class="score-lbl">VIRAL SCORE</span>
           </div>
         </div>
-        ${trend.summary ? `<p class="trend-summary">${esc(trend.summary)}</p>` : ''}
-        ${trend.keywords ? `<p class="trend-keywords">🔑 <code>${esc(trend.keywords)}</code></p>` : ''}
-        <div class="videos">${videos}</div>`;
+
+        ${trend.summary ? `
+          <div class="trend-summary-box">
+            <div class="trend-summary-title">💡 Mengapa Topik Ini Viral:</div>
+            <p class="trend-summary-text">${esc(trend.summary)}</p>
+          </div>` : ''}
+
+        ${kwHtml}
+        ${videosHtml}
+      `;
 
       list.appendChild(card);
+    });
+
+    // Add click handler for keyword chips to quickly populate search input
+    $$('.trend-kw-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        $('#res-keyword').value = chip.textContent.trim();
+        toast(`Keyword "${chip.textContent.trim()}" diset ke pencarian`, 'success');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     });
 
     $('#research-results').classList.remove('hidden');
   }
 
   /* ---------- Transform Pipeline ---------- */
-  $('#btn-transform').addEventListener('click', async () => {
+  async function runTransform(triggerBtn) {
     const url = $('#transform-url').value.trim();
     if (!url) {
       toast('Masukkan URL YouTube dulu', 'error');
@@ -603,15 +759,15 @@
       return;
     }
 
-    const btn = $('#btn-transform');
-    btn.disabled = true;
+    const btn = triggerBtn || $('#btn-transform');
+    if (btn) btn.disabled = true;
     $('#transform-results').classList.add('hidden');
     $('#transform-error').classList.add('hidden');
     $('#transform-stages').classList.remove('hidden');
 
     // Reel mode needs at least one selected viral clip.
     if (($('#transform-output-mode')?.value || 'narration') === 'reel' && clipState.selected.size === 0) {
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
       toast('Mode Reel: pilih minimal 1 klip viral dulu (Step 4)', 'error');
       $('#clip-panel').classList.remove('hidden');
       $('#clip-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -632,10 +788,8 @@
     setProgress('transform', true, 0, 'Menyiapkan…');
 
     try {
-      const engine = $('#transform-engine')?.value || 'commentary';
-      const template = engine === 'remotion'
-        ? ($('#transform-style')?.value || 'commentary')
-        : engine;
+      const engine = $('#transform-engine')?.value || 'ffmpeg';
+      const style = $('#transform-style')?.value || 'commentary';
       const outputMode = $('#transform-output-mode')?.value || 'narration';
       // Mode Reel tidak memakai engine/STT/bahasa/TTS/channel/badge —
       // field tersebut hanya dikirim di mode Narasi.
@@ -658,7 +812,9 @@
           }
         : {
             youtubeUrl: url,
-            template,
+            engine,
+            style,
+            template: style,
             language: $('#transform-lang').value || 'auto',
             sttProvider: $('#transform-stt-provider').value || undefined,
             ttsProvider: $('#transform-tts-provider').value || undefined,
@@ -732,27 +888,13 @@
                 setProgress('transform', false);
                 renderTransformResult(payload);
               } else if (eventName === 'error') {
-                if (prevStage) setStageStatus(prevStage, 'error');
                 setProgress('transform', false);
                 $('#transform-error').classList.remove('hidden');
-                $('#transform-error-msg').textContent = payload.message;
+                $('#transform-error-msg').textContent = payload.message || 'Transform gagal';
               }
-            } catch { /* malformed event */ }
-          }
-        }
-        // Process any remaining buffer
-        if (buffer.trim()) {
-          let eventName = '', data = '';
-          for (const line of buffer.split('\n')) {
-            if (line.startsWith('event: ')) eventName = line.slice(7);
-            else if (line.startsWith('data: ')) data = line.slice(6);
-          }
-          if (eventName === 'result' && data) {
-            try {
-              if (prevStage) setStageStatus(prevStage, 'done');
-              setProgress('transform', false);
-              renderTransformResult(JSON.parse(data));
-            } catch { /* ignore */ }
+            } catch {
+              // Non-JSON payload
+            }
           }
         }
       } else {
@@ -774,9 +916,11 @@
       $('#transform-error').classList.remove('hidden');
       $('#transform-error-msg').textContent = error.message;
     } finally {
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
     }
-  });
+  }
+
+  $('#btn-transform').addEventListener('click', () => runTransform());
 
   function stageLabel(stage) {
     const labels = {
@@ -805,13 +949,35 @@
     const card = document.createElement('div');
     card.className = 'transform-result';
 
-    const videoUrl = result.outputVideo?.url || result.outputVideo || '';
+    const rawVideoUrl = result.outputVideo?.url || result.outputVideo || '';
+    const videoUrl = rawVideoUrl
+      ? rawVideoUrl + (rawVideoUrl.includes('?') ? '&' : '?') + '_v=' + Date.now()
+      : '';
     const narrationUrl = result.narration?.url || '';
     const scriptData = result.script || {};
     const angleData = result.angle || {};
     const storyData = result.story || {};
     const planData = result.videoPlan || {};
     const isReel = result.outputMode === 'reel';
+
+    // Build reel warning banners
+    const reelWarnings = [];
+    if (isReel) {
+      const dropped = result.reel?.droppedClips ?? [];
+      if (dropped.length > 0) {
+        const names = dropped
+          .map((c) => c.title ? `"${esc(c.title)}" (${fmtDuration(c.start)}–${fmtDuration(c.end)})` : `${fmtDuration(c.start)}–${fmtDuration(c.end)}`)
+          .join(', ');
+        reelWarnings.push(
+          `⚠️ <strong>${dropped.length} klip dihapus</strong> karena overlap dengan hook intro atau klip lain: ${names}`,
+        );
+      }
+      if (result.reel?.hookPreviewMissing) {
+        reelWarnings.push(
+          '⚠️ File preview hook intro tidak ditemukan di server — hook dipotong ulang dari video sumber.',
+        );
+      }
+    }
 
     card.innerHTML = `
       <div class="transform-head">
@@ -823,12 +989,14 @@
           <div class="transform-meta">
             ${result.jobId ? `<span class="chip">Job: ${esc(result.jobId.slice(0, 8))}…</span>` : ''}
             ${planData.duration ? `<span class="chip">${fmtDuration(planData.duration)}</span>` : ''}
-            ${result.reel?.durationSeconds ? `<span class="chip">${fmtDuration(result.reel.durationSeconds)} · ${result.reel.clipCount} klip</span>` : ''}
+            ${result.reel?.durationSeconds ? `<span class="chip">${fmtDuration(result.reel.durationSeconds)} · ${result.reel.clipCount} klip${result.reel.hasIntro ? ' + intro' : ''}</span>` : ''}
+            ${result.reel?.usedHookIntro ? '<span class="chip">✅ Hook intro dipakai</span>' : ''}
             ${result.dryRun ? '<span class="chip">Dry Run</span>' : ''}
           </div>
+          ${reelWarnings.length > 0 ? `<div class="reel-warnings">${reelWarnings.map((w) => `<div class="reel-warning">${w}</div>`).join('')}</div>` : ''}
           ${isReel
             ? (result.reel?.segments || []).map((s, i) => `
-                <div class="transform-angle">Klip ${i + 1}: ${fmtDuration(s.start)}–${fmtDuration(s.end)} dari sumber</div>`).join('')
+                <div class="transform-angle">Klip ${i + 1}: ${fmtDuration(s.start)}–${fmtDuration(s.end)} · ⏱ ${fmtDuration(s.end - s.start)}${s.kind === 'intro' ? ' (hook intro)' : ''}</div>`).join('')
             : ''}
           ${!isReel && angleData.title ? `<div class="transform-angle">Angle: ${esc(angleData.title)}</div>` : ''}
           ${!isReel && result.storyApplied === false ? '<div class="transform-angle" style="color:var(--muted)">⚠️ Story beats tidak diterapkan (analisis cerita gagal) — struktur video memakai pembagian merata</div>' : ''}
@@ -865,7 +1033,13 @@
     list.appendChild(card);
     $('#transform-results').classList.remove('hidden');
     $('#transform-meta').textContent = '1 job selesai';
-    toast('Transformasi berhasil!', 'success');
+
+    // Toast dengan info klip yang dibuang jika ada
+    if (isReel && (result.reel?.droppedClips?.length ?? 0) > 0) {
+      toast(`Reel selesai — ${result.reel.droppedClips.length} klip dihapus karena overlap`, 'error');
+    } else {
+      toast('Transformasi berhasil!', 'success');
+    }
   }
 
   /* ---------- Rights & Quality ---------- */
@@ -1087,14 +1261,41 @@
   /* ---------- Init ---------- */
   checkHealth();
 
-  // Show/hide Remotion style selector based on engine selection
+  // Dynamic style options per engine (FFmpeg vs Remotion)
+  const ENGINE_STYLES = {
+    ffmpeg: [
+      { value: 'commentary', label: 'Commentary' },
+      { value: 'sports', label: 'Sports News' },
+      { value: 'interview', label: 'Interview' },
+    ],
+    remotion: [
+      { value: 'commentary', label: 'Commentary' },
+      { value: 'sports', label: 'Sports News' },
+      { value: 'interview', label: 'Interview' },
+    ],
+  };
+
   const engineSelect = $('#transform-engine');
-  const styleGroup = $('#remotion-style-group');
-  if (engineSelect && styleGroup) {
-    engineSelect.addEventListener('change', (e) => {
-      const isRemotion = e.target.value === 'remotion';
-      styleGroup.classList.toggle('hidden', !isRemotion);
-    });
+  const styleSelect = $('#transform-style');
+
+  function syncEngineStyles() {
+    if (!engineSelect || !styleSelect) return;
+    const currentEngine = engineSelect.value || 'ffmpeg';
+    const styles = ENGINE_STYLES[currentEngine] || ENGINE_STYLES.ffmpeg;
+    const currentStyle = styleSelect.value;
+
+    styleSelect.innerHTML = styles
+      .map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`)
+      .join('');
+
+    if (styles.some((s) => s.value === currentStyle)) {
+      styleSelect.value = currentStyle;
+    }
+  }
+
+  if (engineSelect) {
+    engineSelect.addEventListener('change', syncEngineStyles);
+    syncEngineStyles();
   }
 
   // Mesin Transkrip (STT) ↔ tombol aksi: setiap perubahan engine langsung

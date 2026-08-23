@@ -34,53 +34,88 @@
     <section id="tab-research" class="tab-panel active">
       <div class="card">
         <div class="card-head">
-          <h2>🔍 Riset Topik Viral</h2>
-          <p class="muted">Kumpulkan sinyal dari RSS berita, Reddit, Google Trends & X, lalu ranking dengan AI.</p>
+          <div class="card-head-title">
+            <h2>🔍 Riset Topik Viral & Trend Spotter</h2>
+            <span class="head-badge">AI Powered</span>
+          </div>
+          <p class="muted">Kumpulkan sinyal multi-sumber dari Google Trends, RSS Berita, Reddit & X/Twitter, lalu ranking otomatis dan temukan video YouTube siap transformasi.</p>
         </div>
+
+        <!-- Quick Presets -->
+        <div class="research-presets">
+          <span class="preset-label">⚡ Preset Cepat:</span>
+          <div class="preset-chips">
+            <button type="button" class="preset-chip" data-keyword="teknologi AI kecerdasan buatan" data-subs="technology,artificial,singularity">🤖 AI & Teknologi</button>
+            <button type="button" class="preset-chip" data-keyword="sepak bola olahraga timnas highlight" data-subs="soccer,sports">⚽ Olahraga & Bola</button>
+            <button type="button" class="preset-chip" data-keyword="bisnis investasi pasar ekonomi crypto" data-subs="finance,business,investing">💼 Bisnis & Finansial</button>
+            <button type="button" class="preset-chip" data-keyword="gaming update esports game viral" data-subs="gaming,games">🎮 Gaming & Esports</button>
+            <button type="button" class="preset-chip" data-keyword="berita viral heboh trending indonesia" data-subs="indonesia">🔥 Trending Indonesia</button>
+          </div>
+        </div>
+
         <div class="research-controls">
-          <label>
-            Jumlah topik
-            <input type="number" id="res-max-trends" min="1" max="25" value="10" />
-          </label>
-          <label>
-            Bahasa
-            <select id="res-language">
-              <option value="auto">Auto</option>
-              <option value="id">Indonesia</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-          <label class="wide">
-            Keyword pencarian (Google News)
-            <input type="text" id="res-keyword" placeholder="misal: teknologi AI, politik Indonesia, Piala Dunia" />
-          </label>
-          <label class="wide">
-            Subreddit (pisahkan koma)
-            <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
-          </label>
-          <label class="wide">
-            Provider riset
-            <div class="provider-chips" id="res-providers">
-              <button type="button" class="chip-toggle active" data-provider="rss">📰 RSS Berita</button>
-              <button type="button" class="chip-toggle active" data-provider="reddit">🤖 Reddit</button>
-              <button type="button" class="chip-toggle active" data-provider="trends">📈 Google Trends</button>
-              <button type="button" class="chip-toggle active" data-provider="x">🐦 X/Twitter</button>
+          <div class="form-row">
+            <div class="input-group">
+              <label class="label-main" for="res-max-trends">Jumlah Topik (Max)</label>
+              <input type="number" id="res-max-trends" min="1" max="25" value="10" />
             </div>
-          </label>
-          <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
+            <div class="input-group">
+              <label class="label-main" for="res-language">Bahasa Analisis</label>
+              <select id="res-language">
+                <option value="auto">Auto (Sesuai Sumber)</option>
+                <option value="id" selected>Indonesia (ID)</option>
+                <option value="en">English (EN)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="input-group">
+              <label class="label-main" for="res-keyword">
+                Keyword Pencarian <span class="optional">(Google News & Trends)</span>
+              </label>
+              <input type="text" id="res-keyword" placeholder="misal: teknologi AI, Timnas Indonesia, gadget baru…" />
+            </div>
+            <div class="input-group">
+              <label class="label-main" for="res-subreddits">
+                Target Subreddit <span class="optional">(pisahkan koma)</span>
+              </label>
+              <input type="text" id="res-subreddits" placeholder="worldnews, indonesia, technology" />
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label class="label-main">Sumber Sinyal Riset</label>
+            <div class="provider-chips" id="res-providers">
+              <button type="button" class="chip-toggle active" data-provider="rss"><span class="chip-icon">📰</span> RSS Berita</button>
+              <button type="button" class="chip-toggle active" data-provider="reddit"><span class="chip-icon">🤖</span> Reddit Hot</button>
+              <button type="button" class="chip-toggle active" data-provider="trends"><span class="chip-icon">📈</span> Google Trends</button>
+              <button type="button" class="chip-toggle active" data-provider="x"><span class="chip-icon">🐦</span> X / Twitter</button>
+            </div>
+          </div>
+
+          <div class="research-action-row">
+            <button class="btn primary full" id="btn-research">🚀 Mulai Riset Topik Viral</button>
+          </div>
         </div>
+
         <div class="progress hidden" id="research-progress">
           <div class="progress-bar"><div class="progress-fill" id="research-progress-fill"></div></div>
-          <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal…</span>
+          <div class="progress-status-row">
+            <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal multi-sumber…</span>
+          </div>
         </div>
       </div>
 
       <div id="research-results" class="results hidden">
         <div class="results-head">
-          <h2>📊 Topik Terdeteksi</h2>
+          <div class="results-title-group">
+            <h2>📊 Topik Viral Terdeteksi</h2>
+            <span class="results-badge" id="research-count-badge">0 Topik</span>
+          </div>
           <span class="muted" id="research-meta"></span>
         </div>
-        <div id="research-list"></div>
+        <div id="research-list" class="research-list-container"></div>
       </div>
 
       <div class="card error-card hidden" id="research-error">
@@ -152,6 +187,7 @@
               <div class="hook-panel-head">
                 <span class="hook-panel-title">🎯 Hasil Hook</span>
                 <div style="display:flex;gap:6px">
+                  <button class="btn small ghost" id="btn-rerender-hooks" title="Render ulang preview video hook dengan layout terbaru (tanpa panggil LLM ulang)">🎨 Test Render Preview</button>
                   <button class="btn small ghost" id="btn-regen-hooks" title="Jalankan ulang pipeline hook (abaikan cache)">🔄 Generate ulang</button>
                   <button class="btn small ghost" id="btn-clear-hook">✕ Bersihkan pilihan</button>
                 </div>
@@ -220,16 +256,14 @@
                 <div class="input-group">
                   <label class="label-main">Engine</label>
                   <select id="transform-engine">
-                    <option value="commentary" selected>FFmpeg — Commentary</option>
-                    <option value="sports">FFmpeg — Sports News</option>
-                    <option value="interview">FFmpeg — Interview</option>
+                    <option value="ffmpeg" selected>FFmpeg</option>
                     <option value="remotion">Remotion</option>
                   </select>
                 </div>
-                <div class="input-group hidden" id="remotion-style-group">
+                <div class="input-group" id="transform-style-group">
                   <label class="label-main">Style</label>
                   <select id="transform-style">
-                    <option value="commentary">Commentary</option>
+                    <option value="commentary" selected>Commentary</option>
                     <option value="sports">Sports News</option>
                     <option value="interview">Interview</option>
                   </select>
