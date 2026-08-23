@@ -28,6 +28,10 @@ export const transformRequestSchema = z.object({
   customAngleTitle: z.string().optional(),
   /** Custom hook text, overriding LLM-generated hooks. */
   customHook: z.string().optional(),
+  /** Composition engine selection (`ffmpeg` or `remotion`). */
+  engine: z.enum(['ffmpeg', 'remotion', 'ffmpeg-template']).optional(),
+  /** Visual style selection (`commentary`, `sports`, `interview`). */
+  style: z.enum(['commentary', 'sports', 'interview']).optional(),
   /** Template id (defaults to `commentary`). */
   template: z.string().optional(),
   /** Channel branding (name + optional logo path). */

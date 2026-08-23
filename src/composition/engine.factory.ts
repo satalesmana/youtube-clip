@@ -18,9 +18,9 @@ export interface CompositionEngineFactoryOptions {
 /**
  * Factory for creating composition engines.
  *
- * Returns the appropriate engine based on the `engine` option:
- * - 'ffmpeg-template' (default): Uses existing template renderer
- * - 'remotion': Uses Remotion for advanced compositions
+ * Provides a unified engine that delegates per-request based on `assets.engine`
+ * ('remotion' | 'ffmpeg' | 'ffmpeg-template') or falls back to the default
+ * engine configured in options.
  */
 export function createCompositionEngine(options: CompositionEngineFactoryOptions): ICompositionEngine {
   const {
@@ -32,20 +32,27 @@ export function createCompositionEngine(options: CompositionEngineFactoryOptions
     logger = createLogger('composition'),
   } = options;
 
-  switch (engine) {
-    case 'remotion':
-      return new RemotionCompositionEngine({
-        compositionsDir,
-        outputsDir,
-        logger,
-      });
-    case 'ffmpeg-template':
-    default:
-      return new FfmpegTemplateCompositionEngine(
-        templateService,
-        templateRendererService,
-        outputsDir,
-        logger,
-      );
-  }
+  const remotionEngine = new RemotionCompositionEngine({
+    compositionsDir,
+    outputsDir,
+    logger,
+  });
+
+  const ffmpegEngine = new FfmpegTemplateCompositionEngine(
+    templateService,
+    templateRendererService,
+    outputsDir,
+    logger,
+  );
+
+  return {
+    kind: engine,
+    async render(plan, assets) {
+      const selectedEngine = assets.engine ?? engine;
+      if (selectedEngine === 'remotion' || assets.templateId === 'remotion') {
+        return remotionEngine.render(plan, assets);
+      }
+      return ffmpegEngine.render(plan, assets);
+    },
+  };
 }

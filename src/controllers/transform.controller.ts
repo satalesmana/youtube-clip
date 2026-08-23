@@ -394,8 +394,9 @@ export class TransformController {
     const hookRange = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
       ? { start: request.sourceRange.start, end: request.sourceRange.end }
       : undefined;
+    const templateOrStyle = request.style ?? request.template ?? 'commentary';
     const outputVideo = await this.renderVideo(
-      videoPath, videoId, jobId, request.template ?? 'commentary', videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange,
+      videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine,
     );
 
     return {
@@ -456,6 +457,10 @@ export class TransformController {
     const intro = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
       ? { start: request.sourceRange.start, end: request.sourceRange.end }
       : undefined;
+    // Check whether the styled hook intro file (from a previous render) is
+    // still accessible on disk. When missing, we fall back to re-cutting the
+    // sourceRange from the source video and expose the miss in the response so
+    // the UI can display a clear warning instead of silently omitting the hook.
     let hookIntroFile: string | undefined;
     if (request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
       const { access } = await import('node:fs/promises');
@@ -463,6 +468,10 @@ export class TransformController {
         .then(() => request.hookPreviewPath)
         .catch(() => undefined);
     }
+    const hookPreviewMissing = Boolean(
+      request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4') && !hookIntroFile,
+    );
+
     const segments = planReelSegments({
       intro,
       clips: request.selectedClips.map((clip) => ({ start: clip.start, end: clip.end })),
@@ -470,6 +479,18 @@ export class TransformController {
     if (segments.length === 0) {
       throw AppError.validation('All selected clips have an empty time range.');
     }
+
+    // Build the list of original clips that were fully dropped or trimmed away
+    // by the anti-repeat logic so the response can inform the UI.
+    // A clip is considered "dropped" when the planner produced no output segment
+    // whose (start, end) range overlaps the original clip's range.
+    const droppedClips = request.selectedClips.filter((clip) => {
+      const kept = segments.some(
+        (s) => s.kind === 'clip' && s.start < clip.end && s.end > clip.start,
+      );
+      return !kept;
+    });
+
     // Swap the planned intro range for the styled file when available.
     const composeSegments: ReelSegment[] = hookIntroFile
       ? segments.map((segment) =>
@@ -482,11 +503,17 @@ export class TransformController {
     this.emit('angle', { skipped: true });
     this.emit('story', { skipped: true });
 
-    const droppedCount = request.selectedClips.filter(
-      (clip) => !segments.some((s) => s.kind === 'clip' && s.start === clip.start),
-    ).length;
     logger.info(
-      { jobId, videoId, hasIntro: Boolean(intro), introFromFile: Boolean(hookIntroFile), requestedClips: request.selectedClips.length, keptSegments: segments.length, droppedCount },
+      {
+        jobId,
+        videoId,
+        hasIntro: Boolean(intro),
+        introFromFile: Boolean(hookIntroFile),
+        hookPreviewMissing,
+        requestedClips: request.selectedClips.length,
+        keptSegments: segments.filter((s) => s.kind === 'clip').length,
+        droppedCount: droppedClips.length,
+      },
       'Rendering reel (hook intro + direct clip join)',
     );
 
@@ -527,8 +554,22 @@ export class TransformController {
       candidateId: request.candidateId,
       outputMode: 'reel' as const,
       reel: {
-        clipCount: segments.length,
+        clipCount: segments.filter((s) => s.kind === 'clip').length,
+        hasIntro: Boolean(intro),
+        /** True when the styled hook intro file was used verbatim (WYSIWYG). */
+        usedHookIntro: Boolean(hookIntroFile),
+        /**
+         * True when the caller sent a hookPreviewPath that no longer exists on
+         * disk — the intro was re-cut from sourceRange instead.
+         */
+        hookPreviewMissing,
         segments,
+        /**
+         * Clips the user selected that were fully removed by the anti-repeat
+         * guard (they fully overlapped the hook intro or an earlier clip).
+         * The UI should surface these so the user knows their selection changed.
+         */
+        droppedClips: droppedClips.map((c) => ({ start: c.start, end: c.end, title: c.title })),
         durationSeconds: reel.durationSeconds,
         sizeBytes: reel.sizeBytes,
       },
@@ -569,6 +610,7 @@ export class TransformController {
     transcript?: TranscriptDocument | null,
     /** The chosen hook's source range — drives the fallback path's footage trim. */
     hookRange?: { start: number; end: number },
+    engine?: TransformRequestInput['engine'],
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
     const { ensureDir } = await import('../utils/fs.js');
@@ -589,6 +631,7 @@ export class TransformController {
       channelName: channel?.name,
       hookBadge,
       videoId,
+      engine,
       style: this.toCompositionStyle(templateId),
       templateId,
     };
