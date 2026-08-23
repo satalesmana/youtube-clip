@@ -91,6 +91,10 @@ export interface HookCandidate {
     text: string;
     /** Visual treatment hint for the rendering engine (e.g. "kinetic"). */
     style: string;
+    /** Category tag pill (e.g. "🔥 MOMEN VIRAL", "⚡ DETIK KRUSIAL"). */
+    tag?: string;
+    /** Words inside the headline to highlight in accent color. */
+    highlightWords?: string[];
   };
 
   /**

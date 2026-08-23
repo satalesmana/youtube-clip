@@ -21,6 +21,10 @@ export const hookCandidateLlmSchema = z.object({
   style: hookStyleSchema,
   headline: z.string().min(3),
   spokenHook: z.string().min(3),
+  /** Short category / pattern-interrupt badge tag (e.g. "🔥 MOMEN VIRAL", "⚡ DETIK KRUSIAL"). */
+  tag: z.string().optional(),
+  /** 1-2 emotional punch words from the headline to highlight in accent color. */
+  highlightWords: z.array(z.string()).optional(),
   /** Source footage range in absolute seconds of the source video. */
   sourceStart: z.number().min(0),
   sourceEnd: z.number().min(0),

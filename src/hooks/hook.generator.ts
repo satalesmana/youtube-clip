@@ -115,6 +115,8 @@ export class HookGenerator implements IHookGenerator {
             headline: {
               text: item.headline,
               style: 'kinetic',
+              tag: item.tag,
+              highlightWords: item.highlightWords,
             },
             spokenHook: {
               text: item.spokenHook,

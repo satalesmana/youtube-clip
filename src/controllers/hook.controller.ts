@@ -173,6 +173,8 @@ export class HookController {
                 end: hook.source.end,
                 durationSeconds: hook.spokenHook?.duration > 0 ? hook.spokenHook.duration : 4,
                 headlineText: hook.headline?.text || '',
+                tag: hook.headline?.tag,
+                highlightWords: hook.headline?.highlightWords,
                 themeSeed: `${videoId}:${hook.style ?? 'default'}`,
                 outputDir: previewsDir,
                 fileName,
@@ -260,6 +262,72 @@ export class HookController {
       throw AppError.validation(`No saved hooks for video "${videoId}". Run POST /api/hooks/generate first.`);
     }
     return saved;
+  }
+
+  /**
+   * Fast design testing: re-renders styled preview MP4s for all saved hooks of
+   * a video using the current Remotion composition layout without calling the
+   * LLM or re-running candidate generation/scoring.
+   */
+  async rerenderPreviews(request: { youtubeUrl?: string; videoId?: string; candidateId?: number }): Promise<HookGenerateResponse> {
+    const videoId = this.resolveVideoId(request);
+    if (!videoId) throw AppError.validation('Provide youtubeUrl or videoId.');
+    const candidateId = request.candidateId ?? 0;
+
+    const saved = await this.loadSaved(videoId, candidateId);
+    if (!saved || !saved.hooks?.length) {
+      throw AppError.validation(`No saved hooks found for "${videoId}". Generate hooks first.`);
+    }
+
+    const job = await this.workspaceFor(videoId);
+    const previewsDir = join(job.root, 'hook-previews');
+    const videoPath = join(job.root, 'downloads', `${videoId}.mp4`);
+
+    if (this.deps.styledPreviewRenderer || this.deps.previewRenderer) {
+      const settled = await Promise.allSettled(
+        saved.hooks.map((hook, index) => {
+          const fileName = `final-hook-${String(index + 1).padStart(2, '0')}`;
+          const styled = this.deps.styledPreviewRenderer;
+          if (styled) {
+            return styled.render({
+              videoPath,
+              start: hook.source.start,
+              end: hook.source.end,
+              durationSeconds: hook.spokenHook?.duration > 0 ? hook.spokenHook.duration : 4,
+              headlineText: hook.headline?.text || '',
+              tag: hook.headline?.tag,
+              highlightWords: hook.headline?.highlightWords,
+              themeSeed: `${videoId}:${hook.style ?? 'default'}`,
+              outputDir: previewsDir,
+              fileName,
+            }).catch(async (styledErr) => {
+              this.deps.logger.warn(
+                { err: styledErr, rank: hook.rank },
+                'Styled hook preview failed during re-render — falling back to raw cut',
+              );
+              return this.renderRawPreview(hook, videoPath, previewsDir);
+            });
+          }
+          return this.renderRawPreview(hook, videoPath, previewsDir);
+        }),
+      );
+
+      saved.hooks.forEach((hook, index) => {
+        const outcome = settled[index];
+        if (outcome?.status === 'fulfilled' && outcome.value) {
+          const { path, durationSeconds } = outcome.value;
+          hook.previewUrl = toMediaUrl(this.deps.outputsDir, path);
+          if (path.includes('final-hook-')) {
+            hook.finalDurationSeconds = durationSeconds;
+            hook.previewPath = path;
+          }
+        }
+      });
+    }
+
+    saved.generatedAt = new Date().toISOString();
+    await this.saveResult(videoId, candidateId, saved);
+    return { ...saved, cached: false };
   }
 
   /** Legacy raw-cut preview (PreviewRendererService), shaped like the styled one. */

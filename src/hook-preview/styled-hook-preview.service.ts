@@ -27,6 +27,8 @@ export interface StyledHookPreviewInput {
   durationSeconds: number;
   /** On-screen kinetic headline (= RankedHook.headline.text). */
   headlineText: string;
+  /** Optional category/pattern-interrupt tag (e.g. "🔥 MOMEN VIRAL"). */
+  tag?: string;
   /** Words rendered in accent color inside the headline. */
   highlightWords?: string[];
   /** Social-proof badge shown for ~2s (e.g. "10RB+ Views"). */
@@ -83,6 +85,7 @@ export class StyledHookPreviewService {
       hook: {
         duration: Math.max(1, input.durationSeconds),
         headlineText: input.headlineText,
+        ...(input.tag ? { tag: input.tag } : {}),
         ...(input.highlightWords?.length ? { highlightWords: input.highlightWords } : {}),
         ...(input.badge ? { badge: input.badge } : {}),
         ...(input.channelName ? { channelName: input.channelName } : {}),
