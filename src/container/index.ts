@@ -43,8 +43,6 @@ import { TemplateAssService } from '../template/ass.service.js';
 import { FiltergraphService } from '../template/filtergraph.service.js';
 import { TemplateService } from '../template/template.service.js';
 import { TemplateRendererService } from '../template/renderer.service.js';
-import { RightsService } from '../rights/rights.service.js';
-import { QualityCheckService } from '../rights/quality.service.js';
 import { ContentCache } from '../services/content-cache.service.js';
 import { HookGenerator } from '../hooks/hook.generator.js';
 import { HookEvaluator } from '../hooks/hook.evaluator.js';
@@ -500,19 +498,6 @@ export const videoPlanService = new VideoPlanService(
   createLogger('content.video-plan'),
 );
 
-// --- Rights gate + Quality check (Sprint F) ---
-
-/** Filesystem-backed rights gate — stores per-video rights metadata. */
-export const rightsService = new RightsService(
-  paths.outputs,
-  createLogger('rights'),
-);
-
-/** Quality check service — validates output videos meet standards. */
-export const qualityCheckService = new QualityCheckService(
-  createLogger('quality'),
-);
-
 /**
  * Disk cache for LLM pipeline stage outputs (angle/story/script), keyed by
  * content hash. Regenerating the same video returns the identical narration.
@@ -599,7 +584,7 @@ export const compositionEngine = createCompositionEngine({
   templateRendererService,
   outputsDir: paths.outputs,
   compositionsDir,
-  engine: env.COMPOSITION_ENGINE ?? 'ffmpeg-template',
+  engine: env.COMPOSITION_ENGINE ?? 'remotion',
   logger: createLogger('composition'),
 });
 
@@ -749,8 +734,6 @@ export const container = {
   clipController,
   ttsService,
   videoPlanService,
-  rightsService,
-  qualityCheckService,
   contentCache,
   researchService,
   researchController,
