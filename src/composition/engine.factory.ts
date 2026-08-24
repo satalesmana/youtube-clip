@@ -28,7 +28,7 @@ export function createCompositionEngine(options: CompositionEngineFactoryOptions
     templateRendererService,
     outputsDir,
     compositionsDir,
-    engine = 'ffmpeg-template',
+    engine = 'remotion',
     logger = createLogger('composition'),
   } = options;
 

@@ -60,7 +60,7 @@ const envSchema = z
     TEMPLATES_DIR: z.string().min(1).default('templates'),
     COMPOSITIONS_DIR: z.string().min(1).default('compositions'),
     COMPOSITION_STYLE: z.enum(['commentary', 'sports', 'interview']).default('commentary'),
-    COMPOSITION_ENGINE: z.enum(['ffmpeg-template', 'remotion']).default('ffmpeg-template'),
+    COMPOSITION_ENGINE: z.enum(['ffmpeg-template', 'remotion']).default('remotion'),
     /** Set to 0 to fall back to raw-cut hook previews (no Remotion styling). */
     HOOK_PREVIEW_STYLED: z
       .string()
