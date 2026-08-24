@@ -25,7 +25,6 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="research" role="tab" aria-selected="true">🔍 Riset Viral</button>
     <button class="tab" data-tab="transform" role="tab" aria-selected="false">✨ Transform</button>
-    <button class="tab" data-tab="rights" role="tab" aria-selected="false">⚖️ Rights & Review</button>
     <button class="tab" data-tab="history" role="tab" aria-selected="false">🕘 Riwayat</button>
   </nav>
 
@@ -247,27 +246,10 @@
                (tanpa LLM/TTS/template). Wrapper ini di-toggle hidden oleh
                applyOutputModeVisibility() sehingga kedua section ikut hilang. -->
           <div id="narration-settings">
-            <!-- ═══ STEP 6: Engine & TTS ═══ -->
+            <!-- ═══ STEP 6: Pengaturan TTS ═══ -->
             <div class="workflow-section">
               <div class="workflow-label">
-                <span class="step-num">6</span> Engine &amp; TTS
-              </div>
-              <div class="form-row">
-                <div class="input-group">
-                  <label class="label-main">Engine</label>
-                  <select id="transform-engine">
-                    <option value="ffmpeg" selected>FFmpeg</option>
-                    <option value="remotion">Remotion</option>
-                  </select>
-                </div>
-                <div class="input-group" id="transform-style-group">
-                  <label class="label-main">Style</label>
-                  <select id="transform-style">
-                    <option value="commentary" selected>Commentary</option>
-                    <option value="sports">Sports News</option>
-                    <option value="interview">Interview</option>
-                  </select>
-                </div>
+                <span class="step-num">6</span> Pengaturan TTS
               </div>
               <div class="form-row-3">
                 <div class="input-group">
@@ -318,16 +300,8 @@
             </div>
             <div class="checkbox-row">
               <label class="checkbox-item">
-                <input type="checkbox" id="transform-rights-gate" checked />
-                <span>Rights Gate</span>
-              </label>
-              <label class="checkbox-item">
-                <input type="checkbox" id="transform-quality-check" checked />
-                <span>Quality Check</span>
-              </label>
-              <label class="checkbox-item">
                 <input type="checkbox" id="transform-dry-run" />
-                <span>Dry Run</span>
+                <span>Dry Run (hanya generate script &amp; TTS, tanpa render video)</span>
               </label>
             </div>
           </div>
@@ -405,7 +379,7 @@
           <div class="stage-icon">⚡</div>
           <div class="stage-content">
             <div class="stage-title">Render</div>
-            <div class="stage-desc">Composition engine: Remotion / FFmpeg Template</div>
+            <div class="stage-desc">Composition engine: Remotion</div>
           </div>
           <div class="stage-status"></div>
         </div>
@@ -425,39 +399,6 @@
       </div>
     </section>
 
-    <!-- ============ TAB: RIGHTS & REVIEW ============ -->
-    <section id="tab-rights" class="tab-panel">
-      <div class="card">
-        <div class="card-head">
-          <h2>⚖️ Rights Gate & Review</h2>
-          <p class="muted">Verifikasi hak cipta source dan approve konten sebelum publish.</p>
-        </div>
-        <div class="rights-controls">
-          <label class="wide">
-            Video ID / URL
-            <input type="text" id="rights-video-id" placeholder="QyW1rOk-qqI atau URL YouTube" />
-          </label>
-          <button class="btn" id="btn-check-rights">🔍 Cek Rights</button>
-          <button class="btn" id="btn-check-quality">✅ Quality Check</button>
-        </div>
-      </div>
-
-      <div id="rights-result" class="results hidden">
-        <div class="results-head">
-          <h2>📋 Status Rights</h2>
-          <span class="muted" id="rights-meta"></span>
-        </div>
-        <div id="rights-content"></div>
-      </div>
-
-      <div id="quality-result" class="results hidden">
-        <div class="results-head">
-          <h2>📊 Quality Check</h2>
-          <span class="muted" id="quality-meta"></span>
-        </div>
-        <div id="quality-content"></div>
-      </div>
-    </section>
 
     <!-- ============ TAB: RIWAYAT ============ -->
     <section id="tab-history" class="tab-panel">
@@ -475,7 +416,7 @@
   </main>
 
   <footer class="footer">
-    <p>Viral Clip Studio v0.1 — Sprint A-G Complete · FFmpeg Template + Remotion Engine</p>
+    <p>Viral Clip Studio v0.1 — Sprint A-G Complete · Remotion Engine</p>
   </footer>
 
   <!-- Toast -->

@@ -14,6 +14,8 @@ export interface ResearchTrend {
   keywords: string;
   /** Category of the topic, e.g. `tech`, `politics`, `sports`. */
   category: string;
+  /** Timestamp when the topic occurred or was published (ISO string). */
+  publishedAt?: string;
   /** Raw signals that led to this topic. */
   sources: ResearchSourceItem[];
   /** Matched YouTube videos for this topic. */

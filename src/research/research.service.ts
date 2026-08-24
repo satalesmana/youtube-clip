@@ -155,7 +155,7 @@ export class ResearchService implements IResearchService {
       this.logger.info({ rawResponseLength: raw.length }, 'Raw LLM response received');
       this.logger.debug({ raw }, 'LLM raw response content');
 
-      const trends = parseResearchLlmResponse(raw);
+      const trends = parseResearchLlmResponse(raw, capped);
       if (trends.length === 0) {
         throw AppError.researchAnalysisFailed('LLM returned no trends for the collected signals.');
       }

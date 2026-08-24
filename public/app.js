@@ -33,6 +33,38 @@
     return `${m}:${String(s).padStart(2, '0')}`;
   }
 
+  function fmtDate(isoString) {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  function fmtDateTime(isoString) {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  }
+
   let toastTimer = null;
   function toast(message, type = '') {
     const el = $('#toast');
@@ -129,7 +161,6 @@
       });
       $$('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === `tab-${tab.dataset.tab}`));
       if (tab.dataset.tab === 'history') loadHistory();
-      if (tab.dataset.tab === 'rights') resetRightsView();
     });
   });
 
@@ -666,6 +697,12 @@
         .map((src) => `<span class="trend-source-pill">${sourceIcons[src] || esc(src)}</span>`)
         .join('');
 
+      // Topic date
+      const topicDate = trend.publishedAt || data.generatedAt;
+      const dateBadge = topicDate
+        ? `<span class="trend-date-badge" title="Waktu konten/sinyal dibuat">📅 ${fmtDateTime(topicDate)}</span>`
+        : '';
+
       // Videos grid
       const videos = trend.videos || [];
       const videosHtml = videos.length
@@ -687,6 +724,7 @@
                     <div class="video-card-title" title="${esc(v.title)}">${esc(v.title)}</div>
                     <div class="video-card-meta">
                       ${v.channel ? `<span class="video-card-channel" title="${esc(v.channel)}">👤 ${esc(v.channel)}</span>` : ''}
+                      ${v.publishedAt ? `<span class="video-card-date" title="Tanggal rilis video">📅 ${fmtDate(v.publishedAt)}</span>` : ''}
                       ${v.viewCount != null ? `<span class="video-card-views">👁️ ${fmtViews(v.viewCount)}</span>` : ''}
                     </div>
                     <div class="video-card-actions">
@@ -716,6 +754,7 @@
             <div class="trend-title">${esc(trend.title)}</div>
             <div class="trend-meta-badges">
               <span class="trend-cat">${esc(trend.category || 'Trending')}</span>
+              ${dateBadge}
               ${sourceBadges}
             </div>
           </div>
@@ -788,8 +827,6 @@
     setProgress('transform', true, 0, 'Menyiapkan…');
 
     try {
-      const engine = $('#transform-engine')?.value || 'ffmpeg';
-      const style = $('#transform-style')?.value || 'commentary';
       const outputMode = $('#transform-output-mode')?.value || 'narration';
       // Mode Reel tidak memakai engine/STT/bahasa/TTS/channel/badge —
       // field tersebut hanya dikirim di mode Narasi.
@@ -812,9 +849,7 @@
           }
         : {
             youtubeUrl: url,
-            engine,
-            style,
-            template: style,
+            engine: 'remotion',
             language: $('#transform-lang').value || 'auto',
             sttProvider: $('#transform-stt-provider').value || undefined,
             ttsProvider: $('#transform-tts-provider').value || undefined,
@@ -1042,105 +1077,6 @@
     }
   }
 
-  /* ---------- Rights & Quality ---------- */
-  function resetRightsView() {
-    $('#rights-result').classList.add('hidden');
-    $('#quality-result').classList.add('hidden');
-  }
-
-  $('#btn-check-rights').addEventListener('click', async () => {
-    const videoId = $('#rights-video-id').value.trim();
-    if (!videoId) {
-      toast('Masukkan Video ID', 'error');
-      return;
-    }
-
-    try {
-      const data = await apiGet(`/api/rights/${videoId}`);
-      $('#rights-result').classList.remove('hidden');
-      $('#rights-meta').textContent = `Video: ${videoId}`;
-      renderRightsResult(data);
-    } catch (error) {
-      toast(`Rights check failed: ${error.message}`, 'error');
-    }
-  });
-
-  function renderRightsResult(data) {
-    const content = $('#rights-content');
-    content.innerHTML = '';
-
-    const status = data.status || 'UNKNOWN';
-    const statusColor = status === 'AUTHORIZED' || status === 'LICENSED' || status === 'CC' || status === 'PD'
-      ? 'var(--green)' : status === 'REJECTED' ? 'var(--accent)' : 'var(--accent-2)';
-
-    const card = document.createElement('div');
-    card.className = 'rights-card';
-    card.innerHTML = `
-      <div class="rights-header">
-        <div class="rights-status" style="color: ${statusColor}">${status}</div>
-        <div class="rights-source">${esc(data.sourceId || '')}</div>
-      </div>
-      <div class="rights-details">
-        ${data.approvedBy ? `<div class="rights-field"><span class="field-label">Approved by:</span> <span class="field-value">${esc(data.approvedBy)}</span></div>` : ''}
-        ${data.approvedAt ? `<div class="rights-field"><span class="field-label">Approved at:</span> <span class="field-value">${esc(new Date(data.approvedAt).toLocaleString('id-ID'))}</span></div>` : ''}
-        ${data.notes ? `<div class="rights-field"><span class="field-label">Notes:</span> <span class="field-value">${esc(data.notes)}</span></div>` : ''}
-      </div>
-      <div class="rights-actions">
-        <button class="btn ghost small" data-action="approve" data-id="${esc(data.sourceId)}">✅ Approve</button>
-        <button class="btn ghost small" data-action="reject" data-id="${esc(data.sourceId)}">❌ Reject</button>
-      </div>
-    `;
-    content.appendChild(card);
-    $('#rights-meta').textContent = data.canPublish ? '✓ Dapat dipublikasikan' : '⚠️ Perlu review';
-  }
-
-  $('#btn-check-quality').addEventListener('click', async () => {
-    const videoId = $('#rights-video-id').value.trim();
-    if (!videoId) {
-      toast('Masukkan Video ID', 'error');
-      return;
-    }
-
-    try {
-      const data = await apiPost('/api/quality-check', { videoId });
-      $('#quality-result').classList.remove('hidden');
-      $('#quality-meta').textContent = `Video: ${videoId}`;
-      renderQualityResult(data);
-    } catch (error) {
-      toast(`Quality check failed: ${error.message}`, 'error');
-    }
-  });
-
-  function renderQualityResult(data) {
-    const content = $('#quality-content');
-    content.innerHTML = '';
-
-    const status = data.status || 'UNKNOWN';
-    const statusColor = status === 'PASS' ? 'var(--green)' : 'var(--accent)';
-
-    const card = document.createElement('div');
-    card.className = 'quality-card';
-    card.innerHTML = `
-      <div class="quality-header">
-        <div class="quality-status" style="color: ${statusColor}">${status}</div>
-        ${data.videoPath ? `<div class="quality-path">${esc(data.videoPath)}</div>` : ''}
-      </div>
-      <div class="quality-checks">
-        ${(data.checks || []).map(check => `
-          <div class="quality-check ${check.passed ? 'passed' : 'failed'}">
-            <span class="check-icon">${check.passed ? '✅' : '❌'}</span>
-            <span class="check-name">${esc(check.name)}</span>
-            ${check.warning ? `<span class="check-warning">${esc(check.warning)}</span>` : ''}
-            ${check.metadata ? `<span class="check-metadata">${esc(JSON.stringify(check.metadata))}</span>` : ''}
-          </div>
-        `).join('')}
-      </div>
-      ${data.warnings?.length ? `<div class="quality-warnings">⚠️ ${data.warnings.join(', ')}</div>` : ''}
-      ${data.failures?.length ? `<div class="quality-failures">❌ ${data.failures.join(', ')}</div>` : ''}
-    `;
-    content.appendChild(card);
-  }
-
   /* ---------- History ---------- */
   async function loadHistory() {
     const list = $('#history-list');
@@ -1199,10 +1135,6 @@
           window.open(url, '_blank');
         }
       }
-    } else if (action === 'approve') {
-      updateRights(id, 'AUTHORIZED');
-    } else if (action === 'reject') {
-      updateRights(id, 'REJECTED');
     } else if (action === 'clip') {
       if (url) {
         $('#transform-url').value = url;
@@ -1211,19 +1143,6 @@
       }
     }
   });
-
-  async function updateRights(videoId, status) {
-    try {
-      await apiPost(`/api/rights/${videoId}`, { status, updatedBy: 'web-ui' });
-      toast(`Rights updated to ${status}`, 'success');
-      if (!$('#rights-result').classList.contains('hidden')) {
-        const data = await apiGet(`/api/rights/${videoId}`);
-        renderRightsResult(data);
-      }
-    } catch (error) {
-      toast(`Failed to update rights: ${error.message}`, 'error');
-    }
-  }
 
   function copyText(text) {
     return new Promise((resolve) => {
@@ -1261,42 +1180,6 @@
   /* ---------- Init ---------- */
   checkHealth();
 
-  // Dynamic style options per engine (FFmpeg vs Remotion)
-  const ENGINE_STYLES = {
-    ffmpeg: [
-      { value: 'commentary', label: 'Commentary' },
-      { value: 'sports', label: 'Sports News' },
-      { value: 'interview', label: 'Interview' },
-    ],
-    remotion: [
-      { value: 'commentary', label: 'Commentary' },
-      { value: 'sports', label: 'Sports News' },
-      { value: 'interview', label: 'Interview' },
-    ],
-  };
-
-  const engineSelect = $('#transform-engine');
-  const styleSelect = $('#transform-style');
-
-  function syncEngineStyles() {
-    if (!engineSelect || !styleSelect) return;
-    const currentEngine = engineSelect.value || 'ffmpeg';
-    const styles = ENGINE_STYLES[currentEngine] || ENGINE_STYLES.ffmpeg;
-    const currentStyle = styleSelect.value;
-
-    styleSelect.innerHTML = styles
-      .map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`)
-      .join('');
-
-    if (styles.some((s) => s.value === currentStyle)) {
-      styleSelect.value = currentStyle;
-    }
-  }
-
-  if (engineSelect) {
-    engineSelect.addEventListener('change', syncEngineStyles);
-    syncEngineStyles();
-  }
 
   // Mesin Transkrip (STT) ↔ tombol aksi: setiap perubahan engine langsung
   // terlihat sebagai badge di samping Generate Hook / Generate Klip Viral /
