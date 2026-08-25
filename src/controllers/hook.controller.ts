@@ -17,6 +17,7 @@ import type { JobWorkspace } from '../types/job.js';
 import type { AngleGenerationResult } from '../types/angle.js';
 import type { SourceStory } from '../types/story.js';
 import type { HookRecommendationResult, HookStyle } from '../hooks/hook.types.js';
+import type { ContentGenre } from '../types/genre.js';
 import { hashSeed } from '../utils/seed.js';
 
 export interface HookControllerDeps {
@@ -60,6 +61,11 @@ export interface HookGenerateRequest {
   platform?: string;
   /** Force regeneration even when a saved hook result exists on disk. */
   refresh?: boolean;
+  /**
+   * Optional content genre — when supplied, biases angle types, story concept
+   * detection, and hook style prioritisation for this genre.
+   */
+  genre?: 'podcast' | 'sports' | 'gaming' | 'tutorial' | 'commentary' | 'entertainment';
 }
 
 /** Response shape for `POST /api/hooks/generate` (Plan §7). */
@@ -109,6 +115,11 @@ export class HookController {
     const clipStart = selection.momentSegments[0]?.start ?? 0;
     const clipEnd = selection.momentSegments.at(-1)?.end ?? 30;
 
+    // Target output language for hooks and angles
+    const language = request.language === 'auto' || !request.language
+      ? transcript.language
+      : request.language;
+
     // Stage: angles (existing ContentAngleService, cached).
     const angleContext: ContentAngleContext = {
       candidateId: `candidate_${candidateId}`,
@@ -121,21 +132,20 @@ export class HookController {
       clipEnd,
       sourceTitle: videoId,
       sourceChannel: '',
-      sourceLanguage: transcript.language,
+      sourceLanguage: language,
+      genre: request.genre as ContentGenre | undefined,
     };
-    const angleResult = await this.getAngles(angleContext, videoId, candidateId);
+    const angleResult = await this.getAngles(angleContext, videoId, candidateId, request.genre as ContentGenre | undefined, language);
 
     // Stage: story beats (existing StoryService, cached, optional).
     const story = await this.getStory(
       [...selection.contextSegments, ...selection.momentSegments],
       videoId,
       candidateId,
+      request.genre as ContentGenre | undefined,
     );
 
     // Stage: hook recommendation engine.
-    const language = request.language === 'auto' || !request.language
-      ? transcript.language
-      : request.language;
     const result = await this.deps.hookService.recommend({
       videoId,
       sourceTitle: videoId,
@@ -145,6 +155,7 @@ export class HookController {
       styles: request.styles,
       language,
       duration: request.duration,
+      genre: request.genre as ContentGenre | undefined,
     });
 
     const response: HookGenerateResponse = {
@@ -166,12 +177,13 @@ export class HookController {
           response.hooks.map((hook, index) => {
             const fileName = `final-hook-${String(index + 1).padStart(2, '0')}`;
             const styled = this.deps.styledPreviewRenderer;
+            const sourceDuration = Math.max(0.5, Number((hook.source.end - hook.source.start).toFixed(2)));
             if (styled) {
               return styled.render({
                 videoPath,
                 start: hook.source.start,
                 end: hook.source.end,
-                durationSeconds: hook.spokenHook?.duration > 0 ? hook.spokenHook.duration : 4,
+                durationSeconds: sourceDuration,
                 headlineText: hook.headline?.text || '',
                 tag: hook.headline?.tag,
                 highlightWords: hook.headline?.highlightWords,
@@ -288,12 +300,13 @@ export class HookController {
         saved.hooks.map((hook, index) => {
           const fileName = `final-hook-${String(index + 1).padStart(2, '0')}`;
           const styled = this.deps.styledPreviewRenderer;
+          const sourceDuration = Math.max(0.5, Number((hook.source.end - hook.source.start).toFixed(2)));
           if (styled) {
             return styled.render({
               videoPath,
               start: hook.source.start,
               end: hook.source.end,
-              durationSeconds: hook.spokenHook?.duration > 0 ? hook.spokenHook.duration : 4,
+              durationSeconds: sourceDuration,
               headlineText: hook.headline?.text || '',
               tag: hook.headline?.tag,
               highlightWords: hook.headline?.highlightWords,
@@ -431,8 +444,10 @@ export class HookController {
     context: ContentAngleContext,
     videoId: string,
     candidateId: number,
+    genre?: ContentGenre,
+    language?: string,
   ): Promise<AngleGenerationResult> {
-    const cacheKey = this.cacheKey('hook-angle', videoId, candidateId);
+    const cacheKey = this.cacheKey('hook-angle', videoId, candidateId, genre ?? '', language ?? '');
     const cached = await this.deps.contentCache?.get<AngleGenerationResult>(cacheKey);
     if (cached) {
       this.deps.logger.info({ cache: 'hook-angle', videoId, candidateId }, 'Angle generation served from cache');
@@ -467,8 +482,9 @@ export class HookController {
     segments: TranscriptDocument['segments'],
     videoId: string,
     candidateId: number,
+    genre?: ContentGenre,
   ): Promise<SourceStory | undefined> {
-    const cacheKey = this.cacheKey('hook-story', videoId, candidateId);
+    const cacheKey = this.cacheKey('hook-story', videoId, candidateId, genre ?? '');
     const cached = await this.deps.contentCache?.get<SourceStory>(cacheKey);
     if (cached) {
       this.deps.logger.info({ cache: 'hook-story', videoId, candidateId }, 'Story planning served from cache');
@@ -476,7 +492,7 @@ export class HookController {
     }
 
     try {
-      const story = await this.deps.storyService.buildStory(segments);
+      const story = await this.deps.storyService.buildStory(segments, genre);
       await this.deps.contentCache?.set(cacheKey, story);
       return story;
     } catch (err) {

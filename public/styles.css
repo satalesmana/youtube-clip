@@ -946,7 +946,88 @@ input[type="checkbox"] {
   text-align: center; padding: 26px; color: var(--muted); font-size: 12.5px;
   border-top: 1px solid var(--border);
 }
-.footer a { color: var(--blue); text-decoration: none; }
+/* ---------- Clip Selection Order & Summary ---------- */
+.clip-selection-summary {
+  background: rgba(45, 212, 167, 0.08);
+  border: 1px solid rgba(45, 212, 167, 0.28);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+.selection-summary-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 8px;
+}
+.clip-selected-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.clip-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid rgba(45, 212, 167, 0.4);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.clip-selected-chip .chip-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green);
+  color: #04251c;
+  font-weight: 900;
+  font-size: 11px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.clip-selected-chip .chip-title {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clip-selected-chip .chip-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+.clip-selected-chip .chip-remove {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+  margin-left: 2px;
+  transition: color 0.15s ease;
+  line-height: 1;
+}
+.clip-selected-chip .chip-remove:hover {
+  color: #ff5b79;
+}
+
+.clip-order-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #04251c;
+  margin-bottom: 6px;
+  border: 1px solid rgba(4, 37, 28, 0.2);
+}
 
 .hidden { display: none !important; }
 

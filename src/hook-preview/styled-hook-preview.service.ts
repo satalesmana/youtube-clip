@@ -81,9 +81,14 @@ export class StyledHookPreviewService {
     // Stage media under public/ so the Remotion render server can serve it.
     const mediaDir = join(compositionsDir, 'public', 'media', `hook-${jobId}`);
     const stagedVideoPath = `media/hook-${jobId}/source${extname(input.videoPath) || '.mp4'}`;
+    const sourceDuration = Math.max(0.5, Number((input.end - input.start).toFixed(2)));
+    const targetDuration = input.durationSeconds > 0
+      ? Math.min(input.durationSeconds, sourceDuration)
+      : sourceDuration;
+
     const props = {
       hook: {
-        duration: Math.max(1, input.durationSeconds),
+        duration: targetDuration,
         headlineText: input.headlineText,
         ...(input.tag ? { tag: input.tag } : {}),
         ...(input.highlightWords?.length ? { highlightWords: input.highlightWords } : {}),

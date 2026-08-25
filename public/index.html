@@ -142,14 +142,45 @@
             </div>
           </div>
 
-          <!-- ═══ STEP 2: Mesin Transkrip (STT) ═══ -->
-          <!-- Sengaja di langkah awal: download pertama pada SEMUA aksi
-               (Generate Hook, Generate Klip Viral, Transformasi) langsung
-               menjalankan transkripsi dengan engine ini, jadi pilihan harus
-               terlihat sebelum tombol aksi mana pun ditekan. -->
+          <!-- ═══ STEP 2: Bahasa Output & Genre ═══ -->
+          <div class="workflow-section" id="language-genre-section">
+            <div class="workflow-label">
+              <span class="step-num">2</span> Bahasa Output &amp; Genre
+            </div>
+            <div class="form-row">
+              <div class="input-group">
+                <label class="label-main">Bahasa Target (TTS &amp; Hook)</label>
+                <select id="transform-lang">
+                  <option value="auto" selected>Auto (ikuti bahasa sumber)</option>
+                  <option value="id">🇮🇩 Indonesia</option>
+                  <option value="en">🇬🇧 English</option>
+                </select>
+                <p class="stt-hint muted small">
+                  Pilih bahasa output video akhir. Rekomendasi Hook, Klip, naskah AI, dan suara TTS akan otomatis disesuaikan ke bahasa ini.
+                </p>
+              </div>
+              <div class="input-group">
+                <label class="label-main">Genre Konten <span class="optional-label">(opsional)</span></label>
+                <select id="transform-genre">
+                  <option value="" selected>Auto / General (tanpa preset)</option>
+                  <option value="podcast">🎙️ Podcast / Interview</option>
+                  <option value="sports">⚽ Olahraga / Sports</option>
+                  <option value="gaming">🎮 Gaming / Esports</option>
+                  <option value="tutorial">💡 Tutorial / Edukasi</option>
+                  <option value="commentary">📰 Komentari / Berita</option>
+                  <option value="entertainment">🎭 Entertainment / Lifestyle</option>
+                </select>
+                <p class="stt-hint muted small">
+                  Menyesuaikan prioritas angle, struktur cerita (beats), gaya hook, dan pacing naskah sesuai jenis konten.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ STEP 3: Mesin Transkrip (STT) ═══ -->
           <div class="workflow-section" id="stt-engine-section">
             <div class="workflow-label">
-              <span class="step-num">2</span> Mesin Transkrip (STT)
+              <span class="step-num">3</span> Mesin Transkrip (STT)
             </div>
             <div class="form-row">
               <div class="input-group">
@@ -163,18 +194,16 @@
                 <p class="stt-hint muted small">
                   Dipakai saat video pertama kali diproses: Generate Hook,
                   Generate Klip Viral, dan Transformasi sama-sama menranskrip
-                  audio dengan engine ini. Hasil transkrip tersimpan per video —
-                  ganti engine + <strong>Generate ulang</strong> untuk
-                  mentranskrip ulang video yang sama.
+                  audio dengan engine ini. Hasil transkrip tersimpan per video.
                 </p>
               </div>
             </div>
           </div>
 
-          <!-- ═══ STEP 3: Hook ═══ -->
+          <!-- ═══ STEP 4: Hook ═══ -->
           <div class="workflow-section">
             <div class="workflow-label">
-              <span class="step-num">3</span> Rekomendasi Hook
+              <span class="step-num">4</span> Rekomendasi Hook
               <span class="optional-label">(opsional)</span>
             </div>
             <button class="btn secondary" id="btn-gen-hooks">
@@ -197,10 +226,10 @@
             </div>
           </div>
 
-          <!-- ═══ STEP 4: Rekomendasi Klip Viral ═══ -->
+          <!-- ═══ STEP 5: Rekomendasi Klip Viral ═══ -->
           <div class="workflow-section">
             <div class="workflow-label">
-              <span class="step-num">4</span> Rekomendasi Klip Viral
+              <span class="step-num">5</span> Rekomendasi Klip Viral
               <span class="optional-label">(opsional — untuk mode Reel)</span>
             </div>
             <button class="btn secondary" id="btn-gen-clips">
@@ -217,15 +246,23 @@
                 </div>
               </div>
               <p class="muted small" id="clip-meta"></p>
+
+              <div id="clip-selection-summary" class="clip-selection-summary hidden">
+                <div class="selection-summary-header">
+                  <span class="selection-summary-title">🎬 Urutan Klip Terpilih (<span id="clip-selected-count">0</span> klip · total <span id="clip-total-duration">0s</span>):</span>
+                </div>
+                <div id="clip-selected-chips" class="clip-selected-chips"></div>
+              </div>
+
               <div id="clip-list" class="preview-grid"></div>
-              <p class="muted small">Pilih satu atau beberapa klip — dalam mode <strong>Reel</strong>, klip terpilih digabung langsung menjadi satu video.</p>
+              <p class="muted small">Pilih satu atau beberapa klip — dalam mode <strong>Reel</strong>, klip digabung berurutan sesuai nomor pilihan di atas.</p>
             </div>
           </div>
 
-          <!-- ═══ STEP 5: Mode Output ═══ -->
+          <!-- ═══ STEP 6: Mode Output ═══ -->
           <div class="workflow-section">
             <div class="workflow-label">
-              <span class="step-num">5</span> Mode Output
+              <span class="step-num">6</span> Mode Output
             </div>
             <div class="form-row">
               <div class="input-group">
@@ -242,24 +279,16 @@
             </p>
           </div>
 
-          <!-- Narasi-only settings (Step 6-7): tidak dipakai di mode Reel
+          <!-- Narasi-only settings (Step 7-8): tidak dipakai di mode Reel
                (tanpa LLM/TTS/template). Wrapper ini di-toggle hidden oleh
                applyOutputModeVisibility() sehingga kedua section ikut hilang. -->
           <div id="narration-settings">
-            <!-- ═══ STEP 6: Pengaturan TTS ═══ -->
+            <!-- ═══ STEP 7: Pengaturan TTS Voice ═══ -->
             <div class="workflow-section">
               <div class="workflow-label">
-                <span class="step-num">6</span> Pengaturan TTS
+                <span class="step-num">7</span> Pengaturan Suara (TTS Voice)
               </div>
               <div class="form-row-3">
-                <div class="input-group">
-                  <label class="label-main">TTS Output</label>
-                  <select id="transform-lang">
-                    <option value="auto" selected>Auto (ikuti sumber)</option>
-                    <option value="id">Indonesia</option>
-                    <option value="en">English</option>
-                  </select>
-                </div>
                 <div class="input-group">
                   <label class="label-main">TTS Provider</label>
                   <select id="transform-tts-provider">
@@ -271,13 +300,23 @@
                   <label class="label-main">TTS Voice</label>
                   <input type="text" id="transform-voice" placeholder="misal: id-ID-ArdiNeural (edge-tts) / nova (openai)" />
                 </div>
+                <div class="input-group">
+                  <label class="label-main">Kecepatan Bicara</label>
+                  <select id="transform-tts-rate">
+                    <option value="-15%">Sangat Santai (-15%)</option>
+                    <option value="-10%" selected>Santai / Alami (-10%)</option>
+                    <option value="-5%">Sedang (-5%)</option>
+                    <option value="+0%">Normal (+0%)</option>
+                    <option value="+10%">Cepat (+10%)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
-            <!-- ═══ STEP 7: Branding ═══ -->
+            <!-- ═══ STEP 8: Branding ═══ -->
             <div class="workflow-section">
               <div class="workflow-label">
-                <span class="step-num">7</span> Branding
+                <span class="step-num">8</span> Branding
                 <span class="optional-label">(opsional)</span>
               </div>
               <div class="form-row">
@@ -293,10 +332,10 @@
             </div>
           </div><!-- /narration-settings -->
 
-          <!-- ═══ STEP 8: Opsi Tambahan ═══ -->
+          <!-- ═══ STEP 9: Opsi Tambahan ═══ -->
           <div class="workflow-section">
             <div class="workflow-label">
-              <span class="step-num">8</span> Opsi Tambahan
+              <span class="step-num">9</span> Opsi Tambahan
             </div>
             <div class="checkbox-row">
               <label class="checkbox-item">

@@ -236,6 +236,7 @@
   }
 
   $('#transform-tts-provider')?.addEventListener('change', refreshVoiceOptions);
+  $('#transform-lang')?.addEventListener('change', refreshVoiceOptions);
 
   /* ---------- Hook Recommendation (Plan M) ---------- */
   const hookState = { selected: null };
@@ -271,7 +272,8 @@
       const headline = hook.headline?.text || '';
       const tag = hook.headline?.tag || '';
       const spoken = hook.spokenHook?.text || '';
-      const duration = hook.spokenHook?.duration;
+      const srcDur = hook.source ? (hook.source.end - hook.source.start) : 0;
+      const duration = hook.finalDurationSeconds ?? (srcDur > 0 ? srcDur : hook.spokenHook?.duration);
       const score = hook.rankScore ?? hook.score?.final;
       const style = hook.style || '';
 
@@ -363,6 +365,7 @@
         candidateId: 0,
         language: $('#transform-lang').value || 'auto',
         sttProvider: $('#transform-stt-provider').value || undefined,
+        genre: $('#transform-genre')?.value || undefined,
         refresh,
       });
       renderHooks(data);
@@ -435,6 +438,74 @@
   /* ---------- Viral Clip Recommendation (flow redesign step 3) ---------- */
   const clipState = { selected: new Map() };
 
+  function updateClipSelectionUI() {
+    const selectedCount = clipState.selected.size;
+    const summary = $('#clip-selection-summary');
+    const chipsWrap = $('#clip-selected-chips');
+    const countEl = $('#clip-selected-count');
+    const totalDurEl = $('#clip-total-duration');
+
+    if (summary) {
+      summary.classList.toggle('hidden', selectedCount === 0);
+    }
+
+    if (countEl) countEl.textContent = String(selectedCount);
+
+    let totalSec = 0;
+    const selectedArray = [...clipState.selected.entries()]; // [[clipId, info], ...]
+
+    if (chipsWrap) {
+      chipsWrap.innerHTML = '';
+      selectedArray.forEach(([clipId, info], index) => {
+        const order = index + 1;
+        const dur = info.durationSeconds ?? (info.end - info.start);
+        totalSec += dur;
+        const chip = document.createElement('span');
+        chip.className = 'clip-selected-chip';
+        chip.innerHTML =
+          `<span class="chip-order">${order}</span>` +
+          `<span class="chip-title" title="${esc(info.title || `Klip #${order}`)}">${esc(info.title || `Klip #${order}`)}</span>` +
+          `<span class="chip-time">(${fmtDuration(info.start)}–${fmtDuration(info.end)})</span>` +
+          `<span class="chip-remove" title="Hapus klip ini">✕</span>`;
+        chip.querySelector('.chip-remove')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          clipState.selected.delete(clipId);
+          updateClipSelectionUI();
+          toast(`Klip #${order} dihapus dari pilihan reel`, '');
+        });
+        chipsWrap.appendChild(chip);
+      });
+    }
+
+    if (totalDurEl) totalDurEl.textContent = `${totalSec.toFixed(1)}s`;
+
+    // Update each clip card in the list
+    $$('.clip-item').forEach((item) => {
+      const clipId = item.dataset.clipId;
+      const order = selectedArray.findIndex(([id]) => id === clipId) + 1;
+      const isSel = order > 0;
+      item.classList.toggle('selected', isSel);
+
+      let badge = item.querySelector('.clip-order-badge');
+      if (isSel) {
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.className = 'clip-order-badge';
+          const headline = item.querySelector('.hook-headline');
+          headline?.parentElement?.insertBefore(badge, headline);
+        }
+        badge.innerHTML = `🎬 Urutan #${order}`;
+      } else if (badge) {
+        badge.remove();
+      }
+
+      const hint = item.querySelector('.hook-clear-hint');
+      if (hint) {
+        hint.textContent = isSel ? `✅ Dipilih (#${order})` : 'pilih';
+      }
+    });
+  }
+
   function renderClips(data) {
     const list = $('#clip-list');
     const clips = data?.clips ?? [];
@@ -445,11 +516,13 @@
 
     if (clips.length === 0) {
       list.innerHTML = '<p class="muted small">Tidak ada klip viral ditemukan. Coba ulangi lagi.</p>';
+      updateClipSelectionUI();
       return;
     }
 
     clips.forEach((clip) => {
       const isSelected = clipState.selected.has(clip.id);
+      const order = isSelected ? [...clipState.selected.keys()].indexOf(clip.id) + 1 : 0;
       const item = document.createElement('div');
       item.className = 'hook-item clip-item' + (isSelected ? ' selected' : '');
       item.setAttribute('role', 'button');
@@ -460,6 +533,7 @@
         buildPreviewVideo(clip.previewUrl, `Preview klip ${clip.rank}`) +
         `<div class="hook-rank">${clip.rank}</div>` +
         `<div class="hook-body">` +
+          (isSelected ? `<div class="clip-order-badge">🎬 Urutan #${order}</div>` : '') +
           `<div class="hook-headline">${esc(clip.title)}</div>` +
           `<div class="hook-spoken">“${esc(clip.hook)}”</div>` +
           `<div class="hook-meta-row">` +
@@ -468,18 +542,20 @@
             `<span class="hook-time">⏱ ${clip.durationSeconds.toFixed(1)}s</span>` +
           `</div>` +
         `</div>` +
-        `<span class="hook-clear-hint">${isSelected ? '✅ Dipilih' : 'pilih'}</span>`;
+        `<span class="hook-clear-hint">${isSelected ? `✅ Dipilih (#${order})` : 'pilih'}</span>`;
 
       const toggle = () => {
         if (clipState.selected.has(clip.id)) {
           clipState.selected.delete(clip.id);
         } else {
-          clipState.selected.set(clip.id, { start: clip.start, end: clip.end, title: clip.title });
+          clipState.selected.set(clip.id, {
+            start: clip.start,
+            end: clip.end,
+            title: clip.title,
+            durationSeconds: clip.durationSeconds,
+          });
         }
-        const nowSelected = clipState.selected.has(clip.id);
-        item.classList.toggle('selected', nowSelected);
-        const hint = item.querySelector('.hook-clear-hint');
-        if (hint) hint.textContent = nowSelected ? '✅ Dipilih' : 'pilih';
+        updateClipSelectionUI();
         toast(
           clipState.selected.size > 0
             ? `${clipState.selected.size} klip dipilih untuk reel`
@@ -491,6 +567,8 @@
       item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
       list.appendChild(item);
     });
+
+    updateClipSelectionUI();
   }
 
   async function generateClips(refresh = false) {
@@ -508,6 +586,7 @@
 
     try {
       clipState.selected.clear();
+      updateClipSelectionUI();
       const data = await apiPost('/api/clips/recommend', {
         youtubeUrl: url,
         sttProvider: $('#transform-stt-provider').value || undefined,
@@ -536,6 +615,7 @@
   /** Hides the clip panel and drops any selection (URL changed / no cache). */
   function hideClipPanel() {
     clipState.selected.clear();
+    updateClipSelectionUI();
     $('#clip-list').innerHTML = '';
     $('#clip-meta').textContent = '';
     $('#clip-panel').classList.add('hidden');
@@ -573,7 +653,7 @@
 
   $('#btn-clear-clips').addEventListener('click', () => {
     clipState.selected.clear();
-    $$('.clip-item').forEach((el) => el.classList.remove('selected'));
+    updateClipSelectionUI();
     toast('Pilihan klip dibersihkan', '');
   });
 
@@ -854,9 +934,14 @@
             sttProvider: $('#transform-stt-provider').value || undefined,
             ttsProvider: $('#transform-tts-provider').value || undefined,
             ttsVoice: $('#transform-voice').value || undefined,
+            ttsRate: $('#transform-tts-rate')?.value || undefined,
+            genre: $('#transform-genre')?.value || undefined,
             hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
             channel: { name: $('#transform-channel').value.trim() || undefined },
             dryRun: $('#transform-dry-run')?.checked || false,
+            ...(clipState.selected.size > 0
+              ? { selectedClips: [...clipState.selected.values()] }
+              : {}),
             ...(hookState.selected
               ? {
                   sourceRange: {
