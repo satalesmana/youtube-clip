@@ -81,11 +81,11 @@ export function buildContentAngleUserPrompt(context: ContentAngleContext): strin
     `- reason it was selected: ${context.candidateReason}`,
     ...(context.selectedClips && context.selectedClips.length > 1
       ? [
-          '',
-          `User Selected Multi-Clip Sequence (${context.selectedClips.length} clips):`,
-          ...context.selectedClips.map((c, i) => `Clip ${i + 1}: [${c.start.toFixed(2)}s -> ${c.end.toFixed(2)}s] ${c.title ? `("${c.title}")` : ''}`),
-          'Propose editorial angles that unify these selected clips into a single coherent narrative arc.',
-        ]
+        '',
+        `User Selected Multi-Clip Sequence (${context.selectedClips.length} clips):`,
+        ...context.selectedClips.map((c, i) => `Clip ${i + 1}: [${c.start.toFixed(2)}s -> ${c.end.toFixed(2)}s] ${c.title ? `("${c.title}")` : ''}`),
+        'Propose editorial angles that unify these selected clips into a single coherent narrative arc.',
+      ]
       : []),
     '',
     'Moment transcript (verbatim, with timestamps):',
@@ -112,8 +112,8 @@ function buildScriptGenreGuidance(genre: ContentGenre): string {
     narrativePacing === 'fast'
       ? 'Keep the script tight and punchy. The "analysis" and "reflection" sections should be brief (1-2 sentences max) or omitted entirely when beats do not justify them. Every word must earn its place — no padding.'
       : narrativePacing === 'reflective'
-      ? 'Deeper "analysis" and "supporting" sections are expected and welcome — the audience wants to understand the "why". Aim for 2-4 sentences per analytical section when evidence supports it.'
-      : 'Maintain a clear, balanced structure. "analysis" sections should be concise but substantive — 2-3 sentences each.';
+        ? 'Deeper "analysis" and "supporting" sections are expected and welcome — the audience wants to understand the "why". Aim for 2-4 sentences per analytical section when evidence supports it.'
+        : 'Maintain a clear, balanced structure. "analysis" sections should be concise but substantive — 2-3 sentences each.';
 
   return [
     '',
@@ -235,12 +235,12 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
   const lines = [
     ...(context.targetLanguage
       ? [
-          `=========================================`,
-          `CRITICAL REQUIREMENT - TARGET LANGUAGE: ${context.targetLanguage.toUpperCase()}`,
-          `You MUST write the ENTIRE script narration in ${context.targetLanguage === 'id' ? 'INDONESIAN (Bahasa Indonesia)' : context.targetLanguage}. Every single section (hook, context, source, commentary, analysis, conclusion) must be spoken in ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}.`,
-          `=========================================`,
-          '',
-        ]
+        `=========================================`,
+        `CRITICAL REQUIREMENT - TARGET LANGUAGE: ${context.targetLanguage.toUpperCase()}`,
+        `You MUST write the ENTIRE script narration in ${context.targetLanguage === 'id' ? 'INDONESIAN (Bahasa Indonesia)' : context.targetLanguage}. Every single section (hook, context, source, commentary, analysis, conclusion) must be spoken in ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}.`,
+        `=========================================`,
+        '',
+      ]
       : []),
     'Source video metadata:',
     `- title: ${context.sourceTitle}`,
@@ -252,47 +252,47 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
     `- original title: ${context.candidateTitle}`,
     ...(context.selectedClips && context.selectedClips.length > 1
       ? [
-          '',
-          `User Selected Multi-Clip Sequence (${context.selectedClips.length} clips):`,
-          ...context.selectedClips.map((c, i) => `Clip ${i + 1}: [${c.start.toFixed(2)}s -> ${c.end.toFixed(2)}s] ${c.title ? `("${c.title}")` : ''}`),
-          'Write a continuous voiceover narration that bridges these selected moments chronologically, creating smooth narrative transitions between them.',
-        ]
+        '',
+        `User Selected Multi-Clip Sequence (${context.selectedClips.length} clips):`,
+        ...context.selectedClips.map((c, i) => `Clip ${i + 1}: [${c.start.toFixed(2)}s -> ${c.end.toFixed(2)}s] ${c.title ? `("${c.title}")` : ''}`),
+        'Write a continuous voiceover narration that bridges these selected moments chronologically, creating smooth narrative transitions between them.',
+      ]
       : []),
     '',
     'Moment transcript (verbatim, with timestamps):',
     ...context.momentSegments.map((segment) => `[${segment.start.toFixed(2)} -> ${segment.end.toFixed(2)}] ${segment.text}`),
     ...(context.contextSegments?.length
       ? [
-          'Nearby transcript context (use only when it clarifies the moment):',
-          ...context.contextSegments.map((segment) => `[${segment.start.toFixed(2)} -> ${segment.end.toFixed(2)}] ${segment.text}`),
-        ]
+        'Nearby transcript context (use only when it clarifies the moment):',
+        ...context.contextSegments.map((segment) => `[${segment.start.toFixed(2)} -> ${segment.end.toFixed(2)}] ${segment.text}`),
+      ]
       : []),
     ...(context.story
       ? [
-          '',
-          `Selected source-story concept: ${context.story.concept}`,
-          `Protagonist/subject: ${context.story.protagonist}`,
-          `Story premise: ${context.story.premise}`,
-          ...(context.story.hookMoment
-            ? [
-                `HOOK MOMENT — open the video here: ${context.story.hookMoment.start.toFixed(2)}s-${context.story.hookMoment.end.toFixed(2)}s; suggestedLine: "${context.story.hookMoment.suggestedLine}"`,
-              ]
-            : []),
-          'STORY BEATS — preserve order and use every beat id:',
-          ...context.story.beats.map((beat) => {
-            const parts = [
-              `[${beat.id}] role=${beat.role}`,
-              `${beat.start.toFixed(2)}-${beat.end.toFixed(2)}s`,
-              beat.purpose,
-              beat.engagementScore != null ? `engagement=${beat.engagementScore}/10` : '',
-              beat.retentionRisk ? `retention=${beat.retentionRisk}` : '',
-              beat.openLoop ? `openLoop="${beat.openLoop}"` : '',
-              beat.quotableLine ? `quotable="${beat.quotableLine}"` : '',
-              `evidence: ${beat.evidence.map((quote) => `"${quote}"`).join(' | ')}`,
-            ].filter((part) => part !== '');
-            return parts.join('; ');
-          }),
-        ]
+        '',
+        `Selected source-story concept: ${context.story.concept}`,
+        `Protagonist/subject: ${context.story.protagonist}`,
+        `Story premise: ${context.story.premise}`,
+        ...(context.story.hookMoment
+          ? [
+            `HOOK MOMENT — open the video here: ${context.story.hookMoment.start.toFixed(2)}s-${context.story.hookMoment.end.toFixed(2)}s; suggestedLine: "${context.story.hookMoment.suggestedLine}"`,
+          ]
+          : []),
+        'STORY BEATS — preserve order and use every beat id:',
+        ...context.story.beats.map((beat) => {
+          const parts = [
+            `[${beat.id}] role=${beat.role}`,
+            `${beat.start.toFixed(2)}-${beat.end.toFixed(2)}s`,
+            beat.purpose,
+            beat.engagementScore != null ? `engagement=${beat.engagementScore}/10` : '',
+            beat.retentionRisk ? `retention=${beat.retentionRisk}` : '',
+            beat.openLoop ? `openLoop="${beat.openLoop}"` : '',
+            beat.quotableLine ? `quotable="${beat.quotableLine}"` : '',
+            `evidence: ${beat.evidence.map((quote) => `"${quote}"`).join(' | ')}`,
+          ].filter((part) => part !== '');
+          return parts.join('; ');
+        }),
+      ]
       : []),
     '',
     'Chosen content angle:',
@@ -303,14 +303,14 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
     context.targetLanguage ? `- target language: ${context.targetLanguage}` : '',
     ...(context.fixedHook?.trim()
       ? [
-          '',
-          isCrossLingual
-            ? `USER-SELECTED HOOK (Translate & adapt to ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}):`
-            : 'MANDATORY HOOK (user-selected):',
-          isCrossLingual
-            ? `Translate and adapt this hook naturally into ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage} as the opening hook section text so all voiceover narration flows seamlessly in ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}: "${context.fixedHook.trim()}"`
-            : `The "hook" section MUST be exactly this text, verbatim — do not paraphrase, translate, shorten, or rewrite it: "${context.fixedHook.trim()}"`,
-        ]
+        '',
+        isCrossLingual
+          ? `USER-SELECTED HOOK (Translate & adapt to ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}):`
+          : 'MANDATORY HOOK (user-selected):',
+        isCrossLingual
+          ? `Translate and adapt this hook naturally into ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage} as the opening hook section text so all voiceover narration flows seamlessly in ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}: "${context.fixedHook.trim()}"`
+          : `The "hook" section MUST be exactly this text, verbatim — do not paraphrase, translate, shorten, or rewrite it: "${context.fixedHook.trim()}"`,
+      ]
       : []),
     '',
     `Task: write a concise original short-form script in ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage ?? 'the requested language'} grounded in this material. Use only as much duration as the available facts support; never pad it with generic motivational commentary. Follow the structure and ORIGINALITY RULES.`,
