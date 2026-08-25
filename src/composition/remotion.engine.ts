@@ -114,6 +114,7 @@ export class RemotionCompositionEngine implements ICompositionEngine {
           compositionId,
           outputPath,
           `--props=${propsPath}`,
+          '--concurrency=50%',
           '--image-format=jpeg',
           '--log=info',
         ],
