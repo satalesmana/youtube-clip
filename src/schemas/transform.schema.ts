@@ -52,6 +52,8 @@ export const transformRequestSchema = z.object({
   ttsProvider: z.enum(['edge-tts', 'openai']).optional(),
   /** TTS voice identifier (provider-specific, e.g. "id-ID-ArdiNeural" or "nova"). */
   ttsVoice: z.string().optional(),
+  /** TTS speaking rate adjustment (e.g. "-10%", "+0%", "+10%"). */
+  ttsRate: z.string().optional(),
   /** STT engine selection. Falls back to env default (`WHISPER_PROVIDER`). */
   sttProvider: z.enum(['faster-whisper', 'whisper-cpp', 'whisperx', 'openai']).optional(),
   /**
@@ -63,9 +65,10 @@ export const transformRequestSchema = z.object({
    */
   outputMode: z.enum(['reel', 'narration']).optional(),
   /**
-   * User-selected viral clips (from `/api/clips/recommend`) to join into the
-   * output. Required for `outputMode: 'reel'`; ignored in narration mode
-   * (which keeps using `sourceRange`/`candidateId`).
+   * User-selected viral clips (from `/api/clips/recommend`) to include in the
+   * output. Required for `outputMode: 'reel'`; in narration mode, enables dynamic
+   * multi-clip storytelling across the selected moments (falls back to single-moment
+   * when omitted).
    */
   selectedClips: z.array(z.object({
     start: z.number().min(0),
@@ -81,6 +84,20 @@ export const transformRequestSchema = z.object({
   hookPreviewPath: z.string().optional(),
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),
+  /**
+   * Optional content genre for the source video.
+   * When supplied, all LLM stages (angle generation, story concept detection,
+   * script pacing, hook style prioritisation) are biased toward the patterns
+   * that work best for that genre.
+   *
+   * - `podcast`       — interview, talk show, long-form conversation
+   * - `sports`        — highlights, match recap, live sports
+   * - `gaming`        — gameplay, esports, game review
+   * - `tutorial`      — how-to, education, step-by-step walkthrough
+   * - `commentary`    — opinion, news analysis, explainer
+   * - `entertainment` — comedy, lifestyle, vlog, reaction
+   */
+  genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment']).optional(),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

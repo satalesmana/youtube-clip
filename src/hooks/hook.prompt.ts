@@ -2,6 +2,8 @@ import type { ContentAngle } from '../types/angle.js';
 import type { SourceStory } from '../types/story.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { HookStyle } from './hook.types.js';
+import type { ContentGenre } from '../types/genre.js';
+import { getGenrePreset } from '../types/genre.js';
 
 /**
  * LLM prompts for the Hook Recommendation Engine.
@@ -92,15 +94,24 @@ export interface HookGenerationContext {
   /** Preferred source-clip duration window in seconds. */
   durationMin: number;
   durationMax: number;
+  /** Optional content genre — biases preferred hook styles in the user prompt. */
+  genre?: ContentGenre;
 }
 
 /** Builds the user prompt for hook candidate generation. */
 export function buildHookGenerationUserPrompt(context: HookGenerationContext): string {
+  // Build optional genre guidance line that biases hook style selection.
+  const genrePreset = context.genre ? getGenrePreset(context.genre) : undefined;
+  const genreHint = genrePreset
+    ? `GENRE: ${genrePreset.label} — prioritise these hook styles for this audience: ${genrePreset.hookStyleHints.slice(0, 4).join(', ')}. Tone: ${genrePreset.toneDescription}`
+    : '';
+
   const lines = [
     `Source video: ${context.sourceTitle} (${context.videoId})`,
     context.language ? `Output language: ${context.language}` : '',
     `Requested hook styles: ${context.styles.join(', ')}`,
     `Preferred source clip duration: ${context.durationMin}-${context.durationMax} seconds`,
+    genreHint,
     '',
     'EDITORIAL ANGLES (generate 2-3 hook variants per angle):',
     ...context.angles.map(

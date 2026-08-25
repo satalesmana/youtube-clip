@@ -105,6 +105,12 @@ export const hookGenerateRequestSchema = z
     platform: z.string().max(32).optional(),
     /** Force regeneration even when a saved hook result exists on disk. */
     refresh: z.boolean().optional(),
+    /**
+     * Optional content genre — when supplied, biases angle types, story concept
+     * detection, and hook style prioritisation toward the patterns that work
+     * best for that genre.
+     */
+    genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment']).optional(),
   })
   .refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
     message: 'Provide exactly one of: youtubeUrl OR videoId.',

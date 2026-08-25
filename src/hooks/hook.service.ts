@@ -8,6 +8,7 @@ import type { IHookEvaluator } from './hook.evaluator.js';
 import type { IHookScorer } from './hook.scorer.js';
 import type { IHookRanker } from './hook.ranker.js';
 import type { HookCandidate, HookRecommendationResult, HookStyle } from './hook.types.js';
+import type { ContentGenre } from '../types/genre.js';
 import { MVP_HOOK_STYLES } from './hook.types.js';
 
 export interface HookServiceOptions {
@@ -34,6 +35,8 @@ export interface HookRecommendationInput {
   language?: string;
   /** Per-request source-clip duration override (seconds). */
   duration?: { min?: number; max?: number };
+  /** Optional content genre — biases hook style prioritisation in the generation prompt. */
+  genre?: ContentGenre;
 }
 
 /** Runs the full hook recommendation pipeline for one video. */
@@ -85,6 +88,7 @@ export class HookService implements IHookService {
       language: input.language,
       durationMin: input.duration?.min ?? this.options.durationMin ?? 1.5,
       durationMax: input.duration?.max ?? this.options.durationMax ?? 5,
+      genre: input.genre,
     };
     const candidates = await this.generator.generate(context);
 
