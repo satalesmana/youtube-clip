@@ -233,6 +233,10 @@ export async function extractFrame({
   logger,
 }: ExtractFrameOptions): Promise<void> {
   try {
+    const { dirname } = await import('node:path');
+    const { ensureDir } = await import('./fs.js');
+    await ensureDir(dirname(outputPath));
+
     await runCommand(
       binaryPath,
       [
@@ -242,6 +246,8 @@ export async function extractFrame({
         '-i',
         inputPath,
         '-frames:v',
+        '1',
+        '-update',
         '1',
         '-q:v',
         '2',

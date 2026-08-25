@@ -78,6 +78,80 @@ export class RouterProvider implements IOllamaProvider {
       clearTimeout(timeoutHandle);
     }
   }
+
+  /** Sends a vision chat request with an image file or buffer and returns the raw response. */
+  async chatVision(options: {
+    model?: string;
+    prompt: string;
+    imagePath?: string;
+    imageBuffer?: Buffer;
+    timeoutMs?: number;
+  }): Promise<string> {
+    const timeoutMs = options.timeoutMs ?? 120_000;
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+    let base64 = '';
+    if (options.imageBuffer) {
+      base64 = options.imageBuffer.toString('base64');
+    } else if (options.imagePath) {
+      const fs = await import('node:fs/promises');
+      base64 = await fs.readFile(options.imagePath, 'base64');
+    }
+
+    const requestBody = {
+      model: options.model ?? 'auto',
+      stream: false,
+      temperature: 0.1,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: options.prompt },
+            {
+              type: 'image_url',
+              image_url: { url: `data:image/jpeg;base64,${base64}` },
+            },
+          ],
+        },
+      ],
+    };
+
+    this.logger.debug({ model: requestBody.model, baseUrl: this.baseUrl }, 'Calling AI router (Vision)');
+
+    try {
+      const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      const bodyText = await response.text();
+
+      if (!response.ok) {
+        throw AppError.networkError(
+          `AI router vision responded with HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
+        );
+      }
+
+      const data = parseResponseBody(bodyText);
+      return data.choices?.[0]?.message?.content ?? '';
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw AppError.llmTimeout(`AI router vision request timed out after ${timeoutMs}ms.`, error);
+      }
+
+      throw AppError.networkError('Failed to reach the AI router for vision request.', error);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
 }
 
 function parseResponseBody(bodyText: string): RouterChatResponseBody {
