@@ -343,6 +343,34 @@
                 <span>Dry Run (hanya generate script &amp; TTS, tanpa render video)</span>
               </label>
             </div>
+            <div class="checkbox-row">
+              <label class="checkbox-item">
+                <input type="checkbox" id="transform-blur-watermark" />
+                <span>🫥 Blur Watermark / Logo (kaburkan logo platform di sudut video)</span>
+              </label>
+            </div>
+            <div id="blur-watermark-options" class="form-row hidden" style="margin-top:6px;padding-left:24px;">
+              <div class="input-group">
+                <label class="label-main">Mode Blur</label>
+                <select id="transform-blur-mode">
+                  <option value="preset" selected>Sudut Otomatis (Preset)</option>
+                  <option value="auto">AI Deteksi Otomatis (Vision)</option>
+                </select>
+                <p class="stt-hint muted small">
+                  <strong>Preset:</strong> mengaburkan keempat sudut video (cepat, tanpa AI).<br>
+                  <strong>AI Deteksi:</strong> menggunakan Vision LLM untuk mendeteksi posisi watermark secara akurat (membutuhkan model multimodal).
+                </p>
+              </div>
+              <div class="input-group" id="blur-positions-group">
+                <label class="label-main">Sudut yang Diblur</label>
+                <div class="provider-chips" id="blur-positions">
+                  <button type="button" class="chip-toggle active" data-position="top-left">↖ Atas Kiri</button>
+                  <button type="button" class="chip-toggle active" data-position="top-right">↗ Atas Kanan</button>
+                  <button type="button" class="chip-toggle active" data-position="bottom-left">↙ Bawah Kiri</button>
+                  <button type="button" class="chip-toggle active" data-position="bottom-right">↘ Bawah Kanan</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <button class="btn primary full" id="btn-transform">

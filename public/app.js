@@ -183,6 +183,26 @@
     chip.addEventListener('click', () => chip.classList.toggle('active'));
   });
 
+  /* ---------- Blur Watermark toggle ---------- */
+  $('#transform-blur-watermark')?.addEventListener('change', function () {
+    const opts = $('#blur-watermark-options');
+    if (this.checked) {
+      opts?.classList.remove('hidden');
+    } else {
+      opts?.classList.add('hidden');
+    }
+  });
+
+  /* Hide positions group when mode is 'auto' (AI detects automatically) */
+  $('#transform-blur-mode')?.addEventListener('change', function () {
+    const posGroup = $('#blur-positions-group');
+    if (this.value === 'auto') {
+      posGroup?.classList.add('hidden');
+    } else {
+      posGroup?.classList.remove('hidden');
+    }
+  });
+
   /* ---------- TTS Provider → dynamic voice list ---------- */
   const TTS_VOICES = {
     'edge-tts': [
@@ -689,7 +709,9 @@
       const subs = $('#res-subreddits').value.trim();
       if (subs) body.subreddits = subs;
 
-      const selectedProviders = $$('.chip-toggle.active').map((c) => c.dataset.provider);
+      const selectedProviders = $$('#res-providers .chip-toggle.active')
+        .map((c) => c.dataset.provider)
+        .filter(Boolean);
       if (selectedProviders.length > 0) body.providers = selectedProviders;
 
       setProgress('research', true, 45, '🤖 Menganalisis & merangking topik viral dengan AI…');
@@ -927,31 +949,45 @@
               ? { hookPreviewPath: hookState.selected.previewPath }
               : {}),
           }
-        : {
-            youtubeUrl: url,
-            engine: 'remotion',
-            language: $('#transform-lang').value || 'auto',
-            sttProvider: $('#transform-stt-provider').value || undefined,
-            ttsProvider: $('#transform-tts-provider').value || undefined,
-            ttsVoice: $('#transform-voice').value || undefined,
-            ttsRate: $('#transform-tts-rate')?.value || undefined,
-            genre: $('#transform-genre')?.value || undefined,
-            hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
-            channel: { name: $('#transform-channel').value.trim() || undefined },
-            dryRun: $('#transform-dry-run')?.checked || false,
-            ...(clipState.selected.size > 0
-              ? { selectedClips: [...clipState.selected.values()] }
-              : {}),
-            ...(hookState.selected
-              ? {
-                  sourceRange: {
-                    start: hookState.selected.source?.start ?? 0,
-                    end: hookState.selected.source?.end ?? 30,
-                  },
-                  customHook: hookState.selected.spokenHook?.text || hookState.selected.headline?.text,
-                }
-              : {}),
-          };
+        : (() => {
+            const blurEnabled = $('#transform-blur-watermark')?.checked || false;
+            const blurMode = $('#transform-blur-mode')?.value || 'preset';
+            const selectedPositions = blurEnabled && blurMode === 'preset'
+              ? $$('#blur-positions .chip-toggle.active').map((c) => c.dataset.position).filter(Boolean)
+              : undefined;
+            const blurWatermark = blurEnabled
+              ? { enabled: true, mode: blurMode, ...(selectedPositions?.length ? { positions: selectedPositions } : {}) }
+              : undefined;
+            return {
+              youtubeUrl: url,
+              engine: 'remotion',
+              language: $('#transform-lang').value || 'auto',
+              sttProvider: $('#transform-stt-provider').value || undefined,
+              ttsProvider: $('#transform-tts-provider').value || undefined,
+              ttsVoice: $('#transform-voice').value || undefined,
+              ttsRate: $('#transform-tts-rate')?.value || undefined,
+              genre: $('#transform-genre')?.value || undefined,
+              hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
+              channel: { name: $('#transform-channel').value.trim() || undefined },
+              dryRun: $('#transform-dry-run')?.checked || false,
+              ...(blurWatermark ? { blur_watermark: blurWatermark } : {}),
+              ...(clipState.selected.size > 0
+                ? { selectedClips: [...clipState.selected.values()] }
+                : {}),
+              ...(hookState.selected
+                ? {
+                    sourceRange: {
+                      start: hookState.selected.source?.start ?? 0,
+                      end: hookState.selected.source?.end ?? 30,
+                    },
+                    hookTitle: hookState.selected.headline?.text,
+                    hookTag: hookState.selected.headline?.tag,
+                    hookHighlightWords: hookState.selected.headline?.highlightWords,
+                    customHook: hookState.selected.spokenHook?.text || hookState.selected.headline?.text,
+                  }
+                : {}),
+            };
+          })();
 
       const res = await fetch('/api/transform', {
         method: 'POST',

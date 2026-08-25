@@ -29,6 +29,7 @@ import type { ISubtitleService } from '../services/subtitle.service.js';
 import type { ICompositionEngine, CompositionAssets } from '../composition/composition.types.js';
 import type { ContentCache } from '../services/content-cache.service.js';
 import type { ReelComposerService, ReelSegment, ReelSegmentSubtitle } from '../services/reel-composer.service.js';
+import type { IWatermarkFilterService } from '../services/watermark-filter.service.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
 
@@ -53,6 +54,10 @@ export interface TransformControllerDeps {
   compositionEngine: ICompositionEngine;
   /** Optional disk cache — regenerating the same video returns cached LLM stage outputs. */
   contentCache?: ContentCache;
+  /**
+   * Optional watermark filter service for blurring detected watermarks in source video.
+   */
+  watermarkFilterService?: IWatermarkFilterService;
   /**
    * Optional reel composer (flow redesign step 3, `outputMode: 'reel'`).
    * When absent, reel requests fail with a clear validation error instead of
@@ -374,12 +379,21 @@ export class TransformController {
         ttsSections: ttsResult.sections,
         story,
         customHook: request.customHook,
+        hookTitle: request.hookTitle,
+        hookTag: request.hookTag,
+        hookHighlightWords: request.hookHighlightWords,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
     } catch (err) {
       logger.warn({ err }, 'Video plan failed');
       videoPlan = this.fallbackVideoPlan(script, ttsResult.outputPath);
     }
+
+    const returnedAngle = {
+      ...selectedAngle,
+      ...(request.hookTitle ? { hook: request.hookTitle } : {}),
+      ...(request.customAngleTitle ? { title: request.customAngleTitle } : {}),
+    };
 
     // Dry-run mode
     if (request.dryRun) {
@@ -388,7 +402,7 @@ export class TransformController {
         jobId,
         videoId,
         candidateId: request.candidateId,
-        angle: selectedAngle,
+        angle: returnedAngle,
         story,
         storyApplied: story != null,
         script,
@@ -411,7 +425,7 @@ export class TransformController {
       : undefined;
     const templateOrStyle = request.style ?? request.template ?? 'commentary';
     const outputVideo = await this.renderVideo(
-      videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine,
+      videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine, request.blur_watermark,
     );
 
     return {
@@ -419,7 +433,7 @@ export class TransformController {
       jobId,
       videoId,
       candidateId: request.candidateId,
-      angle: selectedAngle,
+      angle: returnedAngle,
       story,
       // False when story planning failed and the plan fell back to equal
       // slicing — lets the UI explain a "genericer" result honestly.
@@ -626,12 +640,50 @@ export class TransformController {
     /** The chosen hook's source range — drives the fallback path's footage trim. */
     hookRange?: { start: number; end: number },
     engine?: TransformRequestInput['engine'],
+    blurWatermark?: TransformRequestInput['blur_watermark'],
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(outputDir);
 
     const outputPath = join(outputDir, 'transformed.mp4');
+
+    // Pre-process watermark blurring on source video if requested
+    let sourceVideoForRender = videoPath;
+    if (blurWatermark && this.deps.watermarkFilterService) {
+      const wmOpts = typeof blurWatermark === 'boolean'
+        ? { enabled: blurWatermark, mode: 'preset' as const }
+        : blurWatermark;
+      if (wmOpts.enabled) {
+        const wmDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'wm');
+        const blurredVideoPath = join(wmDir, 'source-blurred.mp4');
+        try {
+          const filterResult = await this.deps.watermarkFilterService.buildFilter(videoPath, wmOpts);
+          if (filterResult.filterComplex) {
+            await ensureDir(wmDir);
+            const { runCommand } = await import('../utils/exec.js');
+            const adapted = filterResult.filterComplex.replace(/\[in\]/g, '[0:v]').replace(/\[out\]/g, '[vout]');
+            this.deps.logger.info({ filterComplex: adapted }, 'Applying watermark blur to source video for render');
+            await runCommand('ffmpeg', [
+              '-y',
+              '-i', videoPath,
+              '-filter_complex', adapted,
+              '-map', '[vout]',
+              '-map', '0:a?',
+              '-c:v', 'libx264',
+              '-preset', 'veryfast',
+              '-crf', '18',
+              '-c:a', 'copy',
+              blurredVideoPath,
+            ], { logger: this.deps.logger });
+            sourceVideoForRender = blurredVideoPath;
+            this.deps.logger.info({ blurredVideoPath, regions: filterResult.regionCount }, 'Watermark blur applied to source video before rendering');
+          }
+        } catch (err) {
+          this.deps.logger.warn({ err }, 'Watermark blurring failed; continuing with original source video');
+        }
+      }
+    }
 
     // Build RenderContext with commentary text (kept for engine selection)
     const commentaryText = videoPlan.scenes
@@ -641,7 +693,7 @@ export class TransformController {
 
     // Build composition assets
     const assets: CompositionAssets = {
-      sourceVideo: videoPath,
+      sourceVideo: sourceVideoForRender,
       narration: ttsResult.outputPath,
       channelName: channel?.name,
       hookBadge,

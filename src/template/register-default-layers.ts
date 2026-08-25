@@ -6,6 +6,7 @@ import { RectangleLayerBuilder } from './layers/rectangle.builder.js';
 import { GradientLayerBuilder } from './layers/gradient.builder.js';
 import type { ILayerRegistry } from './layer-registry.js';
 import type { IReframeService } from '../services/reframe.service.js';
+import type { IWatermarkFilterService } from '../services/watermark-filter.service.js';
 
 /**
  * Registers every built-in layer type. Adding a new layer kind (progress
@@ -13,9 +14,18 @@ import type { IReframeService } from '../services/reframe.service.js';
  * adding one `register()` call here — nothing in the layout/filtergraph/
  * renderer services ever needs to change.
  */
-export function registerDefaultLayers(registry: ILayerRegistry, deps: { reframeService: IReframeService }): void {
+export function registerDefaultLayers(
+  registry: ILayerRegistry,
+  deps: {
+    reframeService: IReframeService;
+    /** Optional: when provided, VideoLayerBuilder will inject watermark blur into the filter chain. */
+    watermarkFilterService?: IWatermarkFilterService;
+  },
+): void {
   const backgroundBuilder = new BackgroundLayerBuilder();
-  const videoBuilder = new VideoLayerBuilder(deps.reframeService);
+  const videoBuilder = new VideoLayerBuilder(deps.reframeService, {
+    watermarkFilterService: deps.watermarkFilterService,
+  });
   const textBuilder = new TextLayerBuilder();
   const imageBuilder = new ImageLayerBuilder();
   const rectangleBuilder = new RectangleLayerBuilder();

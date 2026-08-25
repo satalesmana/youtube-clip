@@ -57,6 +57,13 @@ import type { WhisperProvider } from '../services/whisper.service.js';
 import { ReelComposerService } from '../services/reel-composer.service.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
+import {
+  PresetWatermarkDetector,
+  CustomWatermarkDetector,
+  VisionWatermarkDetector,
+  HybridWatermarkDetector,
+} from '../services/watermark-detector.service.js';
+import { WatermarkFilterService } from '../services/watermark-filter.service.js';
 
 /**
  * Composition root: this is the only module that knows about concrete
@@ -243,6 +250,54 @@ const reframeService = new ReframeService(
   faceDetectionService,
 );
 
+/**
+ * Watermark detection + blur services.
+ *
+ * `HybridWatermarkDetector` handles:
+ * - `auto`   → `VisionWatermarkDetector` using the active AI provider's multimodal `chatVision`
+ * - `preset` → `PresetWatermarkDetector` (calculates corner patches from resolution)
+ * - `custom` → `CustomWatermarkDetector` (uses caller-specified bounding boxes)
+ */
+const visionWatermarkDetector = new VisionWatermarkDetector(
+  {
+    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+    tempDir: resolve(rootDir, 'outputs', 'temp'),
+    visionChat: async (prompt, imagePath) => {
+      if (aiProvider.provider.chatVision) {
+        return aiProvider.provider.chatVision({
+          model: aiProvider.model,
+          prompt,
+          imagePath,
+          timeoutMs: aiProvider.timeoutMs,
+        });
+      }
+      return '[]';
+    },
+  },
+  createLogger('watermark-detector.vision'),
+);
+
+const presetWatermarkDetector = new PresetWatermarkDetector(
+  { ffmpegBinaryPath: env.FFMPEG_BINARY_PATH, tempDir: resolve(rootDir, 'outputs', 'temp') },
+  createLogger('watermark-detector.preset'),
+);
+
+const customWatermarkDetector = new CustomWatermarkDetector(
+  { ffmpegBinaryPath: env.FFMPEG_BINARY_PATH, tempDir: resolve(rootDir, 'outputs', 'temp') },
+  createLogger('watermark-detector.custom'),
+);
+
+export const watermarkDetector = new HybridWatermarkDetector(
+  presetWatermarkDetector,
+  customWatermarkDetector,
+  visionWatermarkDetector,
+);
+
+export const watermarkFilterService = new WatermarkFilterService(
+  watermarkDetector,
+  createLogger('watermark-filter'),
+);
+
 const thumbnailService = new ThumbnailService(
   {
     ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
@@ -278,7 +333,7 @@ const bindingService = new BindingService();
 const layoutService = new LayoutService();
 
 const layerRegistry = new LayerRegistry();
-registerDefaultLayers(layerRegistry, { reframeService });
+registerDefaultLayers(layerRegistry, { reframeService, watermarkFilterService });
 
 const validationService = new ValidationService(layerRegistry);
 const templateAssService = new TemplateAssService(assService, { fallbackStyle: assStyle });
@@ -516,6 +571,7 @@ export const previewRenderer = new PreviewRendererService(
   {
     ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
     previewWidth: 360,
+    watermarkFilterService,
   },
   createLogger('preview-renderer'),
 );
@@ -740,6 +796,8 @@ export const container = {
   researchController,
   assStyle,
   compositionEngine,
+  watermarkDetector,
+  watermarkFilterService,
   previewRenderer,
   reelComposer,
 };

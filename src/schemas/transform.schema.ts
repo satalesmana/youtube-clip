@@ -26,8 +26,14 @@ export const transformRequestSchema = z.object({
   selectedAngleId: z.string().optional(),
   /** A custom editorial angle, overriding LLM-generated angles. */
   customAngleTitle: z.string().optional(),
-  /** Custom hook text, overriding LLM-generated hooks. */
+  /** Custom hook text (spoken opening narration), overriding LLM-generated hooks. */
   customHook: z.string().optional(),
+  /** The exact on-screen hook headline title (from recommended hook headline.text). */
+  hookTitle: z.string().optional(),
+  /** Pattern-interrupt category pill tag for hook title (e.g. "🔥 MOMEN VIRAL"). */
+  hookTag: z.string().optional(),
+  /** Words inside hook title to highlight in theme accent color. */
+  hookHighlightWords: z.array(z.string()).optional(),
   /** Composition engine selection (`ffmpeg` or `remotion`). */
   engine: z.enum(['ffmpeg', 'remotion', 'ffmpeg-template']).optional(),
   /** Visual style selection (`commentary`, `sports`, `interview`). */
@@ -98,6 +104,30 @@ export const transformRequestSchema = z.object({
    * - `entertainment` — comedy, lifestyle, vlog, reaction
    */
   genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment']).optional(),
+  /**
+   * Watermark blurring settings.
+   * - `false` / absent — disabled (default, no blur).
+   * - `true`           — shorthand for `{ enabled: true, mode: "preset" }` (blurs all four corners).
+   * - object form      — full control over mode, corner selection, and blur strength.
+   *
+   * Modes:
+   * - `preset`  — blurs the chosen corner patches without any AI detection.
+   * - `auto`    — runs Vision AI detection; falls back to no blur when detection fails.
+   * - `custom`  — uses caller-supplied bounding boxes (requires `regions`).
+   */
+  blur_watermark: z.union([
+    z.boolean(),
+    z.object({
+      enabled: z.boolean().default(true),
+      mode: z.enum(['auto', 'preset', 'custom']).default('preset'),
+      /** Corner positions to blur (for mode `preset`; default: all four). */
+      positions: z
+        .array(z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']))
+        .optional(),
+      /** FFmpeg boxblur sigma strength (5–50; default: 15). */
+      blur_strength: z.coerce.number().int().min(5).max(50).optional(),
+    }),
+  ]).optional(),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

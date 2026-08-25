@@ -39,8 +39,21 @@ export default defineEventHandler(async (event) => {
       start(streamController) {
         const encoder = new TextEncoder();
         const send = (eventName: string, data: unknown) => {
-          streamController.enqueue(encoder.encode(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`));
+          try {
+            streamController.enqueue(encoder.encode(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`));
+          } catch {
+            // Stream might already be closed
+          }
         };
+
+        // Keep-alive heartbeat: sends a ping comment every 5s so browser/proxy connection never times out during render
+        const pingInterval = setInterval(() => {
+          try {
+            streamController.enqueue(encoder.encode(': ping\n\n'));
+          } catch {
+            clearInterval(pingInterval);
+          }
+        }, 5000);
 
         const deps: TransformControllerDeps = {
           youtubeService: container.youtubeService,
@@ -61,16 +74,19 @@ export default defineEventHandler(async (event) => {
           compositionEngine: container.compositionEngine,
           contentCache: container.contentCache,
           reelComposer: container.reelComposer,
+          watermarkFilterService: container.watermarkFilterService,
           onStage: (stage, opts) => send('stage', { stage, skipped: opts?.skipped ?? false }),
         };
 
         const pipeline = new TransformController(deps);
         pipeline.transform(request)
           .then((result) => {
+            clearInterval(pingInterval);
             send('result', result);
             streamController.close();
           })
           .catch((error) => {
+            clearInterval(pingInterval);
             send('error', { message: error?.message ?? 'Transform failed' });
             streamController.close();
           });
@@ -103,6 +119,7 @@ export default defineEventHandler(async (event) => {
     compositionEngine: container.compositionEngine,
     contentCache: container.contentCache,
     reelComposer: container.reelComposer,
+    watermarkFilterService: container.watermarkFilterService,
   };
 
   const controller = new TransformController(deps);

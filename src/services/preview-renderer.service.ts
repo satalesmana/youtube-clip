@@ -3,12 +3,16 @@ import { access, stat } from 'node:fs/promises';
 import { runCommand } from '../utils/exec.js';
 import { ensureDir } from '../utils/fs.js';
 import type { Logger } from '../utils/logger.js';
+import type { IWatermarkFilterService } from './watermark-filter.service.js';
+import type { WatermarkBlurOptions } from '../types/watermark.js';
 
 export interface PreviewRendererOptions {
   /** FFmpeg binary path (default `ffmpeg`). */
   ffmpegBinaryPath?: string;
   /** Output width in pixels. Height follows the source aspect ratio. */
   previewWidth?: number;
+  /** Optional watermark filter service injected at construction time. */
+  watermarkFilterService?: IWatermarkFilterService;
 }
 
 /** Renders a lightweight MP4 preview of one source range. */
@@ -27,6 +31,11 @@ export interface PreviewRenderInput {
   outputDir: string;
   /** File name (without extension) for the preview. */
   fileName: string;
+  /**
+   * Optional watermark blur settings. When provided and the filter service is
+   * wired in, the preview will have the watermark area blurred.
+   */
+  blurWatermark?: WatermarkBlurOptions;
 }
 
 export interface PreviewRenderOutput {
@@ -42,6 +51,10 @@ const DEFAULT_WIDTH = 360;
  * the downloaded source video. Re-encodes at a reduced resolution with
  * `faststart` so the browser can start playback immediately; audio is kept
  * at low bitrate since the spoken content is part of what the user judges.
+ *
+ * When `blurWatermark` is supplied and a `WatermarkFilterService` is
+ * configured, a boxblur overlay is applied over the detected watermark region
+ * before the preview is encoded.
  */
 export class PreviewRendererService implements IPreviewRenderer {
   constructor(
@@ -67,13 +80,43 @@ export class PreviewRendererService implements IPreviewRenderer {
       };
     }
 
+    // Build watermark blur filter (if requested and service is available).
+    let vfFilter = `scale=${width}:-2`;
+    const wmFilter = this.options.watermarkFilterService;
+    if (input.blurWatermark && wmFilter && input.blurWatermark.mode !== 'none') {
+      try {
+        const { filterComplex, regionCount } = await wmFilter.buildFilter(
+          input.videoPath,
+          input.blurWatermark,
+        );
+        if (filterComplex && regionCount > 0) {
+          // Wrap the watermark blur + scale into a single filter_complex chain.
+          // [0:v] → split+blur overlay → scale → [vout]
+          const scaleLabel = 'wm_scaled';
+          const blurGraph = filterComplex
+            .replace('[in]', '[0:v]')
+            .replace('[out]', `[wm_out]`);
+          vfFilter = `${blurGraph};[wm_out]scale=${width}:-2[${scaleLabel}]`;
+          this.logger.info({ regionCount }, 'Preview renderer: watermark blur applied');
+        }
+      } catch (err) {
+        this.logger.warn({ err }, 'Preview renderer: watermark blur failed, rendering without blur');
+      }
+    }
+
+    // Choose between -vf (simple) and -filter_complex (when blur is applied).
+    const isComplex = vfFilter.includes(';') || vfFilter.includes('[0:v]');
+    const filterArgs: string[] = isComplex
+      ? ['-filter_complex', vfFilter, '-map', '[wm_scaled]', '-map', '0:a?']
+      : ['-vf', vfFilter];
+
     await runCommand(ffmpeg, [
       '-y',
       // Input-level seek before `-i` is fast and frame-accurate enough for previews.
       '-ss', input.start.toFixed(3),
       '-t', duration.toFixed(3),
       '-i', input.videoPath,
-      '-vf', `scale=${width}:-2`,
+      ...filterArgs,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28',
       '-c:a', 'aac', '-b:a', '96k',
       '-movflags', '+faststart',
