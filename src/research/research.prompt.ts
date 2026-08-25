@@ -2,6 +2,20 @@ import { AppError } from '../utils/errors.js';
 import type { ResearchTrend } from '../types/research.js';
 import type { ResearchSourceItem } from '../types/media.js';
 
+function formatLanguageInstruction(language: string): string {
+  const lower = language.toLowerCase().trim();
+  if (lower === 'id' || lower === 'indonesia' || lower === 'indonesian') {
+    return 'Indonesian (Bahasa Indonesia)';
+  }
+  if (lower === 'en' || lower === 'english') {
+    return 'English';
+  }
+  if (lower === 'auto') {
+    return 'the dominant language of the signals (usually Indonesian or English)';
+  }
+  return language;
+}
+
 /** Builds the LLM prompt from the collected signals. */
 export function buildResearchPrompt(
   signals: ResearchSourceItem[],
@@ -24,6 +38,8 @@ export function buildResearchPrompt(
     })
     .join('\n');
 
+  const langInstruction = formatLanguageInstruction(language);
+
   return [
     `Analyze the following ${signals.length} signals from news RSS feeds, Reddit, Google Trends and X.`,
     `Identify the ${maxTrends} most viral-worthy topics RIGHT NOW and rank them by likely virality for short-form video creation (YouTube Shorts, TikTok, Instagram Reels).`,
@@ -35,7 +51,7 @@ export function buildResearchPrompt(
     `- Output strict JSON only matching this schema: {"trends": [ { "slug", "title", "summary", "score", "keywords", "category", "signalIndices", "publishedAt" } ]}`,
     `- Return up to ${maxTrends} strongest trends (or fewer if signals are too few/redundant).`,
     '- slug: lowercase-kebab-case unique id, e.g. "timnas-indonesia-kualifikasi-pildun".',
-    `- title/summary: written in ${language === 'auto' ? 'the dominant language of the signals (usually en or id)' : language}.`,
+    `- title/summary: written strictly in ${langInstruction}.`,
     '- summary: 2 sentences: 1st sentence explains why this topic is hot right now with key facts, 2nd sentence gives an actionable angle/hook idea for creating a viral 9:16 short/reel.',
     '- score: integer 0-100, higher = more likely to go viral. Rank by score descending.',
     '- keywords: a JSON array of 2-4 high-intent YouTube search queries (e.g. "[Subject] kronologi", "[Subject] full footage", "[Subject] review", "[Subject] explained"). Prioritize specific queries that find direct video footage over generic buzzwords.',
