@@ -208,7 +208,9 @@ export class TransformController {
     }
 
     // Stage 1: Generate angles
-    const selection = request.sourceRange
+    const selection = request.selectedClips?.length
+      ? this.selectClips(transcript, request.selectedClips)
+      : request.sourceRange
       ? this.selectRange(transcript, request.sourceRange.start, request.sourceRange.end)
       : this.selectMoment(transcript, request.candidateId);
     const clip = {
@@ -216,6 +218,10 @@ export class TransformController {
       end: selection.momentSegments.at(-1)?.end ?? 30,
       text: selection.momentSegments.map((segment) => segment.text).join(' '),
     };
+    const targetLang = request.language === 'auto' || !request.language
+      ? transcript.language
+      : request.language;
+
     const angleContext: ContentAngleContext = {
       candidateId: `candidate_${request.candidateId}`,
       momentSegments: selection.momentSegments,
@@ -227,17 +233,21 @@ export class TransformController {
       clipEnd: clip.end,
       sourceTitle: videoId,
       sourceChannel: '',
-      sourceLanguage: transcript.language,
+      sourceLanguage: targetLang,
+      genre: request.genre,
+      selectedClips: request.selectedClips,
     };
 
     let angleResult: AngleGenerationResult;
     this.emit('angle');
-    // The selected hook's source range changes the moment segments fed to the
-    // angle/story stages — include it so cached outputs always match it.
-    const rangeCacheKey = request.sourceRange
+    // The selected hook's source range or multi-clip selection changes the moment
+    // segments fed to the angle/story stages — include it so cached outputs match.
+    const rangeCacheKey = request.selectedClips?.length
+      ? request.selectedClips.map((c) => `${c.start}-${c.end}`).join(';')
+      : request.sourceRange
       ? `${request.sourceRange.start}-${request.sourceRange.end}`
       : undefined;
-    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey);
+    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey, request.genre, targetLang);
     const cachedAngle = await this.deps.contentCache?.get<AngleGenerationResult>(angleCacheKey);
     if (cachedAngle) {
       logger.info({ cache: 'angle', videoId, candidateId: request.candidateId }, 'Angle generation served from cache');
@@ -258,7 +268,7 @@ export class TransformController {
 
     let story: Awaited<ReturnType<IStoryService['buildStory']>> | undefined;
     this.emit('story');
-    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey);
+    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey, request.genre);
     const cachedStory = await this.deps.contentCache?.get<Awaited<ReturnType<IStoryService['buildStory']>>>(storyCacheKey);
     if (cachedStory) {
       logger.info({ cache: 'story', videoId, candidateId: request.candidateId }, 'Story planning served from cache');
@@ -270,7 +280,7 @@ export class TransformController {
           ...angleContext.contextSegments,
           ...selection.momentSegments,
         ];
-        story = await this.deps.storyService.buildStory(storySegments);
+        story = await this.deps.storyService.buildStory(storySegments, request.genre);
         logger.info({ concept: story.concept, beatCount: story.beats.length }, 'Source story selected');
         await this.deps.contentCache?.set(storyCacheKey, story);
       } catch (err) {
@@ -291,6 +301,8 @@ export class TransformController {
       request.customAngleTitle,
       request.customHook,
       request.language,
+      request.genre,
+      rangeCacheKey,
     );
     const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
     if (cachedScript) {
@@ -315,12 +327,14 @@ export class TransformController {
           sourceChannel: angleContext.sourceChannel,
           sourceLanguage: angleContext.sourceLanguage,
           targetLanguage: request.language === 'auto' ? undefined : request.language,
+          genre: request.genre,
+          selectedClips: request.selectedClips,
         };
         script = await this.deps.scriptService.generateScript(scriptContext);
         await this.deps.contentCache?.set(scriptCacheKey, script);
       } catch (err) {
-        logger.warn({ err }, 'Script generation failed');
-        script = this.fallbackScript(selectedAngle, transcript.language);
+        logger.error({ err, targetLang }, 'Script generation failed — using emergency fallback script');
+        script = this.fallbackScript(selectedAngle, targetLang);
       }
     }
 
@@ -334,7 +348,7 @@ export class TransformController {
     // frontend's responsibility (it syncs the dropdown on change).
     const { createTtsServiceWith } = await import('../container/index.js');
     const ttsService = (request.ttsProvider && request.ttsVoice)
-      ? createTtsServiceWith(request.ttsProvider, request.ttsVoice)
+      ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
       : this.deps.ttsService;
 
     let ttsResult: { outputPath: string; durationSeconds: number; sections?: TTSSectionTiming[] };
@@ -354,6 +368,7 @@ export class TransformController {
         script,
         clipStart: angleContext.clipStart,
         clipEnd: angleContext.clipEnd,
+        selectedClips: request.selectedClips,
         narrationPath: ttsResult.outputPath,
         narrationDurationSeconds: ttsResult.durationSeconds,
         ttsSections: ttsResult.sections,
@@ -732,12 +747,17 @@ export class TransformController {
   }
 
   private fallbackScript(angle: ContentAngle, language: string): OriginalScript {
+    const isId = language === 'id';
     return {
-      candidateId: '', angleId: angle.id, angleTitle: angle.title, language,
+      candidateId: '',
+      angleId: angle.id,
+      angleTitle: angle.title,
+      language,
       sections: [
         { type: 'hook', text: angle.hook },
+        { type: 'context', text: isId ? 'Berikut adalah fakta penting seputar momen ini.' : 'Here is the key context behind this moment.' },
         { type: 'commentary', text: angle.reason },
-        { type: 'conclusion', text: 'Tuntas.' },
+        { type: 'conclusion', text: isId ? 'Itulah momen luar biasa yang baru saja terjadi.' : 'That concludes this incredible moment.' },
       ],
       originality: { status: 'WARNING', notes: ['fallback'] },
       estimatedDurationSeconds: 30,
@@ -795,6 +815,52 @@ export class TransformController {
         ...segments.slice(Math.max(0, firstIndex - 2), firstIndex),
         ...segments.slice(lastIndex + 1, lastIndex + 3),
       ],
+    };
+  }
+
+  /**
+   * Selects transcript segments overlapping any of the user-selected viral clips,
+   * sorted chronologically and deduplicated.
+   */
+  private selectClips(
+    transcript: TranscriptDocument,
+    selectedClips: Array<{ start: number; end: number }>,
+  ): {
+    momentSegments: TranscriptSegment[];
+    contextSegments: TranscriptSegment[];
+  } {
+    const segments = transcript.segments;
+    const momentIndices = new Set<number>();
+    const contextIndices = new Set<number>();
+
+    for (const clip of selectedClips) {
+      if (clip.end <= clip.start) continue;
+      let first = -1;
+      let last = -1;
+      for (let i = 0; i < segments.length; i += 1) {
+        const seg = segments[i]!;
+        if (seg.end < clip.start) continue;
+        if (seg.start > clip.end) break;
+        if (first === -1) first = i;
+        last = i;
+        momentIndices.add(i);
+      }
+      if (first !== -1) {
+        for (let i = Math.max(0, first - 2); i < first; i += 1) {
+          if (!momentIndices.has(i)) contextIndices.add(i);
+        }
+        for (let i = last + 1; i < Math.min(segments.length, last + 3); i += 1) {
+          if (!momentIndices.has(i)) contextIndices.add(i);
+        }
+      }
+    }
+
+    const sortedMomentIdx = [...momentIndices].sort((a, b) => a - b);
+    const sortedContextIdx = [...contextIndices].filter((i) => !momentIndices.has(i)).sort((a, b) => a - b);
+
+    return {
+      momentSegments: sortedMomentIdx.map((i) => segments[i]!),
+      contextSegments: sortedContextIdx.map((i) => segments[i]!),
     };
   }
 

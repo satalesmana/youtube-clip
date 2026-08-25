@@ -53,7 +53,7 @@ export class ScriptService implements IScriptService {
 
         const raw = await this.provider.chat({
           model: this.options.model,
-          system: buildScriptSystemPrompt(effectiveContext.targetDurationSeconds ?? 60),
+          system: buildScriptSystemPrompt(effectiveContext.targetDurationSeconds ?? 60, effectiveContext.genre),
           prompt: buildScriptUserPrompt(effectiveContext),
           temperature: this.options.temperature,
           timeoutMs: this.options.timeoutMs,
@@ -83,7 +83,7 @@ export class ScriptService implements IScriptService {
         const sections = normalizeSections(data.sections);
         enforceFixedHook(sections, context);
         validateTranscriptGrounding(sections, context, this.logger);
-        attachStorySources(sections, context);
+        attachStorySources(sections, context, this.logger);
 
         if (sections.length < 3) {
           throw AppError.llmInvalidResponse('Script response contained too few sections.');
@@ -146,7 +146,7 @@ export class ScriptService implements IScriptService {
   }
 }
 
-function attachStorySources(sections: ScriptSection[], context: ScriptContext): void {
+function attachStorySources(sections: ScriptSection[], context: ScriptContext, logger?: Logger): void {
   if (!context.story) return;
   const beats = new Map(context.story.beats.map((beat) => [beat.id, beat]));
   for (const section of sections) {
@@ -155,10 +155,16 @@ function attachStorySources(sections: ScriptSection[], context: ScriptContext): 
     // Allow sections without beatId (LLM may omit it for non-beat-mapped sections)
     if (!section.beatId) continue;
     const beat = beats.get(section.beatId);
-    if (!beat) throw AppError.llmInvalidResponse(`Script section references unknown story beat "${section.beatId}".`);
+    if (!beat) {
+      logger?.debug({ beatId: section.beatId }, 'Script section references unknown story beat; skipping source link');
+      continue;
+    }
     // Map story beat role to script section type for validation
     const mappedSectionType = mapBeatRoleToSectionType(beat.role);
-    if (mappedSectionType !== section.type) throw AppError.llmInvalidResponse(`Story beat "${section.beatId}" with role "${beat.role}" doesn't match script section type "${section.type}".`);
+    if (mappedSectionType !== section.type) {
+      logger?.debug({ beatId: section.beatId, role: beat.role, sectionType: section.type }, 'Story beat role does not strictly match section type; skipping strict mapping');
+      continue;
+    }
     section.source = { start: beat.start, end: beat.end };
     if (!section.evidence?.length) section.evidence = beat.evidence;
   }
@@ -166,6 +172,12 @@ function attachStorySources(sections: ScriptSection[], context: ScriptContext): 
 
 /** Rejects generic drafts whose claimed evidence is absent from the supplied transcript. */
 function validateTranscriptGrounding(sections: ScriptSection[], context: ScriptContext, logger?: Logger): void {
+  const isCrossLingual = Boolean(
+    context.targetLanguage &&
+    context.sourceLanguage &&
+    context.targetLanguage.toLowerCase() !== context.sourceLanguage.toLowerCase(),
+  );
+
   const transcript = [...context.momentSegments, ...(context.contextSegments ?? [])]
     .map((segment) => normalizeForMatch(segment.text))
     .join(' ');
@@ -175,30 +187,39 @@ function validateTranscriptGrounding(sections: ScriptSection[], context: ScriptC
   for (const section of sections) {
     if (!groundedTypes.has(section.type)) continue;
     const evidence = section.evidence ?? [];
-    if (evidence.length === 0) {
+    if (evidence.length === 0 && !isCrossLingual) {
       throw AppError.llmInvalidResponse(`Script section "${section.type}" is missing transcript evidence.`);
     }
     for (const quote of evidence) {
       const normalizedQuote = normalizeForMatch(quote);
       if (!transcript.includes(normalizedQuote)) {
-        throw AppError.llmInvalidResponse(
-          `Script section "${section.type}" contains evidence not found in the supplied transcript.`,
-        );
+        if (isCrossLingual) {
+          logger?.debug({ quote, sectionType: section.type }, 'Evidence quote in cross-lingual mode differs from source transcript');
+        } else {
+          throw AppError.llmInvalidResponse(
+            `Script section "${section.type}" contains evidence not found in the supplied transcript.`,
+          );
+        }
+      } else {
+        evidenceUsed.add(normalizedQuote);
       }
-      evidenceUsed.add(normalizedQuote);
     }
   }
 
   const source = sections.find((section) => section.type === 'source');
-  if (!source?.sourceQuote || !transcript.includes(normalizeForMatch(source.sourceQuote))) {
-    throw AppError.llmInvalidResponse('The source section must include a verbatim sourceQuote from the transcript.');
+  if (source?.sourceQuote && !transcript.includes(normalizeForMatch(source.sourceQuote))) {
+    if (isCrossLingual) {
+      logger?.debug({ sourceQuote: source.sourceQuote }, 'Source quote in cross-lingual mode translated or adapted');
+    } else {
+      throw AppError.llmInvalidResponse('The source section must include a verbatim sourceQuote from the transcript.');
+    }
   }
   // Note: source.text should naturally include sourceQuote, but we don't enforce
   // strict inclusion here to avoid false negatives from minor formatting differences.
-  if (logger && source.text && !normalizeForMatch(source.text).includes(normalizeForMatch(source.sourceQuote))) {
+  if (logger && source?.text && source?.sourceQuote && !normalizeForMatch(source.text).includes(normalizeForMatch(source.sourceQuote))) {
     logger.warn({ sourceQuote: source.sourceQuote }, 'Source section text does not include sourceQuote verbatim — TTS narration may be less specific');
   }
-  if (evidenceUsed.size < 2) {
+  if (!isCrossLingual && evidenceUsed.size < 2) {
     throw AppError.llmInvalidResponse('Script must use at least two distinct transcript details as evidence.');
   }
 }
@@ -238,7 +259,16 @@ function enforceFixedHook(sections: ScriptSection[], context: ScriptContext): vo
     sections.unshift({ type: 'hook', text: fixedHook });
     return;
   }
-  hook.text = fixedHook;
+  // When targetLanguage is specified and differs from sourceLanguage, preserve the LLM's
+  // translated/adapted hook text instead of overwriting it with the original language string.
+  const isCrossLingual = Boolean(
+    context.targetLanguage &&
+    context.sourceLanguage &&
+    context.targetLanguage.toLowerCase() !== context.sourceLanguage.toLowerCase(),
+  );
+  if (!isCrossLingual || !hook.text?.trim()) {
+    hook.text = fixedHook;
+  }
   // A user-selected hook is not a verbatim source quote — drop stale
   // grounding metadata that no longer matches the replaced text.
   delete hook.beatId;

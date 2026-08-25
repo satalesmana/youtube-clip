@@ -457,21 +457,22 @@ export function createTtsService(overrides?: { provider?: ReturnType<typeof crea
  * the request overrides the env-configured TTS provider (e.g. user picks
  * OpenAI instead of edge-tts from the UI).
  */
-export function createTtsServiceWith(kind: 'edge-tts' | 'openai', voice: string): TtsService {
+export function createTtsServiceWith(kind: 'edge-tts' | 'openai', voice: string, rate?: string): TtsService {
   const logger = createLogger('tts.service');
+  const effectiveRate = rate ?? env.TTS_RATE;
   const provider = createTtsProvider({
     kind,
     edge: {
       outputDir: resolve(rootDir, env.OUTPUTS_DIR),
       binaryPath: env.TTS_BINARY_PATH,
-      rate: env.TTS_RATE,
+      rate: effectiveRate,
     },
     openai: {
       outputDir: resolve(rootDir, env.OUTPUTS_DIR),
       baseUrl: env.TTS_BASE_URL,
       apiKey: env.TTS_API_KEY,
       model: env.TTS_MODEL,
-      rate: env.TTS_RATE,
+      rate: effectiveRate,
     },
     logger,
   });
@@ -480,7 +481,7 @@ export function createTtsServiceWith(kind: 'edge-tts' | 'openai', voice: string)
     provider,
     {
       voice,
-      rate: env.TTS_RATE,
+      rate: effectiveRate,
       outputDir: resolve(rootDir, env.OUTPUTS_DIR),
       language: env.TTS_LANGUAGE,
     },

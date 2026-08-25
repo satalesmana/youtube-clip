@@ -55,9 +55,10 @@ export class TtsService implements ITtsService {
     const sectionTimings: TTSSectionTiming[] = [];
     const alignDir = join(voiceDir, '.align');
     let offset = 0;
-    for (const section of narrationSections) {
+    for (let index = 0; index < narrationSections.length; index += 1) {
+      const section = narrationSections[index]!;
       const safeName = section.type.replace(/[^a-z0-9]+/gi, '-');
-      const outPath = join(voiceDir, `narration-${safeName}.mp3`);
+      const outPath = join(voiceDir, `narration-${String(index).padStart(2, '0')}-${safeName}.mp3`);
       const result = await this.provider.synthesize({
         text: section.text,
         voice: this.options.voice,
