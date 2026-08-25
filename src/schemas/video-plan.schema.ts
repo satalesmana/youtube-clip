@@ -29,6 +29,12 @@ export const planSceneSchema = z.object({
   openLoop: z.string().optional(),
   /** The most caption-worthy verbatim line from the source beat. */
   quotableLine: z.string().optional(),
+  /** On-screen headline hook title from recommended hook. */
+  hookTitle: z.string().optional(),
+  /** Pattern-interrupt category pill tag for hook title (e.g. "🔥 MOMEN VIRAL"). */
+  hookTag: z.string().optional(),
+  /** Words in the hook headline rendered in accent color. */
+  highlightWords: z.array(z.string()).optional(),
 });
 
 /** A caption event with word-level timing. */

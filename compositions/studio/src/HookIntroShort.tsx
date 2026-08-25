@@ -109,9 +109,10 @@ export const HookIntroShort: React.FC<HookIntroProps> = ({
         </Sequence>
       </AbsoluteFill>
 
-      {/* Layer 4: Modern Hook Title Card (Static Quote Style, Bottom-Left) */}
+      {/* Layer 4: Modern Hook Title Card (Upper-Middle Video Clipper Style) */}
       <HookHeadline
         text={hook.headlineText}
+        tag={hook.tag}
         theme={theme}
         highlightWords={hook.highlightWords}
         absoluteStartFrame={0}

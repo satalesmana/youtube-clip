@@ -45,6 +45,15 @@ export interface VideoPlanBuildInput {
    * auto-detected hook moment line. Optional: absent when no hook was chosen.
    */
   customHook?: string;
+  /**
+   * Exact on-screen hook headline title chosen by the user (from hook recommendation headline.text).
+   * When set, it is the authoritative on-screen headline title for the hook scene.
+   */
+  hookTitle?: string;
+  /** Pattern-interrupt category pill tag (e.g. "🔥 MOMEN VIRAL"). */
+  hookTag?: string;
+  /** Words in the hook headline rendered in accent color. */
+  hookHighlightWords?: string[];
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -83,7 +92,20 @@ export class VideoPlanService implements IVideoPlanService {
   ) {}
 
   async buildPlan(input: VideoPlanBuildInput): Promise<VideoPlan> {
-    const { script, clipStart, clipEnd, selectedClips: rawSelectedClips, narrationPath, narrationDurationSeconds, story, ttsSections, customHook } = input;
+    const {
+      script,
+      clipStart,
+      clipEnd,
+      selectedClips: rawSelectedClips,
+      narrationPath,
+      narrationDurationSeconds,
+      story,
+      ttsSections,
+      customHook,
+      hookTitle,
+      hookTag,
+      hookHighlightWords,
+    } = input;
     const configuredTarget = this.options.targetDuration ?? 60;
     // Never make a video longer than its narration: that produces a frozen
     // tail and causes a later audio remux to truncate the video.
@@ -220,14 +242,25 @@ export class VideoPlanService implements IVideoPlanService {
     });
 
     // Hook-first: open the video on the strongest cut. A user-selected hook
-    // wins: its text becomes the on-screen headline and its source range is
+    // wins: its headline title becomes the on-screen headline and its source range is
     // used as the hook scene's footage backdrop. Without a selection, keep existing behaviour.
+    const selectedTitle = hookTitle?.trim();
     const selectedHook = customHook?.trim();
-    const hookMoment = selectedHook ? undefined : story?.hookMoment;
+    const hookMoment = (selectedTitle || selectedHook) ? undefined : story?.hookMoment;
     const firstScene = scenes[0];
     if (firstScene && firstScene.type === 'hook') {
-      if (selectedHook) {
+      if (selectedTitle) {
+        firstScene.quotableLine = selectedTitle;
+        firstScene.hookTitle = selectedTitle;
+      } else if (selectedHook) {
         firstScene.quotableLine = selectedHook;
+        firstScene.hookTitle = selectedHook;
+      }
+      if (hookTag?.trim()) {
+        firstScene.hookTag = hookTag.trim();
+      }
+      if (hookHighlightWords && hookHighlightWords.length > 0) {
+        firstScene.highlightWords = hookHighlightWords;
       }
       if (!firstScene.source && clipEnd > clipStart) {
         firstScene.source = {
@@ -244,6 +277,7 @@ export class VideoPlanService implements IVideoPlanService {
       }
       if (hookMoment.suggestedLine?.trim() && !firstScene.quotableLine) {
         firstScene.quotableLine = hookMoment.suggestedLine.trim();
+        firstScene.hookTitle = hookMoment.suggestedLine.trim();
       }
     }
 

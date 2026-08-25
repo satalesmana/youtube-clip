@@ -100,11 +100,24 @@ async function main(): Promise<void> {
     story,
   };
 
-  const planWithHook = await planner.buildPlan({ ...planInput, customHook: 'HOOK PILIHAN USER' });
+  const planWithHook = await planner.buildPlan({
+    ...planInput,
+    customHook: 'HOOK SPOKEN NARASI PILIHAN USER',
+    hookTitle: 'JUDUL ON-SCREEN HOOK REKOMENDASI TERPILIH',
+    hookTag: '⚡ DETIK KRUSIAL',
+    hookHighlightWords: ['REKOMENDASI'],
+  });
   const hookScene = planWithHook.scenes.find((s) => s.type === 'hook');
-  check('hook scene shows the selected hook (quotableLine)',
-    hookScene?.quotableLine === 'HOOK PILIHAN USER',
-    `got: "${hookScene?.quotableLine}"`);
+  check('hook scene shows the exact hookTitle as hookTitle and quotableLine',
+    hookScene?.hookTitle === 'JUDUL ON-SCREEN HOOK REKOMENDASI TERPILIH' &&
+    hookScene?.quotableLine === 'JUDUL ON-SCREEN HOOK REKOMENDASI TERPILIH',
+    `got hookTitle: "${hookScene?.hookTitle}", quotableLine: "${hookScene?.quotableLine}"`);
+  check('hook scene carries hookTag',
+    hookScene?.hookTag === '⚡ DETIK KRUSIAL',
+    `got: "${hookScene?.hookTag}"`);
+  check('hook scene carries highlightWords',
+    Boolean(hookScene?.highlightWords?.includes('REKOMENDASI')),
+    `got: "${JSON.stringify(hookScene?.highlightWords)}"`);
   check('story hookMoment does NOT override the selected hook source',
     !(hookScene?.source?.start === 12 && hookScene?.source?.end === 15),
     `source: ${JSON.stringify(hookScene?.source)}`);

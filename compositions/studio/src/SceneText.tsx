@@ -21,7 +21,9 @@ export const SceneText: React.FC<{
   if (scene.type === 'hook') {
     return (
       <HookHeadline
-        text={scene.quotableLine || scene.narration || ''}
+        text={scene.hookTitle || scene.quotableLine || scene.narration || ''}
+        tag={scene.hookTag}
+        highlightWords={scene.highlightWords}
         theme={theme}
         wordTimings={wordTimings}
         absoluteStartFrame={absoluteStartFrame ?? 0}

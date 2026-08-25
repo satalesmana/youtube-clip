@@ -15,6 +15,12 @@ export type PlanScene = {
   openLoop?: string;
   /** The most caption-worthy verbatim line from the source beat. */
   quotableLine?: string;
+  /** On-screen headline hook title from recommended hook. */
+  hookTitle?: string;
+  /** Pattern-interrupt category pill tag (e.g. "🔥 MOMEN VIRAL"). */
+  hookTag?: string;
+  /** Words in the hook headline rendered in accent color. */
+  highlightWords?: string[];
 };
 
 export type PlanCaption = {
