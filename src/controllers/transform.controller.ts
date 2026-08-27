@@ -325,19 +325,19 @@ export class TransformController {
     } catch (engineError) {
       this.deps.logger.warn({ error: engineError }, 'Composition engine failed, falling back to direct template render');
       // Fallback: direct template render (existing behavior)
+      // Generate ASS subtitles from transcript into the output workspace.
+      const assPath = join(outputDir, 'subtitles.ass');
       const context: RenderContext = {
         clip: { title: 'AI Commentary', score: 99, duration: videoPlan.duration, start: 0, end: videoPlan.duration },
         video: { path: videoPath },
-        subtitle: { ass: '', words: [] },
+        subtitle: { ass: assPath, words: [] },
         channel,
         commentary: { text: commentaryText },
       };
 
-      // Generate ASS subtitles from transcript
       if (transcript && transcript.segments.length > 0) {
         const events = this.deps.subtitleService.buildEvents(transcript, 0, videoPlan.duration);
-        const assContent = this.deps.assService.render(events, this.deps.assStyle);
-        context.subtitle = { ass: assContent, words: events };
+        context.subtitle = { ass: assPath, words: events };
       }
 
       try {
@@ -348,7 +348,7 @@ export class TransformController {
           enrichedLayers: enriched,
           canvas: loaded.template.canvas,
           templateDir: loaded.templateDir,
-          assPath: '',
+          assPath,
           outputPath,
           hints: { sourceWidth: 1920, sourceHeight: 1080, focalPoint: { x: 0.5, y: 0.5 } },
           logger: this.deps.logger,
