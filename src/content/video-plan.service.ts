@@ -26,6 +26,11 @@ export interface VideoPlanBuildInput {
   /** The candidate moment's time range in the source video. */
   clipStart: number;
   clipEnd: number;
+  /**
+   * User-selected viral clips for dynamic multi-clip scene allocation.
+   * When provided (N >= 1), scenes are distributed proportionally across these clips.
+   */
+  selectedClips?: Array<{ start: number; end: number; title?: string }>;
   /** Narration audio path (optional, already synthesized). */
   narrationPath?: string;
   /** Measured narration length. When present it is the authoritative timeline length. */
@@ -34,6 +39,21 @@ export interface VideoPlanBuildInput {
   story?: SourceStory;
   /** Optional per-section narration timing (real word boundaries) from TTS. */
   ttsSections?: TTSSectionTiming[];
+  /**
+   * Hook text explicitly chosen by the user (from the hook recommendation).
+   * When set it becomes the on-screen hook headline, overriding the story's
+   * auto-detected hook moment line. Optional: absent when no hook was chosen.
+   */
+  customHook?: string;
+  /**
+   * Exact on-screen hook headline title chosen by the user (from hook recommendation headline.text).
+   * When set, it is the authoritative on-screen headline title for the hook scene.
+   */
+  hookTitle?: string;
+  /** Pattern-interrupt category pill tag (e.g. "🔥 MOMEN VIRAL"). */
+  hookTag?: string;
+  /** Words in the hook headline rendered in accent color. */
+  hookHighlightWords?: string[];
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -72,7 +92,20 @@ export class VideoPlanService implements IVideoPlanService {
   ) {}
 
   async buildPlan(input: VideoPlanBuildInput): Promise<VideoPlan> {
-    const { script, clipStart, clipEnd, narrationPath, narrationDurationSeconds, story, ttsSections } = input;
+    const {
+      script,
+      clipStart,
+      clipEnd,
+      selectedClips: rawSelectedClips,
+      narrationPath,
+      narrationDurationSeconds,
+      story,
+      ttsSections,
+      customHook,
+      hookTitle,
+      hookTag,
+      hookHighlightWords,
+    } = input;
     const configuredTarget = this.options.targetDuration ?? 60;
     // Never make a video longer than its narration: that produces a frozen
     // tail and causes a later audio remux to truncate the video.
@@ -84,6 +117,14 @@ export class VideoPlanService implements IVideoPlanService {
     if (narrationSections.length === 0) {
       throw AppError.validation('Script has no narration sections to plan.');
     }
+
+    // Resolve usable clip ranges (either from selectedClips or fallback clipStart..clipEnd)
+    const validSelectedClips = (rawSelectedClips ?? []).filter((c) => c.end > c.start);
+    const effectiveClips = validSelectedClips.length > 0
+      ? validSelectedClips
+      : clipEnd > clipStart
+      ? [{ start: clipStart, end: clipEnd }]
+      : [];
 
     // When TTS exposed real per-section durations (edge-tts word boundaries),
     // use them as the authoritative layout so scenes, captions and the voice
@@ -113,7 +154,6 @@ export class VideoPlanService implements IVideoPlanService {
 
     const scenes: PlanScene[] = [];
     let cursor = 0;
-    const sourceRange = clipEnd - clipStart;
 
     // Build a lookup: script section type → story beat (when story is available)
     const beatByType = new Map<string, NonNullable<SourceStory['beats']>[number]>();
@@ -122,6 +162,12 @@ export class VideoPlanService implements IVideoPlanService {
         if (!beatByType.has(beat.role)) beatByType.set(beat.role, beat);
       }
     }
+
+    // Pre-calculate which scenes will display source/background video for dynamic clip bucket distribution
+    const sourceScenesIndices = narrationSections
+      .map((s, idx) => (SECTION_VISUALS[s.type] !== 'graphic' ? idx : -1))
+      .filter((idx) => idx !== -1);
+    const totalSourceScenes = sourceScenesIndices.length;
 
     narrationSections.forEach((section, index) => {
       const duration = durations[index]!;
@@ -136,14 +182,8 @@ export class VideoPlanService implements IVideoPlanService {
         visual: SECTION_VISUALS[section.type] ?? 'speaker',
       };
 
-      // Story mode: use beat source timestamps + retention metadata directly
+      // Story mode metadata (engagement, retentionRisk, openLoop, quotableLine)
       const beat = story ? beatByType.get(section.type) : undefined;
-      if (beat && beat.end > beat.start) {
-        scene.source = {
-          start: Math.max(clipStart, beat.start),
-          end: Math.min(clipEnd, beat.end),
-        };
-      }
       if (beat) {
         if (beat.engagementScore != null) scene.engagementScore = beat.engagementScore;
         if (beat.retentionRisk) scene.retentionRisk = beat.retentionRisk;
@@ -151,14 +191,48 @@ export class VideoPlanService implements IVideoPlanService {
         if (beat.quotableLine) scene.quotableLine = beat.quotableLine;
       }
 
-      // Fallback: equal-slice the source range
-      if (!scene.source && sourceRange > 0) {
-        const sourceCount = narrationSections.filter((s) => SECTION_VISUALS[s.type] !== 'graphic').length;
-        if (sourceCount > 0) {
-          const slice = sourceRange / sourceCount;
-          const sourceCursor = clipStart + index * slice;
-          const srcStart = Math.min(clipEnd - slice, sourceCursor);
-          const srcEnd = Math.min(clipEnd, srcStart + slice);
+      // Visual source assignment:
+      // 1. If explicit selected clips are provided (validSelectedClips), prioritize multi-clip distribution
+      // 2. Otherwise if story beats are available, use beat source timestamps
+      // 3. Otherwise fall back to effectiveClips slicing
+      if (validSelectedClips.length > 0) {
+        const sourceOrder = sourceScenesIndices.indexOf(index);
+        if (sourceOrder !== -1 && totalSourceScenes > 0) {
+          const clipIdx = Math.min(
+            effectiveClips.length - 1,
+            Math.floor((sourceOrder / totalSourceScenes) * effectiveClips.length),
+          );
+          const targetClip = effectiveClips[clipIdx]!;
+
+          const scenesForClip = sourceScenesIndices.filter(
+            (sIdx) => Math.min(
+              effectiveClips.length - 1,
+              Math.floor((sourceScenesIndices.indexOf(sIdx) / totalSourceScenes) * effectiveClips.length),
+            ) === clipIdx,
+          );
+          const orderInClip = scenesForClip.indexOf(index);
+          const clipCount = Math.max(1, scenesForClip.length);
+
+          const clipSpan = targetClip.end - targetClip.start;
+          const slice = clipSpan / clipCount;
+          const srcStart = targetClip.start + orderInClip * slice;
+          const srcEnd = Math.min(targetClip.end, srcStart + slice);
+
+          scene.source = { start: srcStart, end: srcEnd };
+        }
+      } else if (beat && beat.end > beat.start) {
+        scene.source = {
+          start: beat.start,
+          end: beat.end,
+        };
+      } else if (effectiveClips.length > 0) {
+        const sourceOrder = sourceScenesIndices.indexOf(index);
+        if (sourceOrder !== -1 && totalSourceScenes > 0) {
+          const targetClip = effectiveClips[0]!;
+          const clipSpan = targetClip.end - targetClip.start;
+          const slice = clipSpan / totalSourceScenes;
+          const srcStart = targetClip.start + sourceOrder * slice;
+          const srcEnd = Math.min(targetClip.end, srcStart + slice);
           scene.source = { start: srcStart, end: srcEnd };
         }
       }
@@ -167,11 +241,34 @@ export class VideoPlanService implements IVideoPlanService {
       cursor = end;
     });
 
-    // Hook-first: open the video on the strongest cut when the story provides
-    // one, so the first frames show the money shot behind the title card. The
-    // hook's suggestedLine becomes the on-screen title + quote card.
-    const hookMoment = story?.hookMoment;
+    // Hook-first: open the video on the strongest cut. A user-selected hook
+    // wins: its headline title becomes the on-screen headline and its source range is
+    // used as the hook scene's footage backdrop. Without a selection, keep existing behaviour.
+    const selectedTitle = hookTitle?.trim();
+    const selectedHook = customHook?.trim();
+    const hookMoment = (selectedTitle || selectedHook) ? undefined : story?.hookMoment;
     const firstScene = scenes[0];
+    if (firstScene && firstScene.type === 'hook') {
+      if (selectedTitle) {
+        firstScene.quotableLine = selectedTitle;
+        firstScene.hookTitle = selectedTitle;
+      } else if (selectedHook) {
+        firstScene.quotableLine = selectedHook;
+        firstScene.hookTitle = selectedHook;
+      }
+      if (hookTag?.trim()) {
+        firstScene.hookTag = hookTag.trim();
+      }
+      if (hookHighlightWords && hookHighlightWords.length > 0) {
+        firstScene.highlightWords = hookHighlightWords;
+      }
+      if (!firstScene.source && clipEnd > clipStart) {
+        firstScene.source = {
+          start: clipStart,
+          end: Math.min(clipEnd, clipStart + (firstScene.end - firstScene.start)),
+        };
+      }
+    }
     if (hookMoment && firstScene && hookMoment.end > hookMoment.start) {
       const hStart = Math.max(clipStart, hookMoment.start);
       const hEnd = Math.min(clipEnd, hookMoment.end);
@@ -180,6 +277,7 @@ export class VideoPlanService implements IVideoPlanService {
       }
       if (hookMoment.suggestedLine?.trim() && !firstScene.quotableLine) {
         firstScene.quotableLine = hookMoment.suggestedLine.trim();
+        firstScene.hookTitle = hookMoment.suggestedLine.trim();
       }
     }
 
@@ -215,7 +313,7 @@ export class VideoPlanService implements IVideoPlanService {
     return parsed.data;
   }
 
-  /** Groups narration text into short caption events (<= 4 words) and adds a money-line quote card per scene that has one. */
+  /** Groups narration text into short caption events (<= 4 words) with frame-accurate word timings from TTS. */
   private buildCaptions(
     scenes: PlanScene[],
     ttsSections?: TTSSectionTiming[],
@@ -223,50 +321,45 @@ export class VideoPlanService implements IVideoPlanService {
     const captions: PlanCaption[] = [];
     for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex += 1) {
       const scene = scenes[sceneIndex]!;
-      const quotable = scene.quotableLine?.trim();
-      // The hook scene already renders its money line as the kinetic headline,
-      // so a separate quote card would just duplicate the same text on screen.
-      if (quotable && scene.type !== 'hook') {
-        captions.push({
-          start: Number(scene.start.toFixed(2)),
-          // Cap the quote on-screen time so it never sits static for a whole
-          // long scene (retention killer) — it fades out shortly after.
-          end: Number(Math.min(scene.end, scene.start + 2.5).toFixed(2)),
-          text: quotable,
-          type: 'quote',
-          highlightWords: quotable.split(/\s+/).filter(Boolean),
-        });
+      // The hook scene already renders its money line as the kinetic HookHeadline/quote card,
+      // so subtitles and quote cards are omitted to avoid double-text clutter on screen.
+      if (scene.type === 'hook') {
+        continue;
       }
 
       const words = scene.narration.split(/\s+/).filter(Boolean);
       if (words.length === 0) continue;
 
-      // Real word boundaries (edge-tts VTT) when they line up with the spoken
-      // text; otherwise fall back to even distribution across the scene.
-      const realTimings =
+      // Real word boundaries from TTS (VTT / Whisper alignment)
+      const rawTimings =
         ttsSections && ttsSections.length === scenes.length
           ? ttsSections[sceneIndex]?.wordTimings ?? []
           : [];
-      const hasRealTimings =
-        realTimings.length > 0 && realTimings.length === words.length;
 
-      for (let i = 0; i < words.length; i += 4) {
-        const group = words.slice(i, i + 4);
-        if (hasRealTimings) {
-          const groupTimings = realTimings.slice(i, i + 4);
-          const first = groupTimings[0]!;
-          const last = groupTimings[groupTimings.length - 1]!;
+      if (rawTimings.length > 0) {
+        const chunkSize = 4;
+        for (let i = 0; i < words.length; i += chunkSize) {
+          const group = words.slice(i, i + chunkSize);
+          const startIdx = Math.min(rawTimings.length - 1, Math.floor((i / words.length) * rawTimings.length));
+          const endIdx = Math.min(rawTimings.length - 1, Math.floor(((i + group.length) / words.length) * rawTimings.length) - 1);
+          const first = rawTimings[startIdx]!;
+          const last = rawTimings[Math.max(startIdx, endIdx)]!;
+          const chunkTimings = rawTimings.slice(startIdx, Math.max(startIdx + 1, endIdx + 1));
           captions.push({
             start: Number(first.start.toFixed(2)),
             end: Number(Math.max(last.end, first.start + 0.1).toFixed(2)),
             text: group.join(' '),
             highlightWords: this.pickHighlightWords(group),
-            wordTimings: groupTimings,
+            wordTimings: chunkTimings,
           });
-        } else {
+        }
+      } else {
+        const chunkSize = 4;
+        for (let i = 0; i < words.length; i += chunkSize) {
+          const group = words.slice(i, i + chunkSize);
           const sceneSpan = Math.max(scene.end - scene.start, 1);
           const groupStart = scene.start + (i / words.length) * sceneSpan;
-          const groupEnd = scene.start + (Math.min(i + 4, words.length) / words.length) * sceneSpan;
+          const groupEnd = scene.start + (Math.min(i + chunkSize, words.length) / words.length) * sceneSpan;
           captions.push({
             start: Number(groupStart.toFixed(2)),
             end: Number(Math.max(groupEnd, groupStart + 0.1).toFixed(2)),

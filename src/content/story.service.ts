@@ -7,9 +7,35 @@ import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { SourceStory } from '../types/story.js';
+import type { ContentGenre } from '../types/genre.js';
+import { getGenrePreset } from '../types/genre.js';
 
 export interface StoryServiceOptions { model: string; temperature: number; timeoutMs: number; maxRetries: number; }
-export interface IStoryService { buildStory(segments: TranscriptSegment[]): Promise<SourceStory>; }
+export interface IStoryService { buildStory(segments: TranscriptSegment[], genre?: ContentGenre): Promise<SourceStory>; }
+
+/** Builds a genre-specific guidance block appended to the story system prompt. */
+function buildStoryGenreGuidance(genre: ContentGenre): string {
+  const preset = getGenrePreset(genre);
+  if (!preset) return '';
+  const topConcepts = preset.preferredStoryConcepts.slice(0, 3).join(', ');
+  const { narrativePacing, beatCountRange, label } = preset;
+  const beatInstruction =
+    narrativePacing === 'fast'
+      ? `Return ${beatCountRange.min}-${beatCountRange.max} beats. Keep each beat tight — prioritise high engagementScore beats. Drop low-payoff beats (retentionRisk: "low") when they do not add urgency.`
+      : narrativePacing === 'reflective'
+      ? `Return ${beatCountRange.min}-${beatCountRange.max} beats. Deeper "reflection" and "resolution" beats are expected — the audience wants to understand the full arc.`
+      : `Return ${beatCountRange.min}-${beatCountRange.max} beats with a clear escalation arc.`;
+  return [
+    '',
+    `## Genre Context: ${label}`,
+    `The source video belongs to the "${genre}" genre. Apply these biases:`,
+    `- Preferred story concepts (bias toward these when evidence equally supports multiple): ${topConcepts}`,
+    `- Beat count: ${beatInstruction}`,
+    `- Tone: ${preset.toneDescription}`,
+    `Override these biases only when the transcript content genuinely calls for a different treatment.`,
+  ].join('\n');
+}
+
 
 const SYSTEM = `You are a viral short-form editor (TikTok, YouTube Shorts, Instagram Reels). Your job is to analyze a source video transcript and derive a precise story concept with time-coded beats that HOOK viewers and hold retention — grounded ONLY in what the transcript actually contains.
 
@@ -50,11 +76,11 @@ Return 4-7 chronological beats. Each beat MUST include:
 - "quotableLine": the single most caption-worthy verbatim line in this beat (the kind of line a short uses as on-screen text). Empty string ("") when the beat has none.
 - "openLoop": the question or tension this beat opens, answered by a later beat — or how it resolves the loop opened by the previous beat.
 - "retentionRisk": "high" = the money shot, must keep in the clip; "medium" = keep if length allows; "low" = safe to cut or skip.
-- Narrative metadata when the transcript establishes it:
-  - kondisiAwal: the state before this beat's events
-  - konflik: the conflict, tension, or obstacle
-  - titikBalik: the pivotal turning point moment
-  - hasil: the result or outcome
+- Narrative metadata when the transcript establishes it (include only the fields the transcript supports):
+  - kondisiAwal: the initial state or situation before the events of this beat
+  - konflik: the conflict, tension, or obstacle introduced or escalated in this beat
+  - titikBalik: the pivotal turning-point moment or key revelation within this beat
+  - hasil: the result, outcome, or consequence that this beat produces
 
 The beat sequence must form a complete arc: setup → tension/claim → turning point/evidence → resolution → conclusion.
 
@@ -77,19 +103,21 @@ Separately identify the single strongest opening cut in "hookMoment": the exact 
 export class StoryService implements IStoryService {
   constructor(private readonly provider: IOllamaProvider, private readonly options: StoryServiceOptions, private readonly logger: Logger) {}
 
-  async buildStory(segments: TranscriptSegment[]): Promise<SourceStory> {
+  async buildStory(segments: TranscriptSegment[], genre?: ContentGenre): Promise<SourceStory> {
     if (segments.length === 0) throw AppError.validation('Cannot build a story from an empty transcript selection.');
     const source = segments.map((s) => `[${s.start.toFixed(2)} -> ${s.end.toFixed(2)}] ${s.text}`).join('\\n');
+    // Compose the effective system prompt: append genre guidance when genre is supplied.
+    const effectiveSystem = genre ? SYSTEM + buildStoryGenreGuidance(genre) : SYSTEM;
     return retry(async () => {
-      this.logger.info({ segmentCount: segments.length }, 'Building source story');
+      this.logger.info({ segmentCount: segments.length, genre }, 'Building source story');
       const raw = await this.provider.chat({
         model: this.options.model,
-        system: SYSTEM,
+        system: effectiveSystem,
         prompt: `SOURCE TRANSCRIPT:\\n${source}`,
         temperature: this.options.temperature,
         timeoutMs: this.options.timeoutMs,
-        // Deterministic output: same transcript selection → same story beats.
-        seed: hashSeed('story', ...segments.map((s) => `${s.start}|${s.end}|${s.text}`)),
+        // Deterministic output: same transcript selection + genre → same story beats.
+        seed: hashSeed('story', genre ?? '', ...segments.map((s) => `${s.start}|${s.end}|${s.text}`)),
       });
       const parsed = parseLlmJson(raw) as Record<string, unknown>;
       // Pre-process: truncate evidence arrays to max 2 items before schema validation

@@ -3,13 +3,14 @@ import { AppError } from '../utils/errors.js';
 import { hashSeed } from '../utils/seed.js';
 import { angleGenerationResponseSchema } from '../schemas/angle.schema.js';
 import {
-  CONTENT_ANGLE_SYSTEM_PROMPT,
+  buildContentAngleSystemPrompt,
   buildContentAngleUserPrompt,
 } from './content.prompt.js';
 import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { AngleGenerationResult, ContentAngle } from '../types/angle.js';
+import type { ContentGenre } from '../types/genre.js';
 
 export interface ContentAngleServiceOptions {
   model: string;
@@ -37,6 +38,10 @@ export interface ContentAngleContext {
   sourceChannel: string;
   /** Optional target language for the angles (e.g. "id", "en"). */
   sourceLanguage?: string;
+  /** Optional content genre — conditions angle type priorities and tone. */
+  genre?: ContentGenre;
+  /** Optional user-selected multi-clip sequence. */
+  selectedClips?: Array<{ start: number; end: number; title?: string }>;
 }
 
 /** Proposes multiple editorial angles for a single viral moment. */
@@ -62,7 +67,7 @@ export class ContentAngleService implements IContentAngleService {
         this.logger.info({ candidateId: context.candidateId }, 'Generating content angles');
 
         const maxAngles = this.options.maxAngles ?? 5;
-        const systemPrompt = `${CONTENT_ANGLE_SYSTEM_PROMPT}\n\nGenerate at most ${maxAngles} angles.`;
+        const systemPrompt = `${buildContentAngleSystemPrompt(context.genre)}\n\nGenerate at most ${maxAngles} angles.`;
 
         const raw = await this.provider.chat({
           model: this.options.model,

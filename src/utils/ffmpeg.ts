@@ -16,7 +16,14 @@ export interface ExtractAudioOptions {
  * Overwrites the output file if it already exists.
  */
 export async function extractAudio(options: ExtractAudioOptions): Promise<void> {
-  const { binaryPath, inputPath, outputPath, sampleRateHz = 16_000, channels = 1, logger } = options;
+  const {
+    binaryPath,
+    inputPath,
+    outputPath,
+    sampleRateHz = 16_000,
+    channels = 1,
+    logger,
+  } = options;
 
   const args = [
     '-y',
@@ -35,8 +42,68 @@ export async function extractAudio(options: ExtractAudioOptions): Promise<void> 
   try {
     await runCommand(binaryPath, args, { logger });
   } catch (error) {
+    throw AppError.ffmpegFailed(`Failed to extract audio from "${inputPath}" using FFmpeg.`, error);
+  }
+}
+
+export interface ExtractCompressedAudioOptions {
+  binaryPath: string;
+  inputPath: string;
+  outputPath: string;
+  /** Where the segment starts in the source (seconds). */
+  startSeconds?: number;
+  /** How long the segment runs (seconds); omitted reads to the end. */
+  durationSeconds?: number;
+  audioBitrateKbps?: number;
+  sampleRateHz?: number;
+  channels?: number;
+  logger?: Logger;
+}
+
+/**
+ * Extracts a compressed (MP3) mono audio segment from a media file via
+ * FFmpeg — small enough to stay under API upload limits, unlike the WAV
+ * produced by {@link extractAudio}. Overwrites the output if it exists.
+ */
+export async function extractCompressedAudio(
+  options: ExtractCompressedAudioOptions,
+): Promise<void> {
+  const {
+    binaryPath,
+    inputPath,
+    outputPath,
+    startSeconds,
+    durationSeconds,
+    audioBitrateKbps = 64,
+    sampleRateHz = 16_000,
+    channels = 1,
+    logger,
+  } = options;
+
+  // `-ss` sits before `-i` (input seeking) so chunking a multi-hour file
+  // doesn't decode everything before the start point.
+  const args = ['-y'];
+  if (startSeconds !== undefined) args.push('-ss', startSeconds.toFixed(3));
+  args.push('-i', inputPath);
+  if (durationSeconds !== undefined) args.push('-t', durationSeconds.toFixed(3));
+  args.push(
+    '-vn',
+    '-acodec',
+    'libmp3lame',
+    '-b:a',
+    `${audioBitrateKbps}k`,
+    '-ar',
+    String(sampleRateHz),
+    '-ac',
+    String(channels),
+    outputPath,
+  );
+
+  try {
+    await runCommand(binaryPath, args, { logger });
+  } catch (error) {
     throw AppError.ffmpegFailed(
-      `Failed to extract audio from "${inputPath}" using FFmpeg.`,
+      `Failed to extract compressed audio from "${inputPath}" using FFmpeg.`,
       error,
     );
   }
@@ -168,6 +235,10 @@ export async function extractFrame({
   logger,
 }: ExtractFrameOptions): Promise<void> {
   try {
+    const { dirname } = await import('node:path');
+    const { ensureDir } = await import('./fs.js');
+    await ensureDir(dirname(outputPath));
+
     await runCommand(
       binaryPath,
       [
@@ -177,6 +248,8 @@ export async function extractFrame({
         '-i',
         inputPath,
         '-frames:v',
+        '1',
+        '-update',
         '1',
         '-q:v',
         '2',

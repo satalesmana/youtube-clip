@@ -6,6 +6,20 @@ import { FONT } from './design';
 import type { Theme } from './design';
 import type { PlanCaption } from './types';
 
+/**
+ * Safe area constants for vertical layout coordination.
+ * All components must use these to avoid overlap with platform UI
+ * (Like, Comment, Share buttons on TikTok/Reels, dynamic island, etc).
+ */
+export const SAFE_AREA = {
+  /** Top safe zone: below notch/dynamic island. */
+  top: 200,
+  /** Bottom safe zone: above platform action buttons. */
+  bottom: 420,
+  /** Channel watermark lives at this distance from the bottom. */
+  channelBottom: 140,
+};
+
 const fitTextSize = (text: string, withinWidth: number, cap: number, min: number): number => {
   if (!text) {
     return cap;
@@ -73,53 +87,15 @@ export const Caption: React.FC<{
     });
   };
 
-  // Money-line quote card: larger, higher on screen, whole line in accent,
-  // no karaoke bar — it is the on-screen text that carries the hook. Fades
-  // in quickly and out near the end so it never sits static too long.
   if (caption.type === 'quote') {
-    const fitted = fitTextSize(caption.text, width * 0.84, 110, 52);
-    const exit = interpolate(
-      frame,
-      [Math.max(0, durationFrames - Math.round(0.4 * fps)), durationFrames],
-      [1, 0],
-      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-    );
-    return (
-      <AbsoluteFill
-        style={{ justifyContent: 'center', alignItems: 'center', paddingTop: 120 }}
-      >
-        <div
-          style={{
-            fontSize: fitted,
-            lineHeight: 1.14,
-            textAlign: 'center',
-            textTransform: 'uppercase',
-            fontFamily: FONT,
-            color: theme.fill,
-            WebkitTextStroke: `${Math.max(3, Math.round(fitted / 10))}px ${theme.stroke}`,
-            paintOrder: 'stroke fill',
-            maxWidth: width * 0.9,
-            whiteSpace: 'normal',
-            opacity: enter * exit,
-            scale: interpolate(enter, [0, 1], [0.82, 1], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-              output: 'perceptual-scale',
-            }),
-            translate: interpolate(enter, [0, 1], ['0px 0px', '0px 40px']),
-          }}
-        >
-          {renderTokens(caption.text)}
-        </div>
-      </AbsoluteFill>
-    );
+    return null;
   }
 
   const fitted = fitTextSize(caption.text, width * 0.9, 96, 44);
 
   return (
     <AbsoluteFill
-      style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 340 }}
+      style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: SAFE_AREA.bottom }}
     >
       <div
         style={{
@@ -139,7 +115,10 @@ export const Caption: React.FC<{
             extrapolateRight: 'clamp',
             output: 'perceptual-scale',
           }),
-          translate: interpolate(enter, [0, 1], ['0px 0px', '0px 40px']),
+          translate: interpolate(enter, [0, 1], ['0px 20px', '0px 0px'], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
         }}
       >
         {renderTokens(caption.text, true)}

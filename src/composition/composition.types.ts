@@ -14,6 +14,8 @@ export interface CompositionAssets {
   hookBadge?: string;
   /** Requested visual treatment for this render, selected per request. */
   style?: 'commentary' | 'sports' | 'interview';
+  /** Requested composition engine for this render. */
+  engine?: CompositionEngineKind | 'ffmpeg' | 'remotion';
   /** Requested FFmpeg template id when that engine is active. */
   templateId?: string;
   /** YouTube video id — render outputs land under `outputs/{videoId}/` when provided. */

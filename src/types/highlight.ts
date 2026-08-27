@@ -1,5 +1,3 @@
-import type { RenderError, RenderedClipMetadata } from './render.js';
-
 /** A single candidate viral clip identified by the AI model. */
 export interface HighlightClip {
   start: number;
@@ -8,23 +6,10 @@ export interface HighlightClip {
   title: string;
   reason: string;
   hook: string;
-}
-
-/** Raw shape returned by Ollama for one transcript chunk, prior to merging. */
-export interface HighlightChunkResult {
-  chunkIndex: number;
-  clips: HighlightClip[];
-}
-
-/** Final, deduplicated and ranked set of highlight clips for a whole video. */
-export interface HighlightResult {
-  clips: HighlightClip[];
-}
-
-/** Full response payload for `POST /api/process`. */
-export interface ProcessResult {
-  video: string;
-  transcript: string;
-  clips: RenderedClipMetadata[];
-  clipErrors: RenderError[];
+  /**
+   * Timestamp (seconds) of the most intense/quotable sentence inside the clip,
+   * as flagged by the LLM. Drives peak-aware duration clamping; absent when
+   * the model omitted it.
+   */
+  peak?: number;
 }

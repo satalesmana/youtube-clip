@@ -25,7 +25,6 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="research" role="tab" aria-selected="true">🔍 Riset Viral</button>
     <button class="tab" data-tab="transform" role="tab" aria-selected="false">✨ Transform</button>
-    <button class="tab" data-tab="rights" role="tab" aria-selected="false">⚖️ Rights & Review</button>
     <button class="tab" data-tab="history" role="tab" aria-selected="false">🕘 Riwayat</button>
   </nav>
 
@@ -34,53 +33,88 @@
     <section id="tab-research" class="tab-panel active">
       <div class="card">
         <div class="card-head">
-          <h2>🔍 Riset Topik Viral</h2>
-          <p class="muted">Kumpulkan sinyal dari RSS berita, Reddit, Google Trends & X, lalu ranking dengan AI.</p>
+          <div class="card-head-title">
+            <h2>🔍 Riset Topik Viral & Trend Spotter</h2>
+            <span class="head-badge">AI Powered</span>
+          </div>
+          <p class="muted">Kumpulkan sinyal multi-sumber dari Google Trends, RSS Berita, Reddit & X/Twitter, lalu ranking otomatis dan temukan video YouTube siap transformasi.</p>
         </div>
+
+        <!-- Quick Presets -->
+        <div class="research-presets">
+          <span class="preset-label">⚡ Preset Cepat:</span>
+          <div class="preset-chips">
+            <button type="button" class="preset-chip" data-keyword="teknologi AI kecerdasan buatan" data-subs="technology,artificial,singularity">🤖 AI & Teknologi</button>
+            <button type="button" class="preset-chip" data-keyword="sepak bola olahraga timnas highlight" data-subs="soccer,sports">⚽ Olahraga & Bola</button>
+            <button type="button" class="preset-chip" data-keyword="bisnis investasi pasar ekonomi crypto" data-subs="finance,business,investing">💼 Bisnis & Finansial</button>
+            <button type="button" class="preset-chip" data-keyword="gaming update esports game viral" data-subs="gaming,games">🎮 Gaming & Esports</button>
+            <button type="button" class="preset-chip" data-keyword="berita viral heboh trending indonesia" data-subs="indonesia">🔥 Trending Indonesia</button>
+          </div>
+        </div>
+
         <div class="research-controls">
-          <label>
-            Jumlah topik
-            <input type="number" id="res-max-trends" min="1" max="25" value="10" />
-          </label>
-          <label>
-            Bahasa
-            <select id="res-language">
-              <option value="auto">Auto</option>
-              <option value="id">Indonesia</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-          <label class="wide">
-            Keyword pencarian (Google News)
-            <input type="text" id="res-keyword" placeholder="misal: teknologi AI, politik Indonesia, Piala Dunia" />
-          </label>
-          <label class="wide">
-            Subreddit (pisahkan koma)
-            <input type="text" id="res-subreddits" placeholder="worldnews,indonesia,technology" />
-          </label>
-          <label class="wide">
-            Provider riset
-            <div class="provider-chips" id="res-providers">
-              <button type="button" class="chip-toggle active" data-provider="rss">📰 RSS Berita</button>
-              <button type="button" class="chip-toggle active" data-provider="reddit">🤖 Reddit</button>
-              <button type="button" class="chip-toggle active" data-provider="trends">📈 Google Trends</button>
-              <button type="button" class="chip-toggle active" data-provider="x">🐦 X/Twitter</button>
+          <div class="form-row">
+            <div class="input-group">
+              <label class="label-main" for="res-max-trends">Jumlah Topik (Max)</label>
+              <input type="number" id="res-max-trends" min="1" max="25" value="10" />
             </div>
-          </label>
-          <button class="btn primary" id="btn-research">🚀 Mulai Riset</button>
+            <div class="input-group">
+              <label class="label-main" for="res-language">Bahasa Analisis</label>
+              <select id="res-language">
+                <option value="auto">Auto (Sesuai Sumber)</option>
+                <option value="id" selected>Indonesia (ID)</option>
+                <option value="en">English (EN)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="input-group">
+              <label class="label-main" for="res-keyword">
+                Keyword Pencarian <span class="optional">(Google News & Trends)</span>
+              </label>
+              <input type="text" id="res-keyword" placeholder="misal: teknologi AI, Timnas Indonesia, gadget baru…" />
+            </div>
+            <div class="input-group">
+              <label class="label-main" for="res-subreddits">
+                Target Subreddit <span class="optional">(pisahkan koma)</span>
+              </label>
+              <input type="text" id="res-subreddits" placeholder="worldnews, indonesia, technology" />
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label class="label-main">Sumber Sinyal Riset</label>
+            <div class="provider-chips" id="res-providers">
+              <button type="button" class="chip-toggle active" data-provider="rss"><span class="chip-icon">📰</span> RSS Berita</button>
+              <button type="button" class="chip-toggle active" data-provider="reddit"><span class="chip-icon">🤖</span> Reddit Hot</button>
+              <button type="button" class="chip-toggle active" data-provider="trends"><span class="chip-icon">📈</span> Google Trends</button>
+              <button type="button" class="chip-toggle active" data-provider="x"><span class="chip-icon">🐦</span> X / Twitter</button>
+            </div>
+          </div>
+
+          <div class="research-action-row">
+            <button class="btn primary full" id="btn-research">🚀 Mulai Riset Topik Viral</button>
+          </div>
         </div>
+
         <div class="progress hidden" id="research-progress">
           <div class="progress-bar"><div class="progress-fill" id="research-progress-fill"></div></div>
-          <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal…</span>
+          <div class="progress-status-row">
+            <span class="progress-label" id="research-progress-label">Mengumpulkan sinyal multi-sumber…</span>
+          </div>
         </div>
       </div>
 
       <div id="research-results" class="results hidden">
         <div class="results-head">
-          <h2>📊 Topik Terdeteksi</h2>
+          <div class="results-title-group">
+            <h2>📊 Topik Viral Terdeteksi</h2>
+            <span class="results-badge" id="research-count-badge">0 Topik</span>
+          </div>
           <span class="muted" id="research-meta"></span>
         </div>
-        <div id="research-list"></div>
+        <div id="research-list" class="research-list-container"></div>
       </div>
 
       <div class="card error-card hidden" id="research-error">
@@ -97,76 +131,252 @@
           <p class="muted">Masukkan URL YouTube — sistem akan generate script orisinal, narasi TTS, dan render video 9:16.</p>
         </div>
         <div class="transform-controls">
-          <div class="input-group">
-            <label class="label-main">URL YouTube</label>
-            <input type="url" id="transform-url" placeholder="https://www.youtube.com/watch?v=..." />
-          </div>
 
-          <div class="form-row">
-            <div class="input-group">
-              <label class="label-main">Engine</label>
-              <select id="transform-engine">
-                <option value="ffmpeg-template">FFmpeg Template</option>
-                <option value="remotion">Remotion</option>
-              </select>
+          <!-- ═══ STEP 1: Sumber Video ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">1</span> Sumber Video
             </div>
-            <div class="input-group hidden" id="remotion-style-group">
-              <label class="label-main">Style</label>
-              <select id="transform-style">
-                <option value="commentary">Commentary</option>
-                <option value="sports">Sports News</option>
-                <option value="interview">Interview</option>
-              </select>
+            <div class="input-group">
+              <input type="url" id="transform-url" placeholder="Tempel URL YouTube di sini…" />
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="input-group">
-              <label class="label-main">Bahasa Output</label>
-              <select id="transform-lang">
-                <option value="auto" selected>Auto (ikuti sumber)</option>
-                <option value="id">Indonesia</option>
-                <option value="en">English</option>
-              </select>
+          <!-- ═══ STEP 2: Bahasa Output & Genre ═══ -->
+          <div class="workflow-section" id="language-genre-section">
+            <div class="workflow-label">
+              <span class="step-num">2</span> Bahasa Output &amp; Genre
             </div>
-            <div class="input-group">
-              <label class="label-main">TTS Voice</label>
-              <select id="transform-voice">
-                <option value="id-ID-ArdiNeural" selected>Ardi (ID)</option>
-                <option value="id-ID-GadisNeural">Gadis (ID)</option>
-                <option value="en-US-GuyNeural">Guy (EN)</option>
-                <option value="en-US-AriaNeural">Aria (EN)</option>
-              </select>
+            <div class="form-row">
+              <div class="input-group">
+                <label class="label-main">Bahasa Target (TTS &amp; Hook)</label>
+                <select id="transform-lang">
+                  <option value="auto" selected>Auto (ikuti bahasa sumber)</option>
+                  <option value="id">🇮🇩 Indonesia</option>
+                  <option value="en">🇬🇧 English</option>
+                </select>
+                <p class="stt-hint muted small">
+                  Pilih bahasa output video akhir. Rekomendasi Hook, Klip, naskah AI, dan suara TTS akan otomatis disesuaikan ke bahasa ini.
+                </p>
+              </div>
+              <div class="input-group">
+                <label class="label-main">Genre Konten <span class="optional-label">(opsional)</span></label>
+                <select id="transform-genre">
+                  <option value="" selected>Auto / General (tanpa preset)</option>
+                  <option value="podcast">🎙️ Podcast / Interview</option>
+                  <option value="sports">⚽ Olahraga / Sports</option>
+                  <option value="gaming">🎮 Gaming / Esports</option>
+                  <option value="tutorial">💡 Tutorial / Edukasi</option>
+                  <option value="commentary">📰 Komentari / Berita</option>
+                  <option value="entertainment">🎭 Entertainment / Lifestyle</option>
+                </select>
+                <p class="stt-hint muted small">
+                  Menyesuaikan prioritas angle, struktur cerita (beats), gaya hook, dan pacing naskah sesuai jenis konten.
+                </p>
+              </div>
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="input-group">
-              <label class="label-main">Hook Badge <span class="optional">(opsional)</span></label>
-              <input type="text" id="transform-hook-badge" placeholder="misal: 10RB+ Views" />
+          <!-- ═══ STEP 3: Mesin Transkrip (STT) ═══ -->
+          <div class="workflow-section" id="stt-engine-section">
+            <div class="workflow-label">
+              <span class="step-num">3</span> Mesin Transkrip (STT)
             </div>
-            <div class="input-group">
-              <label class="label-main">Nama Channel <span class="optional">(opsional)</span></label>
-              <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
+            <div class="form-row">
+              <div class="input-group">
+                <select id="transform-stt-provider">
+                  <option value="" selected>Auto (ikuti server)</option>
+                  <option value="faster-whisper">Faster Whisper (lokal)</option>
+                  <option value="whisper-cpp">Whisper.cpp (lokal)</option>
+                  <option value="whisperx">WhisperX (lokal)</option>
+                  <option value="openai">OpenAI Transcribe</option>
+                </select>
+                <p class="stt-hint muted small">
+                  Dipakai saat video pertama kali diproses: Generate Hook,
+                  Generate Klip Viral, dan Transformasi sama-sama menranskrip
+                  audio dengan engine ini. Hasil transkrip tersimpan per video.
+                </p>
+              </div>
             </div>
           </div>
 
-          <div class="checkbox-row">
-            <label class="checkbox-item">
-              <input type="checkbox" id="transform-rights-gate" checked />
-              <span>Rights Gate</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" id="transform-quality-check" checked />
-              <span>Quality Check</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" id="transform-dry-run" />
-              <span>Dry Run</span>
-            </label>
+          <!-- ═══ STEP 4: Hook ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">4</span> Rekomendasi Hook
+              <span class="optional-label">(opsional)</span>
+            </div>
+            <button class="btn secondary" id="btn-gen-hooks">
+              ✨ Generate Hook Top-5
+              <span class="stt-badge" data-stt-badge></span>
+            </button>
+
+            <div class="hook-panel hidden" id="hook-panel">
+              <div class="hook-panel-head">
+                <span class="hook-panel-title">🎯 Hasil Hook</span>
+                <div style="display:flex;gap:6px">
+                  <button class="btn small ghost" id="btn-rerender-hooks" title="Render ulang preview video hook dengan layout terbaru (tanpa panggil LLM ulang)">🎨 Test Render Preview</button>
+                  <button class="btn small ghost" id="btn-regen-hooks" title="Jalankan ulang pipeline hook (abaikan cache)">🔄 Generate ulang</button>
+                  <button class="btn small ghost" id="btn-clear-hook">✕ Bersihkan pilihan</button>
+                </div>
+              </div>
+              <p class="muted small" id="hook-meta"></p>
+              <div id="hook-list" class="preview-grid"></div>
+              <p class="muted small">Klik salah satu hook untuk memakainya — hook akan dipakai sebagai custom hook & range footage sumber.</p>
+            </div>
           </div>
 
-          <button class="btn primary full" id="btn-transform">🚀 Mulai Transformasi</button>
+          <!-- ═══ STEP 5: Rekomendasi Klip Viral ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">5</span> Rekomendasi Klip Viral
+              <span class="optional-label">(opsional — untuk mode Reel)</span>
+            </div>
+            <button class="btn secondary" id="btn-gen-clips">
+              🔥 Generate Klip Viral
+              <span class="stt-badge" data-stt-badge></span>
+            </button>
+
+            <div class="clip-panel hidden" id="clip-panel">
+              <div class="hook-panel-head">
+                <span class="hook-panel-title">🎬 Kandidat Klip</span>
+                <div style="display:flex;gap:6px">
+                  <button class="btn small ghost" id="btn-regen-clips" title="Analisis ulang seluruh transkrip (abaikan cache)">🔄 Generate ulang</button>
+                  <button class="btn small ghost" id="btn-clear-clips">✕ Bersihkan pilihan</button>
+                </div>
+              </div>
+              <p class="muted small" id="clip-meta"></p>
+
+              <div id="clip-selection-summary" class="clip-selection-summary hidden">
+                <div class="selection-summary-header">
+                  <span class="selection-summary-title">🎬 Urutan Klip Terpilih (<span id="clip-selected-count">0</span> klip · total <span id="clip-total-duration">0s</span>):</span>
+                </div>
+                <div id="clip-selected-chips" class="clip-selected-chips"></div>
+              </div>
+
+              <div id="clip-list" class="preview-grid"></div>
+              <p class="muted small">Pilih satu atau beberapa klip — dalam mode <strong>Reel</strong>, klip digabung berurutan sesuai nomor pilihan di atas.</p>
+            </div>
+          </div>
+
+          <!-- ═══ STEP 6: Mode Output ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">6</span> Mode Output
+            </div>
+            <div class="form-row">
+              <div class="input-group">
+                <select id="transform-output-mode">
+                  <option value="narration" selected>Narasi — script + TTS (existing)</option>
+                  <option value="reel">Reel — gabungan langsung klip terpilih</option>
+                </select>
+              </div>
+            </div>
+            <!-- Hint khusus mode Reel: pengaturan narasi disembunyikan karena tidak dipakai. -->
+            <p class="muted small hidden" id="reel-mode-hint">
+              Mode Reel: klip terpilih digabung langsung dengan audio aslinya —
+              engine, STT, bahasa, dan TTS tidak dipakai.
+            </p>
+          </div>
+
+          <!-- Narasi-only settings (Step 7-8): tidak dipakai di mode Reel
+               (tanpa LLM/TTS/template). Wrapper ini di-toggle hidden oleh
+               applyOutputModeVisibility() sehingga kedua section ikut hilang. -->
+          <div id="narration-settings">
+            <!-- ═══ STEP 7: Pengaturan TTS Voice ═══ -->
+            <div class="workflow-section">
+              <div class="workflow-label">
+                <span class="step-num">7</span> Pengaturan Suara (TTS Voice)
+              </div>
+              <div class="form-row-3">
+                <div class="input-group">
+                  <label class="label-main">TTS Provider</label>
+                  <select id="transform-tts-provider">
+                    <option value="edge-tts" selected>Edge TTS (gratis)</option>
+                    <option value="openai">OpenAI TTS</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label class="label-main">TTS Voice</label>
+                  <input type="text" id="transform-voice" placeholder="misal: id-ID-ArdiNeural (edge-tts) / nova (openai)" />
+                </div>
+                <div class="input-group">
+                  <label class="label-main">Kecepatan Bicara</label>
+                  <select id="transform-tts-rate">
+                    <option value="-15%">Sangat Santai (-15%)</option>
+                    <option value="-10%" selected>Santai / Alami (-10%)</option>
+                    <option value="-5%">Sedang (-5%)</option>
+                    <option value="+0%">Normal (+0%)</option>
+                    <option value="+10%">Cepat (+10%)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- ═══ STEP 8: Branding ═══ -->
+            <div class="workflow-section">
+              <div class="workflow-label">
+                <span class="step-num">8</span> Branding
+                <span class="optional-label">(opsional)</span>
+              </div>
+              <div class="form-row">
+                <div class="input-group">
+                  <label class="label-main">Nama Channel</label>
+                  <input type="text" id="transform-channel" placeholder="Nama channel kamu" />
+                </div>
+                <div class="input-group">
+                  <label class="label-main">Hook Badge</label>
+                  <input type="text" id="transform-hook-badge" placeholder="misal: 10RB+ Views" />
+                </div>
+              </div>
+            </div>
+          </div><!-- /narration-settings -->
+
+          <!-- ═══ STEP 9: Opsi Tambahan ═══ -->
+          <div class="workflow-section">
+            <div class="workflow-label">
+              <span class="step-num">9</span> Opsi Tambahan
+            </div>
+            <div class="checkbox-row">
+              <label class="checkbox-item">
+                <input type="checkbox" id="transform-dry-run" />
+                <span>Dry Run (hanya generate script &amp; TTS, tanpa render video)</span>
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <label class="checkbox-item">
+                <input type="checkbox" id="transform-blur-watermark" />
+                <span>🫥 Blur Watermark / Logo (kaburkan logo platform di sudut video)</span>
+              </label>
+            </div>
+            <div id="blur-watermark-options" class="form-row hidden" style="margin-top:6px;padding-left:24px;">
+              <div class="input-group">
+                <label class="label-main">Mode Blur</label>
+                <select id="transform-blur-mode">
+                  <option value="preset" selected>Sudut Otomatis (Preset)</option>
+                  <option value="auto">AI Deteksi Otomatis (Vision)</option>
+                </select>
+                <p class="stt-hint muted small">
+                  <strong>Preset:</strong> mengaburkan keempat sudut video (cepat, tanpa AI).<br>
+                  <strong>AI Deteksi:</strong> menggunakan Vision LLM untuk mendeteksi posisi watermark secara akurat (membutuhkan model multimodal).
+                </p>
+              </div>
+              <div class="input-group" id="blur-positions-group">
+                <label class="label-main">Sudut yang Diblur</label>
+                <div class="provider-chips" id="blur-positions">
+                  <button type="button" class="chip-toggle active" data-position="top-left">↖ Atas Kiri</button>
+                  <button type="button" class="chip-toggle active" data-position="top-right">↗ Atas Kanan</button>
+                  <button type="button" class="chip-toggle active" data-position="bottom-left">↙ Bawah Kiri</button>
+                  <button type="button" class="chip-toggle active" data-position="bottom-right">↘ Bawah Kanan</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn primary full" id="btn-transform">
+            🚀 Mulai Transformasi
+            <span class="stt-badge" data-stt-badge></span>
+          </button>
         </div>
         <div class="progress hidden" id="transform-progress">
           <div class="progress-bar"><div class="progress-fill" id="transform-progress-fill"></div></div>
@@ -236,7 +446,7 @@
           <div class="stage-icon">⚡</div>
           <div class="stage-content">
             <div class="stage-title">Render</div>
-            <div class="stage-desc">Composition engine: Remotion / FFmpeg Template</div>
+            <div class="stage-desc">Composition engine: Remotion</div>
           </div>
           <div class="stage-status"></div>
         </div>
@@ -256,39 +466,6 @@
       </div>
     </section>
 
-    <!-- ============ TAB: RIGHTS & REVIEW ============ -->
-    <section id="tab-rights" class="tab-panel">
-      <div class="card">
-        <div class="card-head">
-          <h2>⚖️ Rights Gate & Review</h2>
-          <p class="muted">Verifikasi hak cipta source dan approve konten sebelum publish.</p>
-        </div>
-        <div class="rights-controls">
-          <label class="wide">
-            Video ID / URL
-            <input type="text" id="rights-video-id" placeholder="QyW1rOk-qqI atau URL YouTube" />
-          </label>
-          <button class="btn" id="btn-check-rights">🔍 Cek Rights</button>
-          <button class="btn" id="btn-check-quality">✅ Quality Check</button>
-        </div>
-      </div>
-
-      <div id="rights-result" class="results hidden">
-        <div class="results-head">
-          <h2>📋 Status Rights</h2>
-          <span class="muted" id="rights-meta"></span>
-        </div>
-        <div id="rights-content"></div>
-      </div>
-
-      <div id="quality-result" class="results hidden">
-        <div class="results-head">
-          <h2>📊 Quality Check</h2>
-          <span class="muted" id="quality-meta"></span>
-        </div>
-        <div id="quality-content"></div>
-      </div>
-    </section>
 
     <!-- ============ TAB: RIWAYAT ============ -->
     <section id="tab-history" class="tab-panel">
@@ -306,7 +483,7 @@
   </main>
 
   <footer class="footer">
-    <p>Viral Clip Studio v0.1 — Sprint A-G Complete · FFmpeg Template + Remotion Engine</p>
+    <p>Viral Clip Studio v0.1 — Sprint A-G Complete · Remotion Engine</p>
   </footer>
 
   <!-- Toast -->

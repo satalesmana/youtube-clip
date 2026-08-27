@@ -25,6 +25,7 @@ export interface IResearchService {
     enabledProviders?: ('rss' | 'reddit' | 'trends' | 'x')[];
     maxTrends?: number;
     keyword?: string;
+    language?: string;
   }): Promise<ResearchResult>;
 }
 
@@ -53,6 +54,7 @@ export class ResearchService implements IResearchService {
     enabledProviders?: ('rss' | 'reddit' | 'trends' | 'x')[];
     maxTrends?: number;
     keyword?: string;
+    language?: string;
   }): Promise<ResearchResult> {
     const skippedSources: { source: string; reason: string }[] = [];
     const collected = await this.collectSignals(skippedSources, options?.enabledProviders, options?.keyword);
@@ -66,7 +68,8 @@ export class ResearchService implements IResearchService {
     this.logger.info({ signalCount: collected.length }, 'Research signals collected');
 
     const maxTrends = options?.maxTrends ?? this.options.maxTrends;
-    const trends = await this.analyzeAndRank(collected, maxTrends);
+    const language = options?.language ?? this.options.language;
+    const trends = await this.analyzeAndRank(collected, maxTrends, language);
     this.logger.info({ trendCount: trends.length }, 'Research trends ranked');
 
     // Attach YouTube videos to each trend (bounded concurrency).
@@ -125,7 +128,11 @@ export class ResearchService implements IResearchService {
     return collected;
   }
 
-  private async analyzeAndRank(signals: ResearchSourceItem[], maxTrends: number): Promise<ResearchTrend[]> {
+  private async analyzeAndRank(
+    signals: ResearchSourceItem[],
+    maxTrends: number,
+    language: string = this.options.language,
+  ): Promise<ResearchTrend[]> {
     // Cap signals to keep prompt size manageable for local models.
     // Prioritize recent signals and those with engagement data.
     const capped = signals
@@ -142,7 +149,7 @@ export class ResearchService implements IResearchService {
       })
       .slice(0, this.options.maxSignalsForLlm);
 
-    const prompt = buildResearchPrompt(capped, this.options.language, maxTrends);
+    const prompt = buildResearchPrompt(capped, language, maxTrends);
     this.logger.debug({ signalCount: capped.length, promptLength: prompt.length }, 'Sending signals to LLM');
 
     try {
@@ -155,7 +162,7 @@ export class ResearchService implements IResearchService {
       this.logger.info({ rawResponseLength: raw.length }, 'Raw LLM response received');
       this.logger.debug({ raw }, 'LLM raw response content');
 
-      const trends = parseResearchLlmResponse(raw);
+      const trends = parseResearchLlmResponse(raw, capped);
       if (trends.length === 0) {
         throw AppError.researchAnalysisFailed('LLM returned no trends for the collected signals.');
       }

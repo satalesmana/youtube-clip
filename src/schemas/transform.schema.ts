@@ -11,12 +11,33 @@ export const transformRequestSchema = z.object({
   videoId: z.string().optional(),
   /** A previously discovered candidate index (0-based) within the video. */
   candidateId: z.number().int().min(0).default(0),
+  /**
+   * Explicit source footage range (absolute seconds) from a recommended hook
+   * (e.g. `/api/hooks/generate` → hook.source). Overrides the moment selected
+   * by `candidateId`.
+   */
+  sourceRange: z
+    .object({
+      start: z.number().min(0),
+      end: z.number().min(0),
+    })
+    .optional(),
   /** The chosen content-angle id (from the angle generation stage). */
   selectedAngleId: z.string().optional(),
   /** A custom editorial angle, overriding LLM-generated angles. */
   customAngleTitle: z.string().optional(),
-  /** Custom hook text, overriding LLM-generated hooks. */
+  /** Custom hook text (spoken opening narration), overriding LLM-generated hooks. */
   customHook: z.string().optional(),
+  /** The exact on-screen hook headline title (from recommended hook headline.text). */
+  hookTitle: z.string().optional(),
+  /** Pattern-interrupt category pill tag for hook title (e.g. "🔥 MOMEN VIRAL"). */
+  hookTag: z.string().optional(),
+  /** Words inside hook title to highlight in theme accent color. */
+  hookHighlightWords: z.array(z.string()).optional(),
+  /** Composition engine selection (`ffmpeg` or `remotion`). */
+  engine: z.enum(['ffmpeg', 'remotion', 'ffmpeg-template']).optional(),
+  /** Visual style selection (`commentary`, `sports`, `interview`). */
+  style: z.enum(['commentary', 'sports', 'interview']).optional(),
   /** Template id (defaults to `commentary`). */
   template: z.string().optional(),
   /** Channel branding (name + optional logo path). */
@@ -33,11 +54,89 @@ export const transformRequestSchema = z.object({
    * `id`, `en`, ... for explicit languages).
    */
   language: z.enum(['auto', 'id', 'en']).default('auto'),
+  /** TTS provider selection (`edge-tts` or `openai`). Falls back to env default. */
+  ttsProvider: z.enum(['edge-tts', 'openai']).optional(),
+  /** TTS voice identifier (provider-specific, e.g. "id-ID-ArdiNeural" or "nova"). */
+  ttsVoice: z.string().optional(),
+  /** TTS speaking rate adjustment (e.g. "-10%", "+0%", "+10%"). */
+  ttsRate: z.string().optional(),
+  /** STT engine selection. Falls back to env default (`WHISPER_PROVIDER`). */
+  sttProvider: z.enum(['faster-whisper', 'whisper-cpp', 'whisperx', 'openai']).optional(),
+  /**
+   * Output mode for the final video.
+   * - `narration` (default): existing pipeline — script + TTS narration over
+   *   the selected footage. Used whenever this field is absent.
+   * - `reel`: direct concatenation of the selected source ranges with their
+   *   original audio — no script, no TTS, no LLM stages.
+   */
+  outputMode: z.enum(['reel', 'narration']).optional(),
+  /**
+   * User-selected viral clips (from `/api/clips/recommend`) to include in the
+   * output. Required for `outputMode: 'reel'`; in narration mode, enables dynamic
+   * multi-clip storytelling across the selected moments (falls back to single-moment
+   * when omitted).
+   */
+  selectedClips: z.array(z.object({
+    start: z.number().min(0),
+    end: z.number().min(0),
+    title: z.string().optional(),
+  })).min(1).optional(),
+  /**
+   * Server path of the selected hook's styled final intro video
+   * (`hook.previewPath` from `/api/hooks/generate`). When provided and the
+   * file exists, the reel opens with that exact file (WYSIWYG) instead of
+   * re-cutting `sourceRange` from the source video.
+   */
+  hookPreviewPath: z.string().optional(),
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),
+  /**
+   * Optional content genre for the source video.
+   * When supplied, all LLM stages (angle generation, story concept detection,
+   * script pacing, hook style prioritisation) are biased toward the patterns
+   * that work best for that genre.
+   *
+   * - `podcast`       — interview, talk show, long-form conversation
+   * - `sports`        — highlights, match recap, live sports
+   * - `gaming`        — gameplay, esports, game review
+   * - `tutorial`      — how-to, education, step-by-step walkthrough
+   * - `commentary`    — opinion, news analysis, explainer
+   * - `entertainment` — comedy, lifestyle, vlog, reaction
+   */
+  genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment']).optional(),
+  /**
+   * Watermark blurring settings.
+   * - `false` / absent — disabled (default, no blur).
+   * - `true`           — shorthand for `{ enabled: true, mode: "preset" }` (blurs all four corners).
+   * - object form      — full control over mode, corner selection, and blur strength.
+   *
+   * Modes:
+   * - `preset`  — blurs the chosen corner patches without any AI detection.
+   * - `auto`    — runs Vision AI detection; falls back to no blur when detection fails.
+   * - `custom`  — uses caller-supplied bounding boxes (requires `regions`).
+   */
+  blur_watermark: z.union([
+    z.boolean(),
+    z.object({
+      enabled: z.boolean().default(true),
+      mode: z.enum(['auto', 'preset', 'custom']).default('preset'),
+      /** Corner positions to blur (for mode `preset`; default: all four). */
+      positions: z
+        .array(z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']))
+        .optional(),
+      /** FFmpeg boxblur sigma strength (5–50; default: 15). */
+      blur_strength: z.coerce.number().int().min(5).max(50).optional(),
+    }),
+  ]).optional(),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],
+}).refine((data) => !data.sourceRange || data.sourceRange.end > data.sourceRange.start, {
+  message: 'sourceRange.end must be greater than sourceRange.start.',
+  path: ['sourceRange'],
+}).refine((data) => data.outputMode !== 'reel' || (data.selectedClips?.length ?? 0) > 0, {
+  message: 'outputMode "reel" requires at least one selectedClips entry.',
+  path: ['selectedClips'],
 });
 
 export type TransformRequestInput = z.infer<typeof transformRequestSchema>;

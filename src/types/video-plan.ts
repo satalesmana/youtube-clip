@@ -31,6 +31,12 @@ export interface PlanScene {
   openLoop?: string;
   /** The most caption-worthy verbatim line from the source beat. */
   quotableLine?: string;
+  /** On-screen headline hook title from recommended hook. */
+  hookTitle?: string;
+  /** Pattern-interrupt category pill tag for hook title (e.g. "🔥 MOMEN VIRAL"). */
+  hookTag?: string;
+  /** Words in the hook headline rendered in accent color. */
+  highlightWords?: string[];
 }
 
 /** A caption event with word-level timing for the composition engines. */

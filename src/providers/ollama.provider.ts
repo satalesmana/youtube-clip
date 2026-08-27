@@ -18,6 +18,13 @@ interface OllamaChatResponseBody {
 /** Thin transport-layer abstraction over Ollama's `/api/chat` HTTP endpoint. */
 export interface IOllamaProvider {
   chat(options: OllamaChatOptions): Promise<string>;
+  chatVision?(options: {
+    model?: string;
+    prompt: string;
+    imagePath?: string;
+    imageBuffer?: Buffer;
+    timeoutMs?: number;
+  }): Promise<string>;
 }
 
 /** Ollama HTTP client. Talks to a local or remote Ollama server via native `fetch`. */
@@ -72,6 +79,67 @@ export class OllamaProvider implements IOllamaProvider {
       }
 
       throw AppError.networkError('Failed to reach the Ollama server.', error);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  /** Sends a vision chat request with an image file or buffer to Ollama. */
+  async chatVision(options: {
+    model?: string;
+    prompt: string;
+    imagePath?: string;
+    imageBuffer?: Buffer;
+    timeoutMs?: number;
+  }): Promise<string> {
+    const timeoutMs = options.timeoutMs ?? 120_000;
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+    let base64 = '';
+    if (options.imageBuffer) {
+      base64 = options.imageBuffer.toString('base64');
+    } else if (options.imagePath) {
+      const fs = await import('node:fs/promises');
+      base64 = await fs.readFile(options.imagePath, 'base64');
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: options.model ?? 'llava',
+          stream: false,
+          messages: [
+            {
+              role: 'user',
+              content: options.prompt,
+              images: [base64],
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+
+      const bodyText = await response.text();
+
+      if (!response.ok) {
+        throw AppError.networkError(
+          `Ollama vision responded with HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
+        );
+      }
+
+      const data = parseResponseBody(bodyText);
+      return data.choices?.[0]?.message?.content ?? '';
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw AppError.llmTimeout(`Ollama vision request timed out after ${timeoutMs}ms.`, error);
+      }
+
+      throw AppError.networkError('Failed to reach the Ollama server for vision request.', error);
     } finally {
       clearTimeout(timeoutHandle);
     }

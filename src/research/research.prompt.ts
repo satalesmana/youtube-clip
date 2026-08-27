@@ -2,6 +2,20 @@ import { AppError } from '../utils/errors.js';
 import type { ResearchTrend } from '../types/research.js';
 import type { ResearchSourceItem } from '../types/media.js';
 
+function formatLanguageInstruction(language: string): string {
+  const lower = language.toLowerCase().trim();
+  if (lower === 'id' || lower === 'indonesia' || lower === 'indonesian') {
+    return 'Indonesian (Bahasa Indonesia)';
+  }
+  if (lower === 'en' || lower === 'english') {
+    return 'English';
+  }
+  if (lower === 'auto') {
+    return 'the dominant language of the signals (usually Indonesian or English)';
+  }
+  return language;
+}
+
 /** Builds the LLM prompt from the collected signals. */
 export function buildResearchPrompt(
   signals: ResearchSourceItem[],
@@ -24,22 +38,26 @@ export function buildResearchPrompt(
     })
     .join('\n');
 
+  const langInstruction = formatLanguageInstruction(language);
+
   return [
     `Analyze the following ${signals.length} signals from news RSS feeds, Reddit, Google Trends and X.`,
-    `Identify the ${maxTrends} most viral-worthy topics RIGHT NOW and rank them by likely virality.`,
+    `Identify the ${maxTrends} most viral-worthy topics RIGHT NOW and rank them by likely virality for short-form video creation (YouTube Shorts, TikTok, Instagram Reels).`,
     '',
     'SIGNALS:',
     signalText,
     '',
     'INSTRUCTIONS:',
-    `- Output strict JSON only: {"trends": [ { "slug", "title", "summary", "score", "keywords", "category" } ]}`,
-    `- Return exactly ${maxTrends} trends (or fewer if signals are too few/redundant).`,
-    '- slug: lowercase-kebab-case unique id, e.g. "elon-musk-twitter-rename".',
-    `- title/summary: written in ${language === 'auto' ? 'the dominant language of the signals (usually en or id)' : language}.`,
-    '- summary: 1-2 sentences on why it is hot and what angle makes a good short video.',
+    `- Output strict JSON only matching this schema: {"trends": [ { "slug", "title", "summary", "score", "keywords", "category", "signalIndices", "publishedAt" } ]}`,
+    `- Return up to ${maxTrends} strongest trends (or fewer if signals are too few/redundant).`,
+    '- slug: lowercase-kebab-case unique id, e.g. "timnas-indonesia-kualifikasi-pildun".',
+    `- title/summary: written strictly in ${langInstruction}.`,
+    '- summary: 2 sentences: 1st sentence explains why this topic is hot right now with key facts, 2nd sentence gives an actionable angle/hook idea for creating a viral 9:16 short/reel.',
     '- score: integer 0-100, higher = more likely to go viral. Rank by score descending.',
-    '- keywords: comma-separated 2-4 YouTube search keywords, most specific first.',
+    '- keywords: a JSON array of 2-4 high-intent YouTube search queries (e.g. "[Subject] kronologi", "[Subject] full footage", "[Subject] review", "[Subject] explained"). Prioritize specific queries that find direct video footage over generic buzzwords.',
     '- category: one of tech, politics, sports, entertainment, business, science, health, world, lifestyle, other.',
+    '- signalIndices: array of integers (e.g. [0, 2]) indicating which signal index numbers directly support this trend.',
+    '- publishedAt: ISO timestamp of the most recent signal supporting this trend, or empty if unknown.',
     '- Prefer topics backed by multiple sources and recent timestamps; drop obvious duplicates.',
     '- Do NOT invent topics that are not supported by the signals.',
     '',
@@ -48,7 +66,7 @@ export function buildResearchPrompt(
 }
 
 /** Parses the LLM's response into `ResearchTrend[]`, tolerating markdown fences. */
-export function parseResearchLlmResponse(raw: string): ResearchTrend[] {
+export function parseResearchLlmResponse(raw: string, signals?: ResearchSourceItem[]): ResearchTrend[] {
   const text = stripCodeFences(raw).trim();
   if (!text) {
     throw AppError.researchAnalysisFailed('LLM returned an empty research response.');
@@ -103,7 +121,39 @@ export function parseResearchLlmResponse(raw: string): ResearchTrend[] {
 
       const score = clampScore(Number(t.score));
       const summary = typeof t.summary === 'string' ? t.summary : '';
-      const keywords = typeof t.keywords === 'string' ? t.keywords : t.title;
+      // Accept both array format (new) and comma-separated string (legacy).
+      const keywords = Array.isArray(t.keywords)
+        ? (t.keywords as unknown[]).filter((k) => typeof k === 'string').join(', ')
+        : typeof t.keywords === 'string'
+          ? t.keywords
+          : t.title;
+
+      // Extract matched sources from signalIndices if available
+      const matchedSources: ResearchSourceItem[] = [];
+      if (signals && Array.isArray(t.signalIndices)) {
+        for (const idx of t.signalIndices) {
+          const num = Number(idx);
+          if (Number.isInteger(num) && num >= 0 && num < signals.length && signals[num]) {
+            matchedSources.push(signals[num]!);
+          }
+        }
+      }
+
+      // Determine publishedAt date
+      let publishedAt: string | undefined =
+        typeof t.publishedAt === 'string' && t.publishedAt.trim()
+          ? t.publishedAt.trim()
+          : undefined;
+
+      if (!publishedAt && matchedSources.length > 0) {
+        const dates = matchedSources
+          .map((s) => s.publishedAt)
+          .filter((d): d is string => Boolean(d));
+        if (dates.length > 0) {
+          dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+          publishedAt = dates[0];
+        }
+      }
 
       return {
         slug: t.slug,
@@ -112,7 +162,8 @@ export function parseResearchLlmResponse(raw: string): ResearchTrend[] {
         score,
         keywords,
         category: typeof t.category === 'string' ? t.category : 'other',
-        sources: [],
+        publishedAt,
+        sources: matchedSources,
         videos: [],
       };
     })

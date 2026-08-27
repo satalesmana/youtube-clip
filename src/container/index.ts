@@ -16,8 +16,6 @@ import { AssService } from '../services/ass.service.js';
 import { NoOpFaceDetectionService } from '../services/face-detection.service.js';
 import { ReframeService } from '../services/reframe.service.js';
 import { ThumbnailService } from '../services/thumbnail.service.js';
-import { RendererService } from '../services/renderer.service.js';
-import { ProcessController } from '../controllers/process.controller.js';
 import { ContentAngleService } from '../content/angle.service.js';
 import { ScriptService } from '../content/script.service.js';
 import { VideoPlanService } from '../content/video-plan.service.js';
@@ -45,11 +43,27 @@ import { TemplateAssService } from '../template/ass.service.js';
 import { FiltergraphService } from '../template/filtergraph.service.js';
 import { TemplateService } from '../template/template.service.js';
 import { TemplateRendererService } from '../template/renderer.service.js';
-import { RightsService } from '../rights/rights.service.js';
-import { QualityCheckService } from '../rights/quality.service.js';
 import { ContentCache } from '../services/content-cache.service.js';
+import { HookGenerator } from '../hooks/hook.generator.js';
+import { HookEvaluator } from '../hooks/hook.evaluator.js';
+import { HookScorer } from '../hooks/hook.scorer.js';
+import { HookRanker } from '../hooks/hook.ranker.js';
+import { HookService } from '../hooks/hook.service.js';
+import { HookController } from '../controllers/hook.controller.js';
+import { PreviewRendererService } from '../services/preview-renderer.service.js';
+import { StyledHookPreviewService } from '../hook-preview/styled-hook-preview.service.js';
+import { ClipController } from '../controllers/clip.controller.js';
+import type { WhisperProvider } from '../services/whisper.service.js';
+import { ReelComposerService } from '../services/reel-composer.service.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
+import {
+  PresetWatermarkDetector,
+  CustomWatermarkDetector,
+  VisionWatermarkDetector,
+  HybridWatermarkDetector,
+} from '../services/watermark-detector.service.js';
+import { WatermarkFilterService } from '../services/watermark-filter.service.js';
 
 /**
  * Composition root: this is the only module that knows about concrete
@@ -77,6 +91,20 @@ function resolveWhisperBinary(configuredPath: string): string {
   return configuredPath;
 }
 
+/**
+ * OpenAI-compatible STT endpoint config shared by all whisper services.
+ * Falls back to the TTS endpoint config so a single gateway (e.g. 9Router)
+ * that serves both `/audio/transcriptions` and `/audio/speech` works out of
+ * the box; `OPENAI_WHISPER_*` takes precedence when set explicitly.
+ */
+const openaiWhisperConfig = {
+  baseUrl: env.OPENAI_WHISPER_BASE_URL ?? env.TTS_BASE_URL ?? '',
+  apiKey: env.OPENAI_WHISPER_API_KEY ?? env.TTS_API_KEY ?? '',
+  model: env.OPENAI_WHISPER_MODEL,
+  maxUploadMb: env.OPENAI_WHISPER_MAX_UPLOAD_MB,
+  ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+};
+
 const paths = {
   outputs: resolve(rootDir, env.OUTPUTS_DIR),
   clips: resolve(rootDir, env.OUTPUTS_DIR, 'clips'),
@@ -89,7 +117,6 @@ const paths = {
 const youtubeService = new YoutubeService(
   {
     binaryPath: env.YT_DLP_BINARY_PATH,
-    downloadsDir: resolve(rootDir, 'outputs', 'downloads'),
     maxRetries: env.YT_DLP_MAX_RETRIES,
     extraArgs: parseShellArgs(env.YT_DLP_EXTRA_ARGS),
   },
@@ -115,9 +142,31 @@ const whisperService = new WhisperService(
     language: env.WHISPER_LANGUAGE,
     outputDir: resolve(rootDir, 'outputs', 'temp'),
     extraArgs: env.WHISPER_EXTRA_ARGS,
+    openai: openaiWhisperConfig,
   },
   createLogger('whisper.service'),
 );
+
+/**
+ * Creates a WhisperService with an explicit STT provider — used when the
+ * request overrides the env-configured STT engine (e.g. user picks OpenAI
+ * instead of faster-whisper from the UI).
+ */
+export function createWhisperServiceWith(kind: WhisperProvider): WhisperService {
+  return new WhisperService(
+    {
+      provider: kind,
+      binaryPath: resolveWhisperBinary(env.WHISPER_BINARY_PATH),
+      model: env.WHISPER_MODEL,
+      language: env.WHISPER_LANGUAGE,
+      outputDir: resolve(rootDir, 'outputs', 'temp'),
+      extraArgs: env.WHISPER_EXTRA_ARGS,
+      openai: openaiWhisperConfig,
+    },
+    createLogger(`whisper.${kind}`),
+  );
+}
+
 
 /**
  * `AI_PROVIDER` selects which AI agent backs highlight analysis: the local
@@ -162,6 +211,8 @@ const ollamaService = new OllamaService(
     temperature: aiProvider.temperature,
     timeoutMs: aiProvider.timeoutMs,
     maxRetries: aiProvider.maxRetries,
+    minClipSeconds: env.HIGHLIGHT_MIN_SECONDS,
+    maxClipSeconds: env.HIGHLIGHT_MAX_SECONDS,
   },
   createLogger('ollama.service'),
 );
@@ -199,6 +250,54 @@ const reframeService = new ReframeService(
   faceDetectionService,
 );
 
+/**
+ * Watermark detection + blur services.
+ *
+ * `HybridWatermarkDetector` handles:
+ * - `auto`   → `VisionWatermarkDetector` using the active AI provider's multimodal `chatVision`
+ * - `preset` → `PresetWatermarkDetector` (calculates corner patches from resolution)
+ * - `custom` → `CustomWatermarkDetector` (uses caller-specified bounding boxes)
+ */
+const visionWatermarkDetector = new VisionWatermarkDetector(
+  {
+    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+    tempDir: resolve(rootDir, 'outputs', 'temp'),
+    visionChat: async (prompt, imagePath) => {
+      if (aiProvider.provider.chatVision) {
+        return aiProvider.provider.chatVision({
+          model: aiProvider.model,
+          prompt,
+          imagePath,
+          timeoutMs: aiProvider.timeoutMs,
+        });
+      }
+      return '[]';
+    },
+  },
+  createLogger('watermark-detector.vision'),
+);
+
+const presetWatermarkDetector = new PresetWatermarkDetector(
+  { ffmpegBinaryPath: env.FFMPEG_BINARY_PATH, tempDir: resolve(rootDir, 'outputs', 'temp') },
+  createLogger('watermark-detector.preset'),
+);
+
+const customWatermarkDetector = new CustomWatermarkDetector(
+  { ffmpegBinaryPath: env.FFMPEG_BINARY_PATH, tempDir: resolve(rootDir, 'outputs', 'temp') },
+  createLogger('watermark-detector.custom'),
+);
+
+export const watermarkDetector = new HybridWatermarkDetector(
+  presetWatermarkDetector,
+  customWatermarkDetector,
+  visionWatermarkDetector,
+);
+
+export const watermarkFilterService = new WatermarkFilterService(
+  watermarkDetector,
+  createLogger('watermark-filter'),
+);
+
 const thumbnailService = new ThumbnailService(
   {
     ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
@@ -234,7 +333,7 @@ const bindingService = new BindingService();
 const layoutService = new LayoutService();
 
 const layerRegistry = new LayerRegistry();
-registerDefaultLayers(layerRegistry, { reframeService });
+registerDefaultLayers(layerRegistry, { reframeService, watermarkFilterService });
 
 const validationService = new ValidationService(layerRegistry);
 const templateAssService = new TemplateAssService(assService, { fallbackStyle: assStyle });
@@ -260,39 +359,6 @@ const templateRendererService = new TemplateRendererService(
   templateAssService,
   filtergraphService,
 );
-
-const rendererService = new RendererService(
-  {
-    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
-    clipsDir: paths.clips,
-    subtitlesDir: paths.subtitles,
-    thumbnailsDir: paths.thumbnails,
-    metadataDir: paths.clipMetadata,
-    tempDir: resolve(rootDir, 'outputs', 'temp'),
-    minDurationSeconds: env.CLIP_MIN_SECONDS,
-    maxDurationSeconds: env.CLIP_MAX_SECONDS,
-    maxConcurrency: env.CLIP_MAX_CONCURRENCY,
-    maxRetries: env.CLIP_MAX_RETRIES,
-  },
-  clipRefinementService,
-  subtitleService,
-  templateService,
-  templateRendererService,
-  reframeService,
-  thumbnailService,
-  createLogger('renderer.service'),
-);
-
-export const processController = new ProcessController({
-  youtubeService,
-  transcriptService,
-  whisperService,
-  ollamaService,
-  highlightService,
-  rendererService,
-  outputsDir: paths.outputs,
-  logger: createLogger('process.controller'),
-});
 
 // --- AI Viral Content Transformer: content pipeline (Sprint A) ---
 
@@ -338,6 +404,61 @@ export const storyService = new StoryService(
     maxRetries: aiProvider.maxRetries,
   },
   createLogger('content.story'),
+);
+
+// --- Hook Recommendation Engine (Plan M1-M5) ---
+
+/**
+ * Hook Recommendation Engine: generates 10-15 hook candidates per video,
+ * guards them against the source transcript (accuracy), scores them on a
+ * 7-metric quality card, and ranks a diverse Top-5. Consumes the existing
+ * angle/story outputs — the editorial pipeline above is untouched.
+ */
+const hookGenerator = new HookGenerator(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('hooks.generator'),
+);
+
+const hookEvaluator = new HookEvaluator(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('hooks.evaluator'),
+);
+
+const hookScorer = new HookScorer(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('hooks.scorer'),
+);
+
+const hookRanker = new HookRanker(
+  { topN: 5, diversityPenalty: 8, duplicateSimilarityThreshold: 0.6 },
+  createLogger('hooks.ranker'),
+);
+
+export const hookService = new HookService(
+  hookGenerator,
+  hookEvaluator,
+  hookScorer,
+  hookRanker,
+  { durationMin: 1.5, durationMax: 5, topN: 5 },
+  createLogger('hooks.service'),
 );
 
 // --- TTS (Sprint C) ---
@@ -386,6 +507,43 @@ export function createTtsService(overrides?: { provider?: ReturnType<typeof crea
   );
 }
 
+/**
+ * Creates a TtsService with an explicit provider kind and voice — used when
+ * the request overrides the env-configured TTS provider (e.g. user picks
+ * OpenAI instead of edge-tts from the UI).
+ */
+export function createTtsServiceWith(kind: 'edge-tts' | 'openai', voice: string, rate?: string): TtsService {
+  const logger = createLogger('tts.service');
+  const effectiveRate = rate ?? env.TTS_RATE;
+  const provider = createTtsProvider({
+    kind,
+    edge: {
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      binaryPath: env.TTS_BINARY_PATH,
+      rate: effectiveRate,
+    },
+    openai: {
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      baseUrl: env.TTS_BASE_URL,
+      apiKey: env.TTS_API_KEY,
+      model: env.TTS_MODEL,
+      rate: effectiveRate,
+    },
+    logger,
+  });
+
+  return new TtsService(
+    provider,
+    {
+      voice,
+      rate: effectiveRate,
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      language: env.TTS_LANGUAGE,
+    },
+    logger,
+  );
+}
+
 export const ttsService = createTtsService();
 
 // --- Video planner (Sprint D) ---
@@ -396,19 +554,6 @@ export const videoPlanService = new VideoPlanService(
   createLogger('content.video-plan'),
 );
 
-// --- Rights gate + Quality check (Sprint F) ---
-
-/** Filesystem-backed rights gate — stores per-video rights metadata. */
-export const rightsService = new RightsService(
-  paths.outputs,
-  createLogger('rights'),
-);
-
-/** Quality check service — validates output videos meet standards. */
-export const qualityCheckService = new QualityCheckService(
-  createLogger('quality'),
-);
-
 /**
  * Disk cache for LLM pipeline stage outputs (angle/story/script), keyed by
  * content hash. Regenerating the same video returns the identical narration.
@@ -417,15 +562,86 @@ export const contentCache = new ContentCache({
   dir: resolve(rootDir, 'outputs', 'transform-cache'),
 });
 
-// --- Composition Engine (Sprint G) ---
+// --- Viral clip recommendation + reel composition (flow redesign) ---
 
 const compositionsDir = resolve(rootDir, env.COMPOSITIONS_DIR, 'studio');
+
+/** Cuts lightweight per-clip previews shown in the UI before selection. */
+export const previewRenderer = new PreviewRendererService(
+  {
+    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+    previewWidth: 360,
+    watermarkFilterService,
+  },
+  createLogger('preview-renderer'),
+);
+
+/**
+ * Renders styled hook previews (HookIntroShort Remotion composition) — the
+ * final clipper-style opening, reused by the reel as its intro segment.
+ */
+export const styledHookPreviewService = new StyledHookPreviewService({
+  compositionsDir,
+  ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+  logger: createLogger('styled-hook-preview'),
+});
+
+/** Entry point for `POST /api/hooks/generate` (Hook Recommendation Engine). */
+export const hookController = new HookController({
+  youtubeService,
+  transcriptService,
+  whisperService,
+  contentAngleService,
+  storyService,
+  hookService,
+  outputsDir: paths.outputs,
+  logger: createLogger('hooks.controller'),
+  contentCache,
+  previewRenderer,
+  styledPreviewRenderer: env.HOOK_PREVIEW_STYLED ? styledHookPreviewService : undefined,
+});
+
+/** Entry point for `POST /api/clips/recommend` (viral clip recommendations). */
+export const clipController = new ClipController({
+  youtubeService,
+  transcriptService,
+  whisperService,
+  ollamaService,
+  highlightService,
+  previewRenderer,
+  outputsDir: paths.outputs,
+  logger: createLogger('clips.controller'),
+});
+
+/**
+ * Feedback loop for viral-clip recommendations: records which recommended
+ * clips the user actually takes into a transform (see
+ * ClipController.recordSelection). Exposed via the container so the transform
+ * route can call it without owning the clips workspace layout.
+ */
+export const recordClipSelection = (
+  videoId: string,
+  selectedClips: Array<{ start: number; end: number; title?: string }>,
+): Promise<void> => clipController.recordSelection(videoId, selectedClips);
+
+/** Joins user-selected clip ranges into one reel (outputMode: 'reel'). */
+export const reelComposer = new ReelComposerService(
+  {
+    ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+    canvasWidth: 1080,
+    canvasHeight: 1920,
+  },
+  createLogger('reel-composer'),
+);
+
+// --- Composition Engine (Sprint G) ---
+
 export const compositionEngine = createCompositionEngine({
   templateService,
   templateRendererService,
   outputsDir: paths.outputs,
   compositionsDir,
-  engine: env.COMPOSITION_ENGINE ?? 'ffmpeg-template',
+  engine: env.COMPOSITION_ENGINE ?? 'remotion',
   logger: createLogger('composition'),
 });
 
@@ -567,18 +783,21 @@ export const container = {
   filtergraphService,
   templateService,
   templateRendererService,
-  rendererService,
-  processController,
   contentAngleService,
   scriptService,
   storyService,
+  hookService,
+  hookController,
+  clipController,
   ttsService,
   videoPlanService,
-  rightsService,
-  qualityCheckService,
   contentCache,
   researchService,
   researchController,
   assStyle,
   compositionEngine,
+  watermarkDetector,
+  watermarkFilterService,
+  previewRenderer,
+  reelComposer,
 };

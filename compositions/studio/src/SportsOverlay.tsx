@@ -1,111 +1,59 @@
-import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import { interpolate, useCurrentFrame } from 'remotion';
 import * as React from 'react';
 import { FONT } from './design';
 import type { Theme } from './design';
 
-const TICKER = ' SPORTS NEWS  •  BREAKING HIGHLIGHTS  •  VIRAL MOMENTS  •  TOP PLAYS  •';
-
-/** Broadcast skin overlay: header bar + LIVE badge + scrolling ticker. */
+/** Modern minimalist sports badge (sleek floating glass capsule). */
 export const SportsOverlay: React.FC<{
   theme: Theme;
   durationFrames: number;
-}> = ({ theme, durationFrames }) => {
+  engagementScore?: number;
+}> = ({ theme }) => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
-
-  const livePulse = interpolate(frame % 30, [0, 15, 30], [1, 0.35, 1]);
-  const tileWidth = width * 1.7;
-  const offset = -((frame * 7) % tileWidth);
+  const livePulse = interpolate(frame % 30, [0, 15, 30], [1, 0.4, 1]);
 
   return (
-    <>
-      <div
+    <div
+      style={{
+        position: 'absolute',
+        top: 60,
+        left: 48,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: 'rgba(10, 15, 28, 0.85)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: 999,
+        padding: '8px 20px 8px 14px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+        pointerEvents: 'none',
+      }}
+    >
+      <span
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width,
-          height: 108,
-          backgroundColor: theme.accent,
-          display: 'flex',
-          alignItems: 'center',
-          paddingLeft: 56,
-          paddingRight: 56,
-          justifyContent: 'space-between',
-        }}
-      >
-        <span
-          style={{
-            fontFamily: FONT,
-            fontSize: 46,
-            letterSpacing: 4,
-            color: '#0A0A0A',
-          }}
-        >
-          SPORTS NEWS
-        </span>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 12,
-            backgroundColor: '#E63946',
-            color: '#FFFFFF',
-            fontFamily: FONT,
-            fontSize: 34,
-            letterSpacing: 3,
-            paddingTop: 8,
-            paddingBottom: 8,
-            paddingLeft: 20,
-            paddingRight: 20,
-            borderRadius: 6,
-            opacity: livePulse,
-          }}
-        >
-          LIVE
-        </span>
-      </div>
-
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 14,
-          left: 0,
-          width,
-          height: 86,
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            whiteSpace: 'pre',
-            fontFamily: FONT,
-            fontSize: 40,
-            letterSpacing: 2,
-            color: theme.accent,
-            translate: `${offset}px 0px`,
-          }}
-        >
-          <span>{TICKER}</span>
-          <span>{TICKER}</span>
-        </div>
-      </div>
-
-      <div
-        style={{
-          position: 'absolute',
-          top: 108,
-          left: 0,
-          width,
-          height: 8,
-          backgroundColor: theme.accent2,
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          backgroundColor: '#EF4444',
+          boxShadow: '0 0 10px #EF4444',
+          opacity: livePulse,
+          display: 'inline-block',
         }}
       />
-    </>
+      <span
+        style={{
+          fontFamily: FONT,
+          fontSize: 22,
+          fontWeight: 800,
+          letterSpacing: 2,
+          color: theme.accent,
+          textTransform: 'uppercase',
+        }}
+      >
+        SPORTS HIGHLIGHT
+      </span>
+    </div>
   );
 };

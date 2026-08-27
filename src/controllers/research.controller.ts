@@ -24,6 +24,7 @@ export class ResearchController {
       enabledProviders: request?.providers,
       maxTrends: request?.max_trends,
       keyword: request?.keyword,
+      language: request?.language,
     });
     logger.info(
       { trendCount: result.trends.length, signalCount: result.signalCount },

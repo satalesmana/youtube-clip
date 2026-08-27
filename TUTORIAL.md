@@ -224,8 +224,6 @@ curl http://localhost:3000/api/quality-check?videoPath=outputs/VIDEO_ID/download
 curl http://localhost:3000/api/rights/VIDEO_ID    # GET status hak / POST jalankan cek
 ```
 
-> `POST /api/process` masih ada sebagai endpoint legacy pipeline klip lama.
-
 ---
 
 ## 6. Hasil render
@@ -233,7 +231,7 @@ curl http://localhost:3000/api/rights/VIDEO_ID    # GET status hak / POST jalank
 Output kini ter-isolasi per video di `outputs/{videoId}/`:
 
 ```
-outputs/downloads/{videoId}.mp4                             # video sumber
+outputs/{videoId}/downloads/{videoId}.mp4                    # video sumber
 outputs/{videoId}/transcripts/{videoId}.json                # transkrip Whisper
 outputs/{videoId}/transform/{jobId}/voice/voice/narration.mp3 # narasi TTS
 outputs/{videoId}/transform/{jobId}/clips/transformed.mp4   # video final 1080×1920

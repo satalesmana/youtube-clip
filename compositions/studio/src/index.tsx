@@ -1,11 +1,12 @@
 import { Composition, registerRoot } from 'remotion';
 import { AIShort, DEFAULT_SKIN } from './AIShort';
+import { HookIntroShort } from './HookIntroShort';
 import { GOLD_THEME } from './design';
 import { InterviewOverlay } from './InterviewOverlay';
 import { SportsOverlay } from './SportsOverlay';
 import type { Skin } from './AIShort';
 import * as React from 'react';
-import type { CompositionProps } from './types';
+import type { CompositionProps, HookIntroProps } from './types';
 
 const FPS = 30;
 
@@ -42,6 +43,18 @@ const defaultProps: CompositionProps = {
   hookBadge: '',
 };
 
+/** Default props for the standalone styled hook intro composition. */
+const defaultHookIntroProps: HookIntroProps = {
+  hook: {
+    duration: 4,
+    headlineText: 'HOOK HEADLINE',
+    themeSeed: 'default:hook-intro',
+  },
+  sourceVideoPath: '',
+  sourceStart: 0,
+  sourceEnd: 1,
+};
+
 /**
  * Registers every style as its own composition (CommentaryShort, SportsShort,
  * InterviewShort) so the engine can pick one per render. Relying on a build-time
@@ -65,5 +78,17 @@ registerRoot(() => (
         defaultProps={defaultProps}
       />
     ))}
+    <Composition
+      id="HookIntroShort"
+      component={HookIntroShort}
+      fps={FPS}
+      width={1080}
+      height={1920}
+      durationInFrames={4 * FPS}
+      calculateMetadata={({ props }) => ({
+        durationInFrames: Math.max(1, Math.round((props.hook?.duration ?? 4) * FPS)),
+      })}
+      defaultProps={defaultHookIntroProps}
+    />
   </>
 ));
