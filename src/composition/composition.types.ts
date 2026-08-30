@@ -20,6 +20,8 @@ export interface CompositionAssets {
   templateId?: string;
   /** YouTube video id — render outputs land under `outputs/{videoId}/` when provided. */
   videoId?: string;
+  /** Optional custom creator logo image path */
+  creatorLogo?: string;
 }
 
 /** Output from a successful render. */

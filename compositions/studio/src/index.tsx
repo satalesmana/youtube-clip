@@ -55,6 +55,8 @@ const defaultHookIntroProps: HookIntroProps = {
   sourceEnd: 1,
 };
 
+const OUTRO_SECONDS = 3;
+
 /**
  * Registers every style as its own composition (CommentaryShort, SportsShort,
  * InterviewShort) so the engine can pick one per render. Relying on a build-time
@@ -72,9 +74,14 @@ registerRoot(() => (
         width={1080}
         height={1920}
         durationInFrames={60 * FPS}
-        calculateMetadata={({ props }) => ({
-          durationInFrames: Math.max(1, Math.round((props.plan?.duration ?? 60) * FPS)),
-        })}
+        calculateMetadata={({ props }) => {
+          const contentDuration = props.plan?.duration ?? 60;
+          const contentFrames = Math.max(1, Math.round(contentDuration * FPS));
+          const outroFrames = Math.round(OUTRO_SECONDS * FPS);
+          return {
+            durationInFrames: contentFrames + outroFrames,
+          };
+        }}
         defaultProps={defaultProps}
       />
     ))}

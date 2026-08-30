@@ -8,12 +8,11 @@ import type { PlanCaption } from './types';
 const MAX_WORDS = 10;
 
 /**
- * Modern Viral Hook Headline Card for Video Clippers.
- * - Positioned in the Upper-Middle safe zone (top ~18-28%) avoiding TikTok/Reels UI.
- * - Pattern Interrupt: Dynamic spring punch-in scale on opening.
- * - Pattern Interrupt Pill Tag: Optional top tag (e.g. "🔥 MOMEN VIRAL", "⚡ DETIK KRUSIAL").
- * - High-Contrast Typography: Heavy bold sans, text stroke, neon glow on keywords.
- * - Premium Frosted Glass Container with glowing accent highlights.
+ * Modern High-Impact Kinetic Creator Hook (Reels / TikTok / Shorts style).
+ * - Kinetic Typography: High-contrast stroke + deep shadow directly over video.
+ * - Dynamic Neon Keyword Highlighting: Trigger words glow vibrantly in theme accent.
+ * - Clean Floating Pill Tag: Modern social media sticker style instead of dev terminal box.
+ * - Pattern Interrupt: Spring punch-in entrance (1.12x -> 1.0x).
  */
 export const HookHeadline: React.FC<{
   text: string;
@@ -53,26 +52,27 @@ export const HookHeadline: React.FC<{
   const entrySpring = spring({
     frame,
     fps,
-    config: { damping: 14, stiffness: 140, mass: 0.8 },
+    config: { damping: 13, stiffness: 140, mass: 0.8 },
   });
-  const scale = interpolate(entrySpring, [0, 1], [0.88, 1]);
-  const opacity = interpolate(entrySpring, [0, 0.4], [0, 1], { extrapolateRight: 'clamp' });
+  const scale = interpolate(entrySpring, [0, 1], [1.12, 1]);
+  const opacity = interpolate(entrySpring, [0, 0.3], [0, 1], { extrapolateRight: 'clamp' });
 
   const fitted = fitText({
     text: tokens.join(' '),
     fontFamily: HOOK_FONT,
-    withinWidth: width * 0.78,
+    withinWidth: width * 0.88,
   });
-  const headlineSize = Math.max(38, Math.min(62, Math.round(fitted.fontSize)));
+  const headlineSize = Math.max(46, Math.min(74, Math.round(fitted.fontSize)));
+  const strokeWidth = Math.max(4, Math.round(headlineSize / 9));
 
   return (
     <AbsoluteFill
       style={{
         justifyContent: 'flex-start',
         alignItems: 'center',
-        paddingTop: height * 0.18,
-        paddingLeft: 36,
-        paddingRight: 36,
+        paddingTop: height * 0.17,
+        paddingLeft: 32,
+        paddingRight: 32,
         pointerEvents: 'none',
       }}
     >
@@ -80,44 +80,36 @@ export const HookHeadline: React.FC<{
         style={{
           transform: `scale(${scale})`,
           opacity,
-          backgroundColor: 'rgba(10, 12, 22, 0.88)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: `3px solid ${theme.accent}`,
-          borderLeft: '1px solid rgba(255, 255, 255, 0.16)',
-          borderRight: '1px solid rgba(255, 255, 255, 0.12)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-          borderRadius: 22,
-          padding: '20px 26px 22px 26px',
-          boxShadow: `0 24px 50px rgba(0,0,0,0.92), 0 0 32px ${theme.accent}35`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           textAlign: 'center',
-          maxWidth: width * 0.90,
-          gap: 12,
+          maxWidth: width * 0.94,
+          gap: 16,
         }}
       >
-        {/* Optional Pattern Interrupt Pill Tag */}
+        {/* Floating Social Pill Tag (Minimalist & Punchy) */}
         {tag ? (
           <div
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              backgroundColor: 'rgba(10, 14, 24, 0.75)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
               border: `1.5px solid ${theme.accent}`,
               borderRadius: 9999,
-              padding: '5px 16px',
-              boxShadow: `0 0 16px ${theme.accent}45`,
+              padding: '6px 20px',
+              boxShadow: `0 8px 24px rgba(0,0,0,0.6), 0 0 20px ${theme.accent}45`,
             }}
           >
             <span
               style={{
                 fontFamily: HOOK_FONT,
-                fontSize: 17,
+                fontSize: 20,
                 fontWeight: 900,
-                letterSpacing: '1px',
+                letterSpacing: '1.2px',
                 color: theme.accent,
                 textTransform: 'uppercase',
               }}
@@ -127,16 +119,17 @@ export const HookHeadline: React.FC<{
           </div>
         ) : null}
 
-        {/* Hook Headline Text with Accent Highlighting */}
+        {/* High-Impact Kinetic Headline Typography */}
         <div
           style={{
             display: 'flex',
             flexWrap: 'wrap',
             justifyContent: 'center',
             alignItems: 'center',
-            columnGap: 10,
-            rowGap: 6,
+            columnGap: 12,
+            rowGap: 8,
             textAlign: 'center',
+            filter: 'drop-shadow(0 12px 28px rgba(0,0,0,0.95))',
           }}
         >
           {tokens.map((token, i) => {
@@ -147,15 +140,17 @@ export const HookHeadline: React.FC<{
                 style={{
                   fontFamily: HOOK_FONT,
                   fontSize: headlineSize,
-                  lineHeight: 1.18,
+                  lineHeight: 1.15,
+                  fontWeight: 900,
                   color: keyword ? theme.accent : '#FFFFFF',
-                  WebkitTextStroke: `${Math.max(2, Math.round(headlineSize / 16))}px #000000`,
+                  WebkitTextStroke: `${strokeWidth}px #000000`,
                   paintOrder: 'stroke fill',
                   textTransform: 'uppercase',
                   display: 'inline-block',
+                  letterSpacing: '0.5px',
                   textShadow: keyword
-                    ? `0 0 22px ${theme.accent}, 0 4px 12px rgba(0,0,0,0.9)`
-                    : '0 4px 14px rgba(0,0,0,0.95)',
+                    ? `0 0 28px ${theme.accent}, 0 6px 16px rgba(0,0,0,0.9)`
+                    : '0 6px 16px rgba(0,0,0,0.95)',
                 }}
               >
                 {token}

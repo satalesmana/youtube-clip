@@ -54,6 +54,8 @@ export type CompositionProps = {
   channelName?: string;
   /** Social-proof badge shown during the first ~2s of the hook (e.g. "10RB+ Views"). */
   hookBadge?: string;
+  /** Optional custom creator logo asset path. Defaults to 'creator-logo.png'. */
+  creatorLogoUrl?: string;
 };
 
 /** Props for the standalone styled hook intro (`HookIntroShort`). */

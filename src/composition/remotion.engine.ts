@@ -70,12 +70,18 @@ export class RemotionCompositionEngine implements ICompositionEngine {
     const narrationPath = assets.narration
       ? `media/${jobId}/narration${extname(assets.narration) || '.mp3'}`
       : '';
+    let creatorLogoUrl = 'creator-logo.png';
 
     try {
       await mkdir(mediaDir, { recursive: true });
       await stageFile(assets.sourceVideo, mediaDir, `source${extname(assets.sourceVideo) || '.mp4'}`);
       if (assets.narration) {
         await stageFile(assets.narration, mediaDir, `narration${extname(assets.narration) || '.mp3'}`);
+      }
+      if (assets.creatorLogo) {
+        const logoExt = extname(assets.creatorLogo) || '.png';
+        await stageFile(assets.creatorLogo, mediaDir, `creator-logo${logoExt}`);
+        creatorLogoUrl = `media/${jobId}/creator-logo${logoExt}`;
       }
 
       // Write props to temp file
@@ -87,6 +93,7 @@ export class RemotionCompositionEngine implements ICompositionEngine {
           sourceVideoPath,
           channelName: assets.channelName,
           hookBadge: assets.hookBadge,
+          creatorLogoUrl,
         }, null, 2),
       );
 

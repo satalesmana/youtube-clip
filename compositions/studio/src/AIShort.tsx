@@ -83,15 +83,17 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   sourceVideoPath,
   channelName,
   hookBadge,
+  creatorLogoUrl,
   skin,
 }) => {
   const { fps } = useVideoConfig();
   const activeSkin = skin ?? DEFAULT_SKIN;
   const theme = activeSkin.theme ?? selectTheme(plan.candidateId, plan.angleId);
-  const durationFrames = toFrame(plan.duration, fps);
+  const contentFrames = toFrame(plan.duration, fps);
 
   const outroFrames = Math.max(1, Math.round(OUTRO_SECONDS * fps));
   const badgeFrames = Math.max(1, Math.round(BADGE_SECONDS * fps));
+  const totalDurationFrames = contentFrames + outroFrames;
 
   return (
     <AbsoluteFill style={{ backgroundColor: theme.surface, fontFamily: FONT }}>
@@ -153,8 +155,24 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
           );
         })}
 
-      <Sequence from={Math.max(0, durationFrames - outroFrames)}>
-        <Outro theme={theme} channelName={channelName} durationFrames={outroFrames} />
+      {/* Outro / CTA: Appears strictly AFTER all video scenes and narration voiceover have completed */}
+      <Sequence from={contentFrames} durationInFrames={outroFrames}>
+        {plan.scenes.length > 0 && sourceVideoPath ? (
+          <SceneBackground
+            scene={plan.scenes[plan.scenes.length - 1]!}
+            videoSrc={sourceVideoPath}
+            theme={theme}
+            isFirst={false}
+            isLast={true}
+            sceneDurationFrames={outroFrames}
+          />
+        ) : null}
+        <Outro
+          theme={theme}
+          channelName={channelName}
+          durationFrames={outroFrames}
+          logoSrc={creatorLogoUrl}
+        />
       </Sequence>
 
       {hookBadge ? (
@@ -164,13 +182,13 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
       ) : null}
 
       {activeSkin.Overlay ? (
-        <activeSkin.Overlay theme={theme} durationFrames={durationFrames} />
+        <activeSkin.Overlay theme={theme} durationFrames={contentFrames} />
       ) : null}
 
       <ProgressBar
         theme={theme}
         channelName={channelName}
-        durationFrames={durationFrames}
+        durationFrames={contentFrames}
       />
 
       {narrationPath ? <Audio src={toAssetUrl(narrationPath)} /> : null}

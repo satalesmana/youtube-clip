@@ -376,13 +376,20 @@
     btn.disabled = true;
     setBtnText(btn, refresh ? '⏳ Men-generate ulang hook…' : '⏳ Men-generate hook…');
     $('#hook-panel').classList.remove('hidden');
-    $('#hook-list').innerHTML = '<p class="muted small">Men-generate 10-15 kandidat, accuracy guard, scoring & ranking…</p>';
+    const selectedClip = [...clipState.selected.values()][0];
+    
+    if (selectedClip) {
+      $('#hook-list').innerHTML = `<p class="muted small">Men-generate hook untuk klip terpilih (mulai ${fmtDuration(selectedClip.start)}), accuracy guard, scoring & ranking…</p>`;
+    } else {
+      $('#hook-list').innerHTML = '<p class="muted small">Men-generate 10-15 kandidat, accuracy guard, scoring & ranking…</p>';
+    }
 
     try {
       hookState.selected = null;
       const data = await apiPost('/api/hooks/generate', {
         youtubeUrl: url,
         candidateId: 0,
+        ...(selectedClip ? { startTime: selectedClip.start } : {}),
         language: $('#transform-lang').value || 'auto',
         sttProvider: $('#transform-stt-provider').value || undefined,
         genre: $('#transform-genre')?.value || undefined,
@@ -669,13 +676,594 @@
     }
   }
 
-  $('#transform-url')?.addEventListener('change', restoreSavedClips);
+  /* ---------- Transcript Editor ---------- */
+  const transcriptState = {
+    videoId: null,
+    sourceUrl: '',
+    language: 'id',
+    segments: [],
+    originalTexts: [],
+    filterQuery: '',
+  };
 
-  $('#btn-clear-clips').addEventListener('click', () => {
-    clipState.selected.clear();
-    updateClipSelectionUI();
-    toast('Pilihan klip dibersihkan', '');
+  function updateTranscriptMeta() {
+    const totalSec = transcriptState.segments.length > 0
+      ? transcriptState.segments[transcriptState.segments.length - 1].end
+      : 0;
+
+    const modifiedCount = transcriptState.segments.filter(
+      (seg, i) => seg.text !== (transcriptState.originalTexts[i] ?? seg.text),
+    ).length;
+
+    const badge = $('#transcript-count-badge');
+    if (badge) badge.textContent = `${transcriptState.segments.length} Segmen`;
+
+    const chipVideoId = $('#chip-video-id');
+    const chipDuration = $('#chip-duration');
+    const chipSegments = $('#chip-segments');
+    const chipLanguage = $('#chip-language');
+    const chipModified = $('#chip-modified');
+
+    if (chipVideoId) chipVideoId.textContent = `🏷️ Video: ${transcriptState.videoId || '—'}`;
+    if (chipDuration) chipDuration.textContent = `⏱️ Durasi: ${fmtDuration(totalSec)}`;
+    if (chipSegments) chipSegments.textContent = `📝 ${transcriptState.segments.length} Segmen`;
+    if (chipLanguage) chipLanguage.textContent = `🌐 STT: ${transcriptState.language?.toUpperCase() || 'AUTO'}`;
+
+    if (chipModified) {
+      if (modifiedCount > 0) {
+        chipModified.textContent = `✏️ ${modifiedCount} segmen diubah`;
+        chipModified.classList.remove('hidden');
+      } else {
+        chipModified.classList.add('hidden');
+      }
+    }
+  }
+
+  function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(48, textarea.scrollHeight)}px`;
+  }
+
+  function renderTranscriptSegments() {
+    const list = $('#transcript-segment-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (transcriptState.segments.length === 0) {
+      list.innerHTML = '<div class="transcript-loading muted">Belum ada segmen transkrip yang dimuat.</div>';
+      return;
+    }
+
+    const query = transcriptState.filterQuery.trim().toLowerCase();
+    const filterOnly = $('#transcript-filter-only')?.checked ?? true;
+    const clearSearchBtn = $('#btn-clear-search');
+    const matchCountEl = $('#transcript-match-count');
+
+    let matchedCount = 0;
+    const itemsToRender = [];
+
+    transcriptState.segments.forEach((seg, idx) => {
+      const isMatched = query ? seg.text.toLowerCase().includes(query) : false;
+      if (isMatched) matchedCount++;
+      const isModified = seg.text !== (transcriptState.originalTexts[idx] ?? seg.text);
+
+      if (!query || !filterOnly || isMatched) {
+        itemsToRender.push({ seg, idx, isMatched, isModified });
+      }
+    });
+
+    if (clearSearchBtn) {
+      clearSearchBtn.classList.toggle('hidden', !query);
+    }
+
+    if (matchCountEl) {
+      if (query) {
+        matchCountEl.textContent = `🎯 ${matchedCount} cocok`;
+        matchCountEl.classList.remove('hidden');
+      } else {
+        matchCountEl.classList.add('hidden');
+      }
+    }
+
+    if (query && itemsToRender.length === 0) {
+      list.innerHTML = `
+        <div class="transcript-loading muted">
+          <p>🔍 Tidak ada segmen yang mengandung kata <strong>"${esc(query)}"</strong>.</p>
+          <button type="button" class="btn small ghost" style="margin-top:8px;" id="btn-reset-search-view">✕ Bersihkan Filter Pencarian</button>
+        </div>
+      `;
+      $('#btn-reset-search-view')?.addEventListener('click', () => {
+        $('#transcript-search').value = '';
+        transcriptState.filterQuery = '';
+        renderTranscriptSegments();
+      });
+      return;
+    }
+
+    itemsToRender.forEach(({ seg, idx, isMatched, isModified }) => {
+      const card = document.createElement('div');
+      card.className = 'transcript-segment-card' +
+        (isMatched ? ' matched' : '') +
+        (isModified ? ' is-modified' : '');
+      card.dataset.idx = String(idx);
+
+      const wordsCount = seg.text.trim().split(/\s+/).filter(Boolean).length;
+      const durationSec = (seg.end - seg.start).toFixed(1);
+
+      card.innerHTML = `
+        <div class="segment-meta-header">
+          <span class="segment-time-badge">${fmtDuration(seg.start)} ➔ ${fmtDuration(seg.end)}</span>
+          <div class="segment-meta-right">
+            <span class="segment-index-badge">#${idx + 1} (${durationSec}s · ${wordsCount} kata)</span>
+            ${isModified ? '<span class="segment-modified-tag">✏️ Diedit</span>' : ''}
+          </div>
+        </div>
+        <textarea class="segment-textarea" data-idx="${idx}" placeholder="Teks segmen...">${esc(seg.text)}</textarea>
+      `;
+
+      const textarea = card.querySelector('textarea');
+      textarea.addEventListener('input', (e) => {
+        transcriptState.segments[idx].text = e.target.value;
+        const nowModified = e.target.value !== (transcriptState.originalTexts[idx] ?? e.target.value);
+        card.classList.toggle('is-modified', nowModified);
+        autoResizeTextarea(e.target);
+        updateTranscriptMeta();
+      });
+
+      // Auto size initial height
+      setTimeout(() => autoResizeTextarea(textarea), 0);
+
+      list.appendChild(card);
+    });
+  }
+
+  async function loadTranscript(force = false) {
+    const url = $('#transform-url').value.trim();
+    if (!url) {
+      toast('Masukkan URL YouTube terlebih dahulu', 'error');
+      $('#transform-url').focus();
+      return;
+    }
+
+    const btn = $('#btn-open-transcript');
+    const panel = $('#transcript-panel');
+    if (panel) {
+      panel.classList.remove('hidden');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    const list = $('#transcript-segment-list');
+    if (list) list.innerHTML = '<div class="transcript-loading muted">🎙️ Mengambil & memproses transkrip audio video…</div>';
+
+    if (btn) btn.disabled = true;
+
+    try {
+      const sttProvider = $('#transform-stt-provider')?.value || undefined;
+      const params = new URLSearchParams({
+        youtubeUrl: url,
+        ...(sttProvider ? { sttProvider } : {}),
+        ...(force ? { force: 'true' } : {}),
+      });
+
+      const res = await apiGet(`/api/transcript?${params.toString()}`);
+      if (!res.success || !res.transcript) {
+        throw new Error('Gagal memuat transkrip');
+      }
+
+      transcriptState.videoId = res.videoId;
+      transcriptState.sourceUrl = res.transcript.sourceUrl || url;
+      transcriptState.language = res.transcript.language || 'id';
+      transcriptState.segments = (res.transcript.segments || []).map((s) => ({
+        start: s.start,
+        end: s.end,
+        text: s.text,
+        words: s.words,
+      }));
+      transcriptState.originalTexts = transcriptState.segments.map((s) => s.text);
+
+      updateTranscriptMeta();
+      renderTranscriptSegments();
+      toast(res.cached ? 'Transkrip dimuat dari penyimpanan' : 'Transkrip baru berhasil diproses', 'success');
+      const statusEl = $('#transcript-quick-status');
+      if (statusEl) statusEl.textContent = `✅ Transkrip siap (${transcriptState.segments.length} segmen)`;
+    } catch (err) {
+      if (list) list.innerHTML = `<div class="transcript-loading muted" style="color:var(--accent)">⚠️ Gagal memuat transkrip: ${esc(err.message)}</div>`;
+      toast(`Gagal memuat transkrip: ${err.message}`, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function saveTranscript() {
+    if (!transcriptState.videoId || transcriptState.segments.length === 0) {
+      toast('Belum ada transkrip yang dimuat', 'error');
+      return;
+    }
+
+    const btnSaveTop = $('#btn-save-transcript');
+    const btnSaveBottom = $('#btn-save-transcript-bottom');
+    if (btnSaveTop) btnSaveTop.disabled = true;
+    if (btnSaveBottom) btnSaveBottom.disabled = true;
+
+    try {
+      const payload = {
+        videoId: transcriptState.videoId,
+        language: transcriptState.language,
+        segments: transcriptState.segments,
+      };
+
+      await apiPost('/api/transcript/update', payload);
+      transcriptState.originalTexts = transcriptState.segments.map((s) => s.text);
+      updateTranscriptMeta();
+      renderTranscriptSegments();
+      toast('✅ Transkrip berhasil disimpan!', 'success');
+      const statusEl = $('#transcript-quick-status');
+      if (statusEl) statusEl.textContent = '✅ Transkrip diperbarui & tersimpan';
+    } catch (err) {
+      toast(`Gagal menyimpan transkrip: ${err.message}`, 'error');
+    } finally {
+      if (btnSaveTop) btnSaveTop.disabled = false;
+      if (btnSaveBottom) btnSaveBottom.disabled = false;
+    }
+  }
+
+  function handleReplaceAll() {
+    const findWord = $('#transcript-find')?.value;
+    const replaceWord = $('#transcript-replace')?.value ?? '';
+
+    if (!findWord) {
+      toast('Masukkan kata salah (typo) yang ingin dicari', 'error');
+      $('#transcript-find')?.focus();
+      return;
+    }
+
+    let count = 0;
+    transcriptState.segments.forEach((seg) => {
+      if (seg.text.includes(findWord)) {
+        const occurrences = seg.text.split(findWord).length - 1;
+        count += occurrences;
+        seg.text = seg.text.replaceAll(findWord, replaceWord);
+      }
+    });
+
+    updateTranscriptMeta();
+    renderTranscriptSegments();
+    if (count > 0) {
+      toast(`Berhasil mengganti ${count} kata "${findWord}" dengan "${replaceWord}"`, 'success');
+    } else {
+      toast(`Kata "${findWord}" tidak ditemukan dalam transkrip`, '');
+    }
+  }
+
+  $('#btn-open-transcript')?.addEventListener('click', () => loadTranscript(false));
+  $('#btn-reload-transcript')?.addEventListener('click', () => loadTranscript(true));
+  $('#btn-close-transcript')?.addEventListener('click', () => $('#transcript-panel')?.classList.add('hidden'));
+  $('#btn-save-transcript')?.addEventListener('click', saveTranscript);
+  $('#btn-save-transcript-bottom')?.addEventListener('click', saveTranscript);
+  $('#btn-replace-all')?.addEventListener('click', handleReplaceAll);
+  $('#btn-clear-search')?.addEventListener('click', () => {
+    const searchInput = $('#transcript-search');
+    if (searchInput) searchInput.value = '';
+    transcriptState.filterQuery = '';
+    renderTranscriptSegments();
   });
+  $('#transcript-filter-only')?.addEventListener('change', () => {
+    renderTranscriptSegments();
+  });
+  $('#transcript-search')?.addEventListener('input', (e) => {
+    transcriptState.filterQuery = e.target.value;
+    const findInput = $('#transcript-find');
+    if (findInput && (!findInput.value || findInput.dataset.autoFilled === 'true')) {
+      findInput.value = e.target.value.trim();
+      findInput.dataset.autoFilled = 'true';
+    }
+    renderTranscriptSegments();
+  });
+  /* ---------- Script & Narration Editor ---------- */
+  const scriptState = {
+    active: false,
+    language: 'id',
+    sections: [],
+    audioUrl: null,
+  };
+
+  const SCRIPT_SECTION_TYPES = [
+    { value: 'hook', label: '🪝 Hook (Pembuka)' },
+    { value: 'context', label: '📖 Context (Latar Belakang)' },
+    { value: 'commentary', label: '💭 Commentary (Komentar)' },
+    { value: 'analysis', label: '📊 Analysis (Analisis)' },
+    { value: 'supporting', label: '💡 Supporting (Pendukung)' },
+    { value: 'conclusion', label: '🎯 Conclusion (Penutup)' },
+  ];
+
+  function updateScriptMeta() {
+    const totalWords = scriptState.sections.reduce((sum, s) => sum + s.text.trim().split(/\s+/).filter(Boolean).length, 0);
+    const estDuration = Math.max(10, Math.round(totalWords / 2.5));
+
+    const badge = $('#script-section-count-badge');
+    if (badge) badge.textContent = `${scriptState.sections.length} Seksi`;
+
+    const chipSections = $('#chip-script-sections');
+    const chipWords = $('#chip-script-words');
+    const chipDuration = $('#chip-script-duration');
+    const chipVoice = $('#chip-script-voice');
+    const chipStatus = $('#chip-script-status');
+
+    if (chipSections) chipSections.textContent = `📑 ${scriptState.sections.length} Seksi`;
+    if (chipWords) chipWords.textContent = `💬 ~${totalWords} kata`;
+    if (chipDuration) chipDuration.textContent = `⏱️ Est. ${estDuration}s`;
+    if (chipVoice) {
+      const voice = $('#transform-voice')?.value || $('#transform-tts-provider')?.value || 'TTS';
+      chipVoice.textContent = `🎙️ ${voice}`;
+    }
+    if (chipStatus) {
+      chipStatus.textContent = scriptState.active ? '✅ Naskah Kustom Aktif' : '🤖 Auto LLM';
+      chipStatus.classList.toggle('chip-modified', scriptState.active);
+    }
+  }
+
+  function renderScriptSections() {
+    const container = $('#script-sections-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (scriptState.sections.length === 0) {
+      container.innerHTML = '<div class="script-loading muted">Belum ada seksi naskah. Klik "Draf Naskah AI" untuk memulai.</div>';
+      return;
+    }
+
+    scriptState.sections.forEach((section, idx) => {
+      const card = document.createElement('div');
+      card.className = 'script-section-card';
+      card.dataset.idx = String(idx);
+
+      const wordsCount = section.text.trim().split(/\s+/).filter(Boolean).length;
+      const estSec = Math.max(1, Math.round(wordsCount / 2.5));
+
+      const typeOptionsHtml = SCRIPT_SECTION_TYPES.map(
+        (t) => `<option value="${t.value}" ${t.value === section.type ? 'selected' : ''}>${t.label}</option>`
+      ).join('');
+
+      card.innerHTML = `
+        <div class="script-section-head">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <select class="script-section-type-select" data-idx="${idx}">
+              ${typeOptionsHtml}
+            </select>
+            <span class="muted small">#${idx + 1} · ${wordsCount} kata (~${estSec}s)</span>
+          </div>
+          <div class="script-section-actions">
+            <button type="button" class="section-action-btn" data-action="move-up" data-idx="${idx}" title="Pindah ke atas" ${idx === 0 ? 'disabled style="opacity:0.4"' : ''}>⬆️</button>
+            <button type="button" class="section-action-btn" data-action="move-down" data-idx="${idx}" title="Pindah ke bawah" ${idx === scriptState.sections.length - 1 ? 'disabled style="opacity:0.4"' : ''}>⬇️</button>
+            <button type="button" class="section-action-btn btn-delete" data-action="delete" data-idx="${idx}" title="Hapus seksi">🗑️</button>
+          </div>
+        </div>
+        <textarea class="script-section-textarea" data-idx="${idx}" placeholder="Tulis narasi untuk seksi ini (akan disuarakan oleh TTS)...">${esc(section.text)}</textarea>
+      `;
+
+      const select = card.querySelector('.script-section-type-select');
+      select.addEventListener('change', (e) => {
+        scriptState.sections[idx].type = e.target.value;
+      });
+
+      const textarea = card.querySelector('.script-section-textarea');
+      textarea.addEventListener('input', (e) => {
+        scriptState.sections[idx].text = e.target.value;
+        autoResizeTextarea(e.target);
+        updateScriptMeta();
+      });
+
+      setTimeout(() => autoResizeTextarea(textarea), 0);
+
+      container.appendChild(card);
+    });
+
+    // Wire action buttons
+    container.querySelectorAll('.section-action-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const action = e.currentTarget.dataset.action;
+        const idx = Number(e.currentTarget.dataset.idx);
+        if (action === 'delete') {
+          scriptState.sections.splice(idx, 1);
+          if (scriptState.sections.length === 0) scriptState.active = false;
+          renderScriptSections();
+          updateScriptMeta();
+        } else if (action === 'move-up' && idx > 0) {
+          const temp = scriptState.sections[idx];
+          scriptState.sections[idx] = scriptState.sections[idx - 1];
+          scriptState.sections[idx - 1] = temp;
+          renderScriptSections();
+          updateScriptMeta();
+        } else if (action === 'move-down' && idx < scriptState.sections.length - 1) {
+          const temp = scriptState.sections[idx];
+          scriptState.sections[idx] = scriptState.sections[idx + 1];
+          scriptState.sections[idx + 1] = temp;
+          renderScriptSections();
+          updateScriptMeta();
+        }
+      });
+    });
+  }
+
+  async function generateDraftScript() {
+    const url = $('#transform-url').value.trim();
+    if (!url) {
+      toast('Masukkan URL YouTube terlebih dahulu', 'error');
+      $('#transform-url').focus();
+      return;
+    }
+
+    const btn = $('#btn-gen-script');
+    if (btn) btn.disabled = true;
+    const panel = $('#script-editor-panel');
+    if (panel) {
+      panel.classList.remove('hidden');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    const container = $('#script-sections-container');
+    if (container) container.innerHTML = '<div class="script-loading muted">🤖 AI sedang menyusun draf naskah narasi orisinal…</div>';
+
+    try {
+      const blurEnabled = $('#transform-blur-watermark')?.checked || false;
+      const blurMode = $('#transform-blur-mode')?.value || 'preset';
+      const selectedPositions = blurEnabled && blurMode === 'preset'
+        ? $$('#blur-positions .chip-toggle.active').map((c) => c.dataset.position).filter(Boolean)
+        : undefined;
+      const blurWatermark = blurEnabled
+        ? { enabled: true, mode: blurMode, ...(selectedPositions?.length ? { positions: selectedPositions } : {}) }
+        : undefined;
+
+      const body = {
+        youtubeUrl: url,
+        dryRun: true,
+        language: $('#transform-lang')?.value || 'auto',
+        sttProvider: $('#transform-stt-provider')?.value || undefined,
+        ttsProvider: $('#transform-tts-provider')?.value || undefined,
+        ttsVoice: $('#transform-voice')?.value || undefined,
+        ttsRate: $('#transform-tts-rate')?.value || undefined,
+        genre: $('#transform-genre')?.value || undefined,
+        ...(clipState.selected.size > 0 ? { selectedClips: [...clipState.selected.values()] } : {}),
+        ...(hookState.selected ? {
+          sourceRange: {
+            start: hookState.selected.source?.start ?? 0,
+            end: hookState.selected.source?.end ?? 30,
+          },
+          hookTitle: hookState.selected.headline?.text,
+          hookTag: hookState.selected.headline?.tag,
+          hookHighlightWords: hookState.selected.headline?.highlightWords,
+          customHook: hookState.selected.spokenHook?.text || hookState.selected.headline?.text,
+        } : {}),
+      };
+
+      const res = await apiPost('/api/transform', body);
+      const scriptData = res.script || {};
+      const narrationData = res.narration || {};
+
+      if (!scriptData.sections?.length) {
+        throw new Error('Draf naskah kosong dari server.');
+      }
+
+      scriptState.active = true;
+      scriptState.language = scriptData.language || 'id';
+      scriptState.sections = scriptData.sections.map((s) => ({
+        type: s.type || 'context',
+        text: s.text || '',
+        sourceQuote: s.sourceQuote,
+        evidence: s.evidence,
+        beatId: s.beatId,
+      }));
+
+      if (narrationData.url) {
+        scriptState.audioUrl = narrationData.url;
+        const player = $('#script-audio-player');
+        const audioWrap = $('#script-audio-preview');
+        const durLabel = $('#audio-preview-duration');
+        if (player) player.src = narrationData.url + '?_v=' + Date.now();
+        if (durLabel) durLabel.textContent = `${fmtDuration(narrationData.durationSeconds || 0)} (${(narrationData.durationSeconds || 0).toFixed(1)}s)`;
+        if (audioWrap) audioWrap.classList.remove('hidden');
+      }
+
+      updateScriptMeta();
+      renderScriptSections();
+      toast('✅ Draf naskah AI berhasil dibuat! Silakan sesuaikan teks di bawah.', 'success');
+      const statusEl = $('#script-quick-status');
+      if (statusEl) statusEl.textContent = '✅ Draf naskah AI siap diedit';
+    } catch (err) {
+      if (container) container.innerHTML = `<div class="script-loading muted" style="color:var(--accent)">⚠️ Gagal membuat draf naskah: ${esc(err.message)}</div>`;
+      toast(`Gagal membuat draf naskah: ${err.message}`, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function previewCustomTts() {
+    const url = $('#transform-url').value.trim();
+    if (!url) {
+      toast('Masukkan URL YouTube terlebih dahulu', 'error');
+      return;
+    }
+
+    if (scriptState.sections.length === 0) {
+      toast('Belum ada seksi naskah untuk disuarakan', 'error');
+      return;
+    }
+
+    const btn1 = $('#btn-preview-tts');
+    const btn2 = $('#btn-preview-tts-bottom');
+    if (btn1) btn1.disabled = true;
+    if (btn2) btn2.disabled = true;
+    toast('🔊 Mengirim naskah ke TTS synthesizer…', 'info');
+
+    try {
+      const body = {
+        youtubeUrl: url,
+        dryRun: true,
+        language: $('#transform-lang')?.value || 'auto',
+        ttsProvider: $('#transform-tts-provider')?.value || undefined,
+        ttsVoice: $('#transform-voice')?.value || undefined,
+        ttsRate: $('#transform-tts-rate')?.value || undefined,
+        customScript: {
+          language: scriptState.language || $('#transform-lang')?.value || 'id',
+          sections: scriptState.sections,
+        },
+      };
+
+      const res = await apiPost('/api/transform', body);
+      const narrationData = res.narration || {};
+
+      if (narrationData.url) {
+        scriptState.audioUrl = narrationData.url;
+        const player = $('#script-audio-player');
+        const audioWrap = $('#script-audio-preview');
+        const durLabel = $('#audio-preview-duration');
+        if (player) {
+          player.src = narrationData.url + '?_v=' + Date.now();
+          player.play().catch(() => {});
+        }
+        if (durLabel) durLabel.textContent = `${fmtDuration(narrationData.durationSeconds || 0)} (${(narrationData.durationSeconds || 0).toFixed(1)}s)`;
+        if (audioWrap) audioWrap.classList.remove('hidden');
+        toast('🔊 Audio TTS siap diputar!', 'success');
+      } else {
+        toast('TTS selesai tapi tidak ada URL audio yang dikembalikan.', 'info');
+      }
+    } catch (err) {
+      toast(`Gagal sintesis audio TTS: ${err.message}`, 'error');
+    } finally {
+      if (btn1) btn1.disabled = false;
+      if (btn2) btn2.disabled = false;
+    }
+  }
+
+  function addEmptyScriptSection() {
+    scriptState.active = true;
+    scriptState.sections.push({
+      type: 'supporting',
+      text: '',
+    });
+    renderScriptSections();
+    updateScriptMeta();
+    const lastTextarea = $('#script-sections-container .script-section-card:last-child textarea');
+    if (lastTextarea) lastTextarea.focus();
+  }
+
+  function clearScriptEditor() {
+    scriptState.active = false;
+    scriptState.sections = [];
+    scriptState.audioUrl = null;
+    $('#script-editor-panel')?.classList.add('hidden');
+    $('#script-audio-preview')?.classList.add('hidden');
+    updateScriptMeta();
+    const statusEl = $('#script-quick-status');
+    if (statusEl) statusEl.textContent = 'Biarkan kosong jika ingin AI men-generate otomatis saat transformasi';
+    toast('Editor naskah dibersihkan. Transformasi akan memakai auto LLM.', '');
+  }
+
+  $('#btn-gen-script')?.addEventListener('click', generateDraftScript);
+  $('#btn-preview-tts')?.addEventListener('click', previewCustomTts);
+  $('#btn-preview-tts-bottom')?.addEventListener('click', previewCustomTts);
+  $('#btn-add-section')?.addEventListener('click', addEmptyScriptSection);
+  $('#btn-add-section-bottom')?.addEventListener('click', addEmptyScriptSection);
+  $('#btn-clear-script')?.addEventListener('click', clearScriptEditor);
 
   /* ---------- Research ---------- */
   // Preset chip event handlers in Research tab
@@ -986,6 +1574,14 @@
                     customHook: hookState.selected.spokenHook?.text || hookState.selected.headline?.text,
                   }
                 : {}),
+              ...(scriptState.active && scriptState.sections.length > 0
+                ? {
+                    customScript: {
+                      language: scriptState.language || $('#transform-lang')?.value || 'auto',
+                      sections: scriptState.sections,
+                    },
+                  }
+                : {}),
             };
           })();
 
@@ -1181,10 +1777,67 @@
           <div class="angle-item">
             <div class="angle-score" style="font-size:11px">${esc(b.role || '?')}</div>
             <div class="angle-title">${esc(b.purpose || b.id)}</div>
-          </div>
-        `).join('')}
       </div>` : ''}
     `;
+
+    // Append Viral Captions Card
+    if (result.captions) {
+      const captionContext = {
+        videoId: result.videoId,
+        jobId: result.jobId,
+        sourceTitle: result.angle?.title || result.videoId,
+        genre: $('#transform-genre')?.value || undefined,
+        scriptText: result.script?.sections?.map((s) => s.text).join(' '),
+      };
+      const captionsCard = createViralCaptionsCard(result.captions, captionContext);
+      card.appendChild(captionsCard);
+    } else {
+      // Provide on-demand caption generation button
+      const captionSection = document.createElement('div');
+      captionSection.className = 'viral-captions-placeholder';
+      captionSection.style.marginTop = '14px';
+      captionSection.innerHTML = `
+        <button type="button" class="btn secondary small full" style="padding:10px;" id="btn-gen-captions-inline">
+          📱 Generate Caption Viral (TikTok, Reels, Shorts, X, Threads)
+        </button>
+      `;
+      captionSection.querySelector('#btn-gen-captions-inline')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = '⏳ Menulis caption viral dengan AI…';
+        try {
+          const res = await apiPost('/api/captions/generate', {
+            videoId: result.videoId,
+            jobId: result.jobId,
+            tone: 'viral_hype',
+            language: $('#transform-lang')?.value || 'auto',
+            customContext: {
+              sourceTitle: result.angle?.title || result.videoId,
+              genre: $('#transform-genre')?.value || undefined,
+              scriptText: result.script?.sections?.map((s) => s.text).join(' '),
+              storyConcept: result.story?.concept,
+              durationSeconds: result.videoPlan?.duration || result.reel?.durationSeconds,
+            },
+          });
+          if (res.success && res.captions) {
+            const cardEl = createViralCaptionsCard(res, {
+              videoId: result.videoId,
+              jobId: result.jobId,
+              sourceTitle: result.angle?.title || result.videoId,
+            });
+            captionSection.replaceWith(cardEl);
+            toast('Caption viral berhasil dibuat! 🚀', 'success');
+          } else {
+            throw new Error(res.message || 'Gagal membuat caption');
+          }
+        } catch (err) {
+          toast(`Gagal membuat caption: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = '📱 Coba Lagi Generate Caption Viral';
+        }
+      });
+      card.appendChild(captionSection);
+    }
 
     list.appendChild(card);
     $('#transform-results').classList.remove('hidden');
@@ -1197,6 +1850,276 @@
       toast('Transformasi berhasil!', 'success');
     }
   }
+
+  /* ---------- Viral Captions UI Builder ---------- */
+  const PLATFORM_META = {
+    tiktok: {
+      name: 'TikTok',
+      icon: '🎵',
+      sweetSpot: '50–150 kar (Search SEO + Comment Loop)',
+      maxChar: 4000,
+    },
+    instagram: {
+      name: 'Instagram Reels',
+      icon: '📸',
+      sweetSpot: '125 kar sebelum fold (Saves & Shares)',
+      maxChar: 2200,
+    },
+    youtube_shorts: {
+      name: 'YouTube Shorts',
+      icon: '🔴',
+      sweetSpot: 'Judul <70 kar (Search SEO Indexing)',
+      maxChar: 5000,
+    },
+    x: {
+      name: 'X (Twitter)',
+      icon: '𝕏',
+      sweetSpot: '<280 kar (Quote-Tweet & RT Bait)',
+      maxChar: 280,
+    },
+    threads: {
+      name: 'Threads',
+      icon: '🧵',
+      sweetSpot: 'Diskusi Komunitas & Balasan Panjang',
+      maxChar: 500,
+    },
+  };
+
+  function createViralCaptionsCard(captionData, ctx = {}) {
+    const card = document.createElement('div');
+    card.className = 'viral-captions-card';
+
+    let currentPlatform = 'tiktok';
+    let currentTone = captionData.tone || 'viral_hype';
+    const captions = { ...captionData.captions };
+
+    function renderContent() {
+      const pData = captions[currentPlatform] || {};
+      const meta = PLATFORM_META[currentPlatform] || { name: currentPlatform, icon: '📱', maxChar: 2000, sweetSpot: '' };
+      const formatted = pData.formattedCaption || '';
+      const charCount = formatted.length;
+      const isOver = currentPlatform === 'x' && charCount > 280;
+
+      card.innerHTML = `
+        <div class="captions-header">
+          <div class="captions-title-group">
+            <span class="captions-title">📱 Caption Viral Multi-Platform</span>
+            <span class="captions-algo-badge">⚡ ALGORITMA 2026</span>
+          </div>
+          <div class="captions-controls">
+            <select class="caption-tone-select" id="caption-tone-picker" title="Ubah Gaya Bahasa / Tone Copywriting">
+              <option value="viral_hype" ${currentTone === 'viral_hype' ? 'selected' : ''}>⚡ Viral &amp; Hype</option>
+              <option value="storytelling" ${currentTone === 'storytelling' ? 'selected' : ''}>📖 Storytelling</option>
+              <option value="educational" ${currentTone === 'educational' ? 'selected' : ''}>💡 Edukasi &amp; Insight</option>
+              <option value="controversial" ${currentTone === 'controversial' ? 'selected' : ''}>🔥 Debat / Diskusi</option>
+              <option value="humorous" ${currentTone === 'humorous' ? 'selected' : ''}>😂 Lucu &amp; Santai</option>
+            </select>
+            <button type="button" class="btn small ghost" id="btn-regen-caption-tone" title="Generate ulang caption dengan tone yang dipilih">🔄 Generate Ulang</button>
+          </div>
+        </div>
+
+        <div class="platform-tabs">
+          <button type="button" class="platform-tab ${currentPlatform === 'tiktok' ? 'active' : ''}" data-platform="tiktok">🎵 TikTok</button>
+          <button type="button" class="platform-tab ${currentPlatform === 'instagram' ? 'active' : ''}" data-platform="instagram">📸 Instagram Reels</button>
+          <button type="button" class="platform-tab ${currentPlatform === 'youtube_shorts' ? 'active' : ''}" data-platform="youtube_shorts">🔴 YouTube Shorts</button>
+          <button type="button" class="platform-tab ${currentPlatform === 'x' ? 'active' : ''}" data-platform="x">𝕏 Twitter / X</button>
+          <button type="button" class="platform-tab ${currentPlatform === 'threads' ? 'active' : ''}" data-platform="threads">🧵 Threads</button>
+        </div>
+
+        ${pData.strategyExplanation ? `
+        <div class="caption-strategy-box">
+          <span class="caption-strategy-icon">💡</span>
+          <div><strong>Strategi Algoritma:</strong> ${esc(pData.strategyExplanation)}</div>
+        </div>` : ''}
+
+        ${pData.title ? `
+        <div class="caption-title-box">
+          <div style="min-width:0;">
+            <div class="muted small" style="font-size:11px;">📌 Rekomendasi Judul Video / Headline:</div>
+            <div class="caption-title-text">${esc(pData.title)}</div>
+          </div>
+          <button type="button" class="btn small ghost" data-caption-action="copy-title" title="Salin judul saja">✏️ Salin Judul</button>
+        </div>` : ''}
+
+        <div class="caption-meta-row">
+          <div class="caption-chips">
+            <span class="caption-chip char-count ${isOver ? 'danger' : ''}" id="caption-char-indicator">
+              📝 ${charCount} Karakter (${meta.sweetSpot})
+            </span>
+            ${pData.hashtags?.length ? `<span class="caption-chip">🏷️ ${pData.hashtags.length} Hashtag</span>` : ''}
+            ${pData.recommendedAudioVibe ? `<span class="caption-chip">🔊 Audio: ${esc(pData.recommendedAudioVibe)}</span>` : ''}
+          </div>
+          ${pData.searchKeywords?.length ? `
+          <div class="caption-chips">
+            <span class="muted small">🔍 Target SEO:</span>
+            ${pData.searchKeywords.slice(0, 3).map((k) => `<span class="caption-chip">${esc(k)}</span>`).join('')}
+          </div>` : ''}
+        </div>
+
+        <textarea class="caption-textarea" id="caption-text-input" placeholder="Teks caption..." spellcheck="false">${esc(formatted)}</textarea>
+
+        <div class="caption-actions">
+          <div class="caption-actions-left">
+            <button type="button" class="btn primary small" data-caption-action="copy-full">📋 Salin Caption Lengkap</button>
+            ${pData.hashtags?.length ? `<button type="button" class="btn secondary small" data-caption-action="copy-hashtags">🏷️ Salin Hashtag</button>` : ''}
+            ${pData.tags?.length ? `<button type="button" class="btn secondary small" data-caption-action="copy-tags">🏷️ Salin Search Tags</button>` : ''}
+          </div>
+          <span class="muted small" id="caption-copy-status">Siap upload ke ${meta.name}</span>
+        </div>
+      `;
+
+      // Event Listeners inside card
+      card.querySelectorAll('.platform-tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          currentPlatform = tab.dataset.platform;
+          renderContent();
+        });
+      });
+
+      const toneSelect = card.querySelector('#caption-tone-picker');
+      const btnRegenTone = card.querySelector('#btn-regen-caption-tone');
+
+      const triggerRegenerate = async () => {
+        const newTone = toneSelect?.value || currentTone;
+        currentTone = newTone;
+        if (btnRegenTone) {
+          btnRegenTone.disabled = true;
+          btnRegenTone.textContent = '⏳ Generating…';
+        }
+        try {
+          const res = await apiPost('/api/captions/generate', {
+            videoId: ctx.videoId || captionData.videoId,
+            jobId: ctx.jobId || captionData.jobId,
+            tone: newTone,
+            language: $('#transform-lang')?.value || 'auto',
+            refresh: true,
+            customContext: {
+              sourceTitle: ctx.sourceTitle || captionData.sourceTitle,
+              genre: ctx.genre || $('#transform-genre')?.value,
+              scriptText: ctx.scriptText,
+            },
+          });
+          if (res.success && res.captions) {
+            Object.assign(captions, res.captions);
+            toast(`Caption diperbarui dengan tone: ${newTone}! ✨`, 'success');
+            renderContent();
+          }
+        } catch (err) {
+          toast(`Gagal update caption: ${err.message}`, 'error');
+          if (btnRegenTone) {
+            btnRegenTone.disabled = false;
+            btnRegenTone.textContent = '🔄 Generate Ulang';
+          }
+        }
+      };
+
+      toneSelect?.addEventListener('change', triggerRegenerate);
+      btnRegenTone?.addEventListener('click', triggerRegenerate);
+
+      const ta = card.querySelector('#caption-text-input');
+      const charInd = card.querySelector('#caption-char-indicator');
+      ta?.addEventListener('input', () => {
+        const val = ta.value;
+        if (captions[currentPlatform]) {
+          captions[currentPlatform].formattedCaption = val;
+        }
+        if (charInd) {
+          const isTooLong = currentPlatform === 'x' && val.length > 280;
+          charInd.textContent = `📝 ${val.length} Karakter (${meta.sweetSpot})`;
+          charInd.className = `caption-chip char-count ${isTooLong ? 'danger' : ''}`;
+        }
+      });
+
+      card.querySelectorAll('[data-caption-action]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const act = btn.dataset.captionAction;
+          if (act === 'copy-full') {
+            const textToCopy = ta?.value || '';
+            const ok = await copyText(textToCopy);
+            if (ok) {
+              toast(`Caption ${meta.name} disalin ke clipboard! 📋`, 'success');
+            } else {
+              toast('Gagal menyalin otomatis — silakan seleksi & salin manual', 'error');
+            }
+          } else if (act === 'copy-hashtags') {
+            const tags = (pData.hashtags || []).map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ');
+            const ok = await copyText(tags);
+            if (ok) toast('Hashtag disalin! 🏷️', 'success');
+          } else if (act === 'copy-title') {
+            const ok = await copyText(pData.title || '');
+            if (ok) toast('Judul disalin! ✏️', 'success');
+          } else if (act === 'copy-tags') {
+            const tagsStr = (pData.tags || []).join(', ');
+            const ok = await copyText(tagsStr);
+            if (ok) toast('Search tags YouTube disalin! 🏷️', 'success');
+          }
+        });
+      });
+    }
+
+    renderContent();
+    return card;
+  }
+
+  /* ---------- Caption Modal for History Tab ---------- */
+  async function openCaptionModal(videoId, title = '') {
+    const modal = $('#caption-modal');
+    const content = $('#modal-caption-content');
+    if (!modal || !content) return;
+
+    modal.classList.remove('hidden');
+    content.innerHTML = `
+      <div style="text-align:center;padding:40px 20px;">
+        <div style="font-size:28px;margin-bottom:10px;">📱</div>
+        <div style="font-weight:700;font-size:16px;margin-bottom:6px;">Memuat Caption Viral…</div>
+        <p class="muted small">Mengambil caption yang tersimpan atau menganalisis metadata video.</p>
+      </div>
+    `;
+
+    try {
+      // Try GET first
+      let res = await fetch(`/api/captions?videoId=${encodeURIComponent(videoId)}`).then((r) => r.json()).catch(() => null);
+      if (!res || !res.success || !res.captions) {
+        // Generate on demand
+        res = await apiPost('/api/captions/generate', {
+          videoId,
+          tone: 'viral_hype',
+          customContext: {
+            sourceTitle: title || `Video ${videoId}`,
+          },
+        });
+      }
+
+      if (res && res.success && res.captions) {
+        content.innerHTML = '';
+        const cardEl = createViralCaptionsCard(res, { videoId, sourceTitle: title });
+        content.appendChild(cardEl);
+      } else {
+        throw new Error(res?.message || 'Tidak ada caption yang ditemukan');
+      }
+    } catch (err) {
+      content.innerHTML = `
+        <div class="card error-card" style="margin:0;">
+          <h3>⚠️ Gagal Memuat Caption</h3>
+          <p>${esc(err.message)}</p>
+          <button type="button" class="btn secondary small" id="btn-retry-modal-caption" style="margin-top:10px;">🔄 Coba Lagi</button>
+        </div>
+      `;
+      content.querySelector('#btn-retry-modal-caption')?.addEventListener('click', () => {
+        openCaptionModal(videoId, title);
+      });
+    }
+  }
+
+  $('#btn-close-caption-modal')?.addEventListener('click', () => {
+    $('#caption-modal')?.classList.add('hidden');
+  });
+
+  $('#caption-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      $('#caption-modal')?.classList.add('hidden');
+    }
+  });
 
   /* ---------- History ---------- */
   async function loadHistory() {
@@ -1212,6 +2135,7 @@
       }
       list.innerHTML = items.slice().reverse().map((c) => {
         const clipUrl = c.videoUrl || c.outputVideo || '';
+        const vId = c.videoId || '';
         return `
         <div class="history-item">
           ${c.thumbnailUrl ? `<img class="h-thumb" src="${esc(c.thumbnailUrl)}" alt="" loading="lazy">` : ''}
@@ -1219,9 +2143,10 @@
             <div class="h-title">${esc(c.title || c.video || 'Transform')}</div>
             <div class="h-meta">${esc(c.video || c.outputVideo || '')}</div>
           </div>
-          <div style="display:flex;gap:6px">
-            ${clipUrl ? `<button class="btn ghost small" data-action="download" data-url="${esc(clipUrl)}">⬇️</button>` : ''}
-            ${clipUrl ? `<button class="btn ghost small" data-action="play" data-url="${esc(clipUrl)}">▶️</button>` : ''}
+          <div style="display:flex;gap:6px;align-items:center;">
+            ${vId ? `<button class="btn ghost small" data-action="view-caption" data-video-id="${esc(vId)}" data-title="${esc(c.title || '')}" title="Lihat/Buat Caption Viral (TikTok, Reels, Shorts)">📱 Caption</button>` : ''}
+            ${clipUrl ? `<button class="btn ghost small" data-action="download" data-url="${esc(clipUrl)}" title="Unduh Video">⬇️</button>` : ''}
+            ${clipUrl ? `<button class="btn ghost small" data-action="play" data-url="${esc(clipUrl)}" title="Putar Video">▶️</button>` : ''}
           </div>
         </div>`;
       }).join('');
@@ -1234,7 +2159,7 @@
   document.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-action]');
     if (!btn) return;
-    const { action, url, id, name } = btn.dataset;
+    const { action, url, id, name, videoId, title } = btn.dataset;
 
     if (action === 'copy') {
       if (url) {
@@ -1255,6 +2180,10 @@
         } else {
           window.open(url, '_blank');
         }
+      }
+    } else if (action === 'view-caption') {
+      if (videoId) {
+        openCaptionModal(videoId, title);
       }
     } else if (action === 'clip') {
       if (url) {
