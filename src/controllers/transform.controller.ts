@@ -30,6 +30,8 @@ import type { ICompositionEngine, CompositionAssets } from '../composition/compo
 import type { ContentCache } from '../services/content-cache.service.js';
 import type { ReelComposerService, ReelSegment, ReelSegmentSubtitle } from '../services/reel-composer.service.js';
 import type { IWatermarkFilterService } from '../services/watermark-filter.service.js';
+import type { ICaptionService } from '../content/caption.service.js';
+import type { VideoCaptionResult } from '../types/caption.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
 
@@ -64,6 +66,10 @@ export interface TransformControllerDeps {
    * silently falling back to the narration pipeline.
    */
   reelComposer?: ReelComposerService;
+  /**
+   * Optional caption service for generating platform-tailored viral social captions.
+   */
+  captionService?: ICaptionService;
   /** Optional real-time progress callback — called before each pipeline stage starts. */
   onStage?: (stage: TransformStage, opts?: { skipped?: boolean }) => void;
 }
@@ -298,48 +304,75 @@ export class TransformController {
     // Stage 2: Script
     let script: OriginalScript;
     this.emit('script');
-    const scriptCacheKey = this.cacheKey(
-      'script',
-      videoId,
-      request.candidateId,
-      selectedAngle.id,
-      request.customAngleTitle,
-      request.customHook,
-      request.language,
-      request.genre,
-      rangeCacheKey,
-    );
-    const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
-    if (cachedScript) {
-      logger.info({ cache: 'script', videoId, candidateId: request.candidateId }, 'Script generation served from cache');
-      script = cachedScript;
+
+    if (request.customScript?.sections?.length) {
+      logger.info({ sectionCount: request.customScript.sections.length }, 'Using user-provided custom narration script');
+      const customSections = request.customScript.sections.map((s) => ({
+        type: s.type,
+        text: s.text.trim(),
+        sourceQuote: s.sourceQuote,
+        evidence: s.evidence,
+        beatId: s.beatId,
+      }));
+      const totalWords = customSections.reduce((sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length, 0);
+      const estDuration = Math.max(10, Math.round(totalWords / 2.5));
+
+      script = {
+        candidateId: `candidate_${request.candidateId}`,
+        angleId: selectedAngle.id,
+        angleTitle: request.customAngleTitle ?? selectedAngle.title,
+        language: request.customScript.language ?? targetLang,
+        estimatedDurationSeconds: estDuration,
+        sections: customSections,
+        originality: {
+          status: 'PASS',
+          notes: ['Naskah narasi dikustomisasi oleh pengguna sebelum render'],
+        },
+      };
     } else {
-      try {
-        const scriptContext = {
-          candidateId: angleResult.candidateId,
-          angleId: selectedAngle.id,
-          angleTitle: request.customAngleTitle ?? selectedAngle.title,
-          angleHook: request.customHook ?? selectedAngle.hook,
-          angleReason: selectedAngle.reason,
-          angleType: selectedAngle.angleType,
-          fixedHook: request.customHook,
-          momentSegments: angleContext.momentSegments,
-          contextSegments: angleContext.contextSegments,
-          story,
-          candidateTitle: angleContext.candidateTitle,
-          candidateHook: angleContext.candidateHook,
-          sourceTitle: angleContext.sourceTitle,
-          sourceChannel: angleContext.sourceChannel,
-          sourceLanguage: angleContext.sourceLanguage,
-          targetLanguage: request.language === 'auto' ? undefined : request.language,
-          genre: request.genre,
-          selectedClips: request.selectedClips,
-        };
-        script = await this.deps.scriptService.generateScript(scriptContext);
-        await this.deps.contentCache?.set(scriptCacheKey, script);
-      } catch (err) {
-        logger.error({ err, targetLang }, 'Script generation failed — using emergency fallback script');
-        script = this.fallbackScript(selectedAngle, targetLang);
+      const scriptCacheKey = this.cacheKey(
+        'script',
+        videoId,
+        request.candidateId,
+        selectedAngle.id,
+        request.customAngleTitle,
+        request.customHook,
+        request.language,
+        request.genre,
+        rangeCacheKey,
+      );
+      const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
+      if (cachedScript) {
+        logger.info({ cache: 'script', videoId, candidateId: request.candidateId }, 'Script generation served from cache');
+        script = cachedScript;
+      } else {
+        try {
+          const scriptContext = {
+            candidateId: angleResult.candidateId,
+            angleId: selectedAngle.id,
+            angleTitle: request.customAngleTitle ?? selectedAngle.title,
+            angleHook: request.customHook ?? selectedAngle.hook,
+            angleReason: selectedAngle.reason,
+            angleType: selectedAngle.angleType,
+            fixedHook: request.customHook,
+            momentSegments: angleContext.momentSegments,
+            contextSegments: angleContext.contextSegments,
+            story,
+            candidateTitle: angleContext.candidateTitle,
+            candidateHook: angleContext.candidateHook,
+            sourceTitle: angleContext.sourceTitle,
+            sourceChannel: angleContext.sourceChannel,
+            sourceLanguage: angleContext.sourceLanguage,
+            targetLanguage: request.language === 'auto' ? undefined : request.language,
+            genre: request.genre,
+            selectedClips: request.selectedClips,
+          };
+          script = await this.deps.scriptService.generateScript(scriptContext);
+          await this.deps.contentCache?.set(scriptCacheKey, script);
+        } catch (err) {
+          logger.error({ err, targetLang }, 'Script generation failed — using emergency fallback script');
+          script = this.fallbackScript(selectedAngle, targetLang);
+        }
       }
     }
 
@@ -395,6 +428,29 @@ export class TransformController {
       ...(request.customAngleTitle ? { title: request.customAngleTitle } : {}),
     };
 
+    const captionTargetLang = request.language === 'auto' ? undefined : request.language;
+    const captions = await this.generateCaptionsForTransform({
+      videoId,
+      jobId,
+      sourceTitle: angleContext.sourceTitle || `Video ${videoId}`,
+      sourceChannel: angleContext.sourceChannel,
+      targetLanguage: captionTargetLang,
+      genre: request.genre,
+      angle: {
+        title: returnedAngle.title,
+        hook: returnedAngle.hook,
+        angleType: returnedAngle.angleType,
+        reason: returnedAngle.reason,
+      },
+      script: {
+        sections: script.sections.map((s) => ({ type: s.type, text: s.text })),
+        estimatedDurationSeconds: script.estimatedDurationSeconds,
+      },
+      story: story ? { concept: story.concept, premise: story.premise } : undefined,
+      clips: request.selectedClips,
+      durationSeconds: videoPlan.duration,
+    });
+
     // Dry-run mode
     if (request.dryRun) {
       return {
@@ -406,8 +462,12 @@ export class TransformController {
         story,
         storyApplied: story != null,
         script,
-        narration: ttsResult,
+        narration: {
+          ...ttsResult,
+          url: ttsResult.outputPath ? this.toMediaUrl(ttsResult.outputPath) : undefined,
+        },
         videoPlan,
+        captions,
         generatedAt: new Date().toISOString(),
         dryRun: true,
       };
@@ -448,6 +508,7 @@ export class TransformController {
         ...outputVideo,
         url: this.toMediaUrl(outputVideo.path),
       },
+      captions,
       generatedAt: new Date().toISOString(),
       dryRun: false,
     };
@@ -576,6 +637,17 @@ export class TransformController {
       fileName: 'reel',
     });
 
+    const reelCaptions = await this.generateCaptionsForTransform({
+      videoId,
+      jobId,
+      sourceTitle: request.hookTitle || (request.selectedClips[0]?.title ? `Reel: ${request.selectedClips[0].title}` : `Reel ${videoId}`),
+      targetLanguage: request.language === 'auto' ? undefined : request.language,
+      genre: request.genre,
+      angle: request.hookTitle ? { title: request.hookTitle, hook: request.hookTitle } : undefined,
+      clips: request.selectedClips.map((c) => ({ start: c.start, end: c.end, title: c.title })),
+      durationSeconds: reel.durationSeconds,
+    });
+
     return {
       success: true,
       jobId,
@@ -610,9 +682,45 @@ export class TransformController {
         width: 1080,
         height: 1920,
       },
+      captions: reelCaptions,
       generatedAt: new Date().toISOString(),
       dryRun: false,
     };
+  }
+
+  /** Generates platform-tailored viral social captions for the transform run. */
+  private async generateCaptionsForTransform(params: {
+    videoId: string;
+    jobId: string;
+    sourceTitle: string;
+    sourceChannel?: string;
+    targetLanguage?: string;
+    genre?: string;
+    angle?: { title: string; hook?: string; angleType?: string; reason?: string };
+    script?: { sections: Array<{ type: string; text: string }>; estimatedDurationSeconds?: number };
+    story?: { concept?: string; premise?: string };
+    clips?: Array<{ start: number; end: number; title?: string }>;
+    durationSeconds?: number;
+  }): Promise<VideoCaptionResult | undefined> {
+    if (!this.deps.captionService) return undefined;
+    try {
+      return await this.deps.captionService.generateCaptions({
+        videoId: params.videoId,
+        jobId: params.jobId,
+        sourceTitle: params.sourceTitle,
+        sourceChannel: params.sourceChannel,
+        targetLanguage: params.targetLanguage,
+        genre: params.genre,
+        angle: params.angle,
+        script: params.script,
+        story: params.story,
+        clips: params.clips,
+        durationSeconds: params.durationSeconds,
+      });
+    } catch (err) {
+      this.deps.logger.warn({ err }, 'Auto caption generation failed in transform pipeline');
+      return undefined;
+    }
   }
 
   /** Loads the per-video transcript (workspace first, shared dir second). */

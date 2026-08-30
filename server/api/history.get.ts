@@ -30,6 +30,15 @@ export default defineEventHandler(async () => {
       if (!entry.isDirectory()) continue;
 
       const manifestPath = join(outputsRoot, entry.name, 'metadata', 'clips.json');
+      const captionsPath = join(outputsRoot, entry.name, 'captions', 'latest.json');
+      let hasCaptions = false;
+      try {
+        await readFile(captionsPath);
+        hasCaptions = true;
+      } catch {
+        // No captions yet
+      }
+
       try {
         const raw = await readFile(manifestPath, 'utf-8');
         const parsed = JSON.parse(raw) as unknown;
@@ -37,6 +46,8 @@ export default defineEventHandler(async () => {
           clips.push(
             ...parsed.map((clip: RenderedClipMetadata) => ({
               ...clip,
+              videoId: entry.name,
+              hasCaptions,
               videoUrl: clip.video ? toMediaUrl(clip.video) : '',
               thumbnailUrl: clip.thumbnail ? toMediaUrl(clip.thumbnail) : '',
             })),

@@ -88,6 +88,8 @@ export const hookGenerateRequestSchema = z
     videoId: z.string().optional(),
     /** Candidate moment index within the video (0-based). */
     candidateId: z.number().int().min(0).default(0),
+    /** Optional explicit start time in seconds to center the hook around. */
+    startTime: z.number().min(0).optional(),
     /** Target language for the hooks ("auto" follows the transcript). */
     language: z.enum(['auto', 'id', 'en']).default('auto'),
     /** Preferred source-clip duration window in seconds (ideal 1.5-5s). */

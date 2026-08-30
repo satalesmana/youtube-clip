@@ -1,0 +1,93 @@
+/**
+ * Social media platforms supported for viral caption generation.
+ */
+export type SocialPlatform = 'tiktok' | 'instagram' | 'youtube_shorts' | 'x' | 'threads';
+
+/**
+ * Editorial tones available for caption copywriting.
+ */
+export type CaptionTone = 'viral_hype' | 'storytelling' | 'educational' | 'controversial' | 'humorous';
+
+/**
+ * Caption data formatted for a specific platform.
+ */
+export interface PlatformCaption {
+  /** Target platform. */
+  platform: SocialPlatform;
+  /** Optional catchy video title (especially important for YouTube Shorts & TikTok). */
+  title?: string;
+  /** Opening hook line (the scroll-stopper / first 1-2 lines before fold). */
+  hook: string;
+  /** Main caption body copy. */
+  body: string;
+  /** Explicit call to action (e.g. Save, Share, Comment prompt). */
+  callToAction: string;
+  /** Curated niche & SEO hashtags (e.g. ["#teknologi", "#ai", "#chatgpt"]). */
+  hashtags: string[];
+  /** Complete formatted, ready-to-copy caption with whitespace, emojis, and hashtags. */
+  formattedCaption: string;
+  /** Target search / SEO keywords woven into this caption. */
+  searchKeywords: string[];
+  /** Total character count of formattedCaption. */
+  characterCount: number;
+  /** Strategic breakdown explaining why this caption matches the platform algorithm. */
+  strategyExplanation: string;
+  /** Suggested background sound / audio mood vibe. */
+  recommendedAudioVibe?: string;
+  /** Search tags (comma-separated for YouTube metadata). */
+  tags?: string[];
+}
+
+/**
+ * Full caption generation result containing all platform variations.
+ */
+export interface VideoCaptionResult {
+  videoId: string;
+  jobId?: string;
+  sourceTitle: string;
+  channelName?: string;
+  language: string;
+  tone: CaptionTone;
+  captions: Record<SocialPlatform, PlatformCaption>;
+  generatedAt: string;
+  cached?: boolean;
+}
+
+/**
+ * Context input passed to the caption generation service.
+ */
+export interface CaptionGenerationContext {
+  videoId: string;
+  jobId?: string;
+  sourceTitle: string;
+  sourceChannel?: string;
+  videoLanguage?: string;
+  targetLanguage?: string;
+  genre?: string;
+  tone?: CaptionTone;
+  angle?: {
+    title: string;
+    hook?: string;
+    angleType?: string;
+    reason?: string;
+  };
+  script?: {
+    sections: Array<{
+      type: string;
+      text: string;
+    }>;
+    estimatedDurationSeconds?: number;
+  };
+  story?: {
+    concept?: string;
+    premise?: string;
+    protagonist?: string;
+  };
+  transcriptSummary?: string;
+  clips?: Array<{
+    start: number;
+    end: number;
+    title?: string;
+  }>;
+  durationSeconds?: number;
+}

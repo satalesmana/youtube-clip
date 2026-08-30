@@ -91,6 +91,32 @@ export const transformRequestSchema = z.object({
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),
   /**
+   * User-edited custom narration script to use for TTS and video plan,
+   * bypassing automatic LLM script generation.
+   */
+  customScript: z
+    .object({
+      language: z.string().optional(),
+      sections: z.array(
+        z.object({
+          type: z.enum([
+            'hook',
+            'context',
+            'source',
+            'commentary',
+            'analysis',
+            'supporting',
+            'conclusion',
+          ]),
+          text: z.string().min(1),
+          sourceQuote: z.string().optional(),
+          evidence: z.array(z.string()).optional(),
+          beatId: z.string().optional(),
+        }),
+      ).min(1),
+    })
+    .optional(),
+  /**
    * Optional content genre for the source video.
    * When supplied, all LLM stages (angle generation, story concept detection,
    * script pacing, hook style prioritisation) are biased toward the patterns

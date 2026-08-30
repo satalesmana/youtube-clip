@@ -49,6 +49,8 @@ export interface HookGenerateRequest {
   videoId?: string;
   /** Candidate moment index within the video (0-based, default 0). */
   candidateId?: number;
+  /** Optional explicit start time in seconds to center the hook around. */
+  startTime?: number;
   /** Target language for the hooks ("auto" follows the transcript). */
   language?: 'auto' | 'id' | 'en';
   /** Preferred source-clip duration window in seconds. */
@@ -108,7 +110,7 @@ export class HookController {
     logger.info({ videoId, candidateId }, 'Hook generation started');
 
     // Select the moment + context segments around the candidate index.
-    const selection = this.selectMoment(transcript, candidateId);
+    const selection = this.selectMoment(transcript, candidateId, request.startTime);
     if (selection.momentSegments.length === 0) {
       throw AppError.validation(`Candidate index ${candidateId} is out of range for this transcript.`);
     }
@@ -447,7 +449,7 @@ export class HookController {
     genre?: ContentGenre,
     language?: string,
   ): Promise<AngleGenerationResult> {
-    const cacheKey = this.cacheKey('hook-angle', videoId, candidateId, genre ?? '', language ?? '');
+    const cacheKey = this.cacheKey('hook-angle', videoId, candidateId, context.clipStart, genre ?? '', language ?? '');
     const cached = await this.deps.contentCache?.get<AngleGenerationResult>(cacheKey);
     if (cached) {
       this.deps.logger.info({ cache: 'hook-angle', videoId, candidateId }, 'Angle generation served from cache');
@@ -484,7 +486,7 @@ export class HookController {
     candidateId: number,
     genre?: ContentGenre,
   ): Promise<SourceStory | undefined> {
-    const cacheKey = this.cacheKey('hook-story', videoId, candidateId, genre ?? '');
+    const cacheKey = this.cacheKey('hook-story', videoId, candidateId, segments[0]?.start ?? 0, genre ?? '');
     const cached = await this.deps.contentCache?.get<SourceStory>(cacheKey);
     if (cached) {
       this.deps.logger.info({ cache: 'hook-story', videoId, candidateId }, 'Story planning served from cache');
@@ -505,12 +507,21 @@ export class HookController {
   private selectMoment(
     transcript: TranscriptDocument,
     candidateId: number,
+    startTime?: number,
   ): {
     momentSegments: TranscriptDocument['segments'];
     contextSegments: TranscriptDocument['segments'];
   } {
     const segments = transcript.segments;
-    const firstIndex = Math.min(candidateId, Math.max(0, segments.length - 1));
+    let firstIndex = Math.min(candidateId, Math.max(0, segments.length - 1));
+
+    if (startTime !== undefined && startTime >= 0) {
+      const foundIndex = segments.findIndex(s => s.start >= startTime || (s.start <= startTime && s.end >= startTime));
+      if (foundIndex >= 0) {
+        firstIndex = foundIndex;
+      }
+    }
+
     const first = segments[firstIndex];
     if (!first) return { momentSegments: [], contextSegments: [] };
 

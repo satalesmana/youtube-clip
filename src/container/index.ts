@@ -53,6 +53,7 @@ import { HookController } from '../controllers/hook.controller.js';
 import { PreviewRendererService } from '../services/preview-renderer.service.js';
 import { StyledHookPreviewService } from '../hook-preview/styled-hook-preview.service.js';
 import { ClipController } from '../controllers/clip.controller.js';
+import { TranscriptController } from '../controllers/transcript.controller.js';
 import type { WhisperProvider } from '../services/whisper.service.js';
 import { ReelComposerService } from '../services/reel-composer.service.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
@@ -64,6 +65,8 @@ import {
   HybridWatermarkDetector,
 } from '../services/watermark-detector.service.js';
 import { WatermarkFilterService } from '../services/watermark-filter.service.js';
+import { CaptionService } from '../content/caption.service.js';
+import { CaptionController } from '../controllers/caption.controller.js';
 
 /**
  * Composition root: this is the only module that knows about concrete
@@ -613,6 +616,16 @@ export const clipController = new ClipController({
   logger: createLogger('clips.controller'),
 });
 
+/** Entry point for `GET /api/transcript` and `POST /api/transcript/update`. */
+export const transcriptController = new TranscriptController({
+  youtubeService,
+  transcriptService,
+  whisperService,
+  outputsDir: paths.outputs,
+  logger: createLogger('transcript.controller'),
+  contentCache,
+});
+
 /**
  * Feedback loop for viral-clip recommendations: records which recommended
  * clips the user actually takes into a transform (see
@@ -758,6 +771,25 @@ export const researchController = new ResearchController({
   logger: createLogger('research.controller'),
 });
 
+export const captionService = new CaptionService(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+    outputsDir: paths.outputs,
+  },
+  createLogger('caption.service'),
+);
+
+export const captionController = new CaptionController({
+  captionService,
+  transcriptService,
+  outputsDir: paths.outputs,
+  logger: createLogger('caption.controller'),
+});
+
 /** Exposed for tests/tooling that need direct access to individual services. */
 export const container = {
   paths,
@@ -789,6 +821,9 @@ export const container = {
   hookService,
   hookController,
   clipController,
+  transcriptController,
+  captionService,
+  captionController,
   ttsService,
   videoPlanService,
   contentCache,
