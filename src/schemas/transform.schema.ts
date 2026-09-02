@@ -109,11 +109,39 @@ export const transformRequestSchema = z.object({
             'conclusion',
           ]),
           text: z.string().min(1),
+          spokenText: z.string().optional(),
           sourceQuote: z.string().optional(),
           evidence: z.array(z.string()).optional(),
           beatId: z.string().optional(),
         }),
       ).min(1),
+    })
+    .optional(),
+  /**
+   * Pre-generated narration audio (e.g. from previewing TTS in script editor).
+   * When provided and the audio file exists on disk, TTS generation is skipped.
+   */
+  existingNarration: z
+    .object({
+      outputPath: z.string(),
+      durationSeconds: z.number().positive(),
+      sections: z
+        .array(
+          z.object({
+            type: z.string(),
+            durationSeconds: z.number(),
+            wordTimings: z
+              .array(
+                z.object({
+                  word: z.string(),
+                  start: z.number(),
+                  end: z.number(),
+                }),
+              )
+              .optional(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
   /**

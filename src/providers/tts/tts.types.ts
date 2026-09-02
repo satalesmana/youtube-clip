@@ -29,7 +29,7 @@ export interface TTSSectionTiming {
   /** Measured duration of this section's audio in seconds. */
   durationSeconds: number;
   /** Word boundaries on the COMBINED narration timeline (already offset). */
-  wordTimings: TTSWordTiming[];
+  wordTimings?: TTSWordTiming[];
 }
 
 export interface TTSSynthesisResult {

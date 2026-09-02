@@ -59,7 +59,10 @@ ${langInstruction}
 
 ---
 
-Return ONLY valid JSON matching this exact structure, with no markdown fences, no extra preamble:
+CRITICAL JSON FORMAT RULES:
+1. Every platform ("tiktok", "instagram", "youtube_shorts", "x", "threads") MUST be a full JSON object enclosed in curly braces { ... }, NEVER a string.
+2. Keep "strategyExplanation" brief (1 concise sentence max) to avoid token limit cutoffs.
+3. Return ONLY valid JSON matching this exact structure, with no markdown fences, no extra preamble:
 {
   "tiktok": {
     "title": "Short Catchy Hook Headline",

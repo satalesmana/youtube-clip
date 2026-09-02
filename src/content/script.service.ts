@@ -10,6 +10,7 @@ import {
   type ScriptContext,
 } from './content.prompt.js';
 import { mapBeatRoleToSectionType } from '../types/story.js';
+import { normalizeForSpeech } from '../utils/speech-normalizer.js';
 import type { IOllamaProvider } from '../providers/ollama.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { OriginalScript, ScriptSection } from '../types/script.js';
@@ -85,6 +86,12 @@ export class ScriptService implements IScriptService {
         enforceFixedHook(sections, context);
         validateTranscriptGrounding(sections, context, this.logger);
         attachStorySources(sections, context, this.logger);
+
+        // Ensure every section has a speech-ready spokenText field
+        for (const section of sections) {
+          const baseSpoken = section.spokenText?.trim() ? section.spokenText : section.text;
+          section.spokenText = normalizeForSpeech(baseSpoken, data.language);
+        }
 
         if (sections.length < 3) {
           throw AppError.llmInvalidResponse('Script response contained too few sections.');
@@ -269,6 +276,9 @@ function enforceFixedHook(sections: ScriptSection[], context: ScriptContext): vo
   );
   if (!isCrossLingual || !hook.text?.trim()) {
     hook.text = fixedHook;
+    hook.spokenText = normalizeForSpeech(fixedHook, context.targetLanguage ?? 'id');
+  } else if (!hook.spokenText?.trim()) {
+    hook.spokenText = normalizeForSpeech(hook.text, context.targetLanguage ?? 'id');
   }
   // A user-selected hook is not a verbatim source quote — drop stale
   // grounding metadata that no longer matches the replaced text.

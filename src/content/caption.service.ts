@@ -14,8 +14,8 @@ import type {
   VideoCaptionResult,
 } from '../types/caption.js';
 import {
-  llmCaptionsResponseSchema,
-  type LlmCaptionsResponse,
+  llmCaptionItemSchema,
+  type LlmCaptionItem,
 } from '../schemas/caption.schema.js';
 import {
   buildCaptionSystemPrompt,
@@ -54,7 +54,7 @@ export class CaptionService implements ICaptionService {
       'Generating viral social captions for all platforms',
     );
 
-    let parsedResult: LlmCaptionsResponse | null = null;
+    let parsedResult: Partial<Record<SocialPlatform, LlmCaptionItem>> | null = null;
 
     try {
       parsedResult = await retry(
@@ -78,14 +78,39 @@ export class CaptionService implements ICaptionService {
           });
 
           const json = parseLlmJson(raw);
-          const validated = llmCaptionsResponseSchema.safeParse(json);
+          const platforms: SocialPlatform[] = ['tiktok', 'instagram', 'youtube_shorts', 'x', 'threads'];
+          const extractedMap: Partial<Record<SocialPlatform, LlmCaptionItem>> = {};
 
-          if (!validated.success) {
-            this.logger.warn({ err: validated.error }, 'LLM caption response schema validation failed');
-            throw AppError.llmInvalidResponse(`Invalid caption schema: ${validated.error.message}`);
+          if (typeof json === 'object' && json !== null) {
+            const rawObj = json as Record<string, unknown>;
+            for (const p of platforms) {
+              const rawItem = rawObj[p];
+              if (rawItem && typeof rawItem === 'object') {
+                const itemRes = llmCaptionItemSchema.safeParse(rawItem);
+                if (itemRes.success) {
+                  extractedMap[p] = itemRes.data;
+                } else {
+                  this.logger.debug(
+                    { platform: p, issues: itemRes.error.issues },
+                    'Platform caption item failed schema validation',
+                  );
+                }
+              }
+            }
           }
 
-          return validated.data;
+          const validKeys = Object.keys(extractedMap) as SocialPlatform[];
+          if (validKeys.length === 0) {
+            this.logger.warn({ json }, 'LLM caption response contained no valid platform objects');
+            throw AppError.llmInvalidResponse('No valid platform caption found in LLM response.');
+          }
+
+          this.logger.info(
+            { validPlatforms: validKeys, count: validKeys.length },
+            'Successfully parsed platform captions from LLM',
+          );
+
+          return extractedMap;
         },
         {
           attempts: this.options.maxRetries,
@@ -98,14 +123,13 @@ export class CaptionService implements ICaptionService {
       this.logger.error({ err }, 'Caption generation via LLM failed, falling back to heuristic generator');
     }
 
-    let result: VideoCaptionResult;
+    const fallback = generateFallbackCaptions(context);
+    const platforms: SocialPlatform[] = ['tiktok', 'instagram', 'youtube_shorts', 'x', 'threads'];
+    const captionMap: Record<SocialPlatform, PlatformCaption> = {} as Record<SocialPlatform, PlatformCaption>;
 
-    if (parsedResult) {
-      const platforms: SocialPlatform[] = ['tiktok', 'instagram', 'youtube_shorts', 'x', 'threads'];
-      const captionMap: Record<SocialPlatform, PlatformCaption> = {} as Record<SocialPlatform, PlatformCaption>;
-
-      for (const p of platforms) {
-        const item = parsedResult[p];
+    for (const p of platforms) {
+      const item = parsedResult?.[p];
+      if (item && (item.hook || item.body || item.title)) {
         const formatted = assembleFormattedCaption(p, item);
         captionMap[p] = {
           platform: p,
@@ -117,25 +141,25 @@ export class CaptionService implements ICaptionService {
           formattedCaption: formatted,
           searchKeywords: item.searchKeywords || [],
           characterCount: formatted.length,
-          strategyExplanation: item.strategyExplanation,
+          strategyExplanation: item.strategyExplanation || '',
           recommendedAudioVibe: item.recommendedAudioVibe,
           tags: item.tags,
         };
+      } else {
+        captionMap[p] = fallback.captions[p];
       }
-
-      result = {
-        videoId: context.videoId,
-        jobId: context.jobId,
-        sourceTitle: context.sourceTitle,
-        channelName: context.sourceChannel,
-        language: effectiveLang,
-        tone,
-        captions: captionMap,
-        generatedAt: new Date().toISOString(),
-      };
-    } else {
-      result = generateFallbackCaptions(context);
     }
+
+    const result: VideoCaptionResult = {
+      videoId: context.videoId,
+      jobId: context.jobId,
+      sourceTitle: context.sourceTitle,
+      channelName: context.sourceChannel,
+      language: effectiveLang,
+      tone,
+      captions: captionMap,
+      generatedAt: new Date().toISOString(),
+    };
 
     // Persist to workspace disk
     await this.saveCaptions(result);

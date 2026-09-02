@@ -15,6 +15,8 @@ export interface ScriptSection {
   type: ScriptSectionType;
   /** Narration text for this section (original words, not copied from source). */
   text: string;
+  /** Pronunciation-optimized text for TTS synthesis (numbers as words, phonetic foreign names). */
+  spokenText?: string;
   /** Optional: the quoted source statement this section references (source section only). */
   sourceQuote?: string;
   /** Verbatim transcript excerpts that ground this editorial claim. */

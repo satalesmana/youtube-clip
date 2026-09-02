@@ -20,6 +20,7 @@ import type { AngleGenerationResult, ContentAngle } from '../types/angle.js';
 import type { OriginalScript } from '../types/script.js';
 import type { VideoPlan } from '../types/video-plan.js';
 import type { TransformRequestInput } from '../schemas/transform.schema.js';
+import type { ScriptDraftRequestInput, TtsSynthesizeRequestInput } from '../schemas/script.schema.js';
 import type { RenderContext } from '../types/template.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 import type { ITemplateService } from '../template/template.service.js';
@@ -34,6 +35,7 @@ import type { ICaptionService } from '../content/caption.service.js';
 import type { VideoCaptionResult } from '../types/caption.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
+import { normalizeForSpeech } from '../utils/speech-normalizer.js';
 
 export type TransformStage = 'download' | 'transcript' | 'angle' | 'story' | 'script' | 'tts' | 'plan' | 'render';
 
@@ -83,11 +85,13 @@ export class TransformController {
     this.deps.onStage?.(stage, opts);
   }
 
-  async transform(request: TransformRequestInput): Promise<Record<string, unknown>> {
+  /** Resolves video file and transcript document with fast-path reuse. */
+  private async resolveTranscriptAndVideo(request: {
+    youtubeUrl?: string;
+    videoId?: string;
+    sttProvider?: 'faster-whisper' | 'whisper-cpp' | 'whisperx' | 'openai';
+  }): Promise<{ videoId: string; videoPath: string; transcript: TranscriptDocument }> {
     const { logger, outputsDir } = this.deps;
-    const jobId = crypto.randomUUID();
-    logger.info({ jobId }, 'Transform started');
-
     let videoPath: string;
     let videoId: string;
     let transcript: TranscriptDocument | null = null;
@@ -107,14 +111,11 @@ export class TransformController {
 
       if (hasVideo && hasTranscript) {
         logger.info({ videoId }, 'Using existing video and transcript from workspace');
-        // Both stages already satisfied — tell the UI they're done (skipped).
         this.emit('download', { skipped: true });
         this.emit('transcript', { skipped: true });
         videoPath = savedVideoPath;
-        // Also try loading from shared transcripts dir
         transcript = await this.deps.transcriptService.loadTranscript(videoId);
         if (!transcript) {
-          // Fall back to per-video workspace transcript
           try {
             const { readFile } = await import('node:fs/promises');
             const raw = await readFile(savedTranscriptPath, 'utf-8');
@@ -146,8 +147,6 @@ export class TransformController {
       } else if (!hasVideo && hasTranscript) {
         logger.info({ videoId }, 'Using existing transcript — downloading video');
         this.emit('download');
-        // Land the file in the per-video workspace (same fast-path location)
-        // instead of the shared downloads dir.
         const job = await createJobWorkspace(outputsDir, videoId);
         const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
         videoPath = download.videoPath;
@@ -155,10 +154,7 @@ export class TransformController {
         transcript = await this.deps.transcriptService.loadTranscript(videoId);
         this.emit('transcript', { skipped: true });
       } else {
-        // Full pipeline: download + transcribe
         this.emit('download');
-        // Same as above — per-video workspace keeps the file where the
-        // hook pipeline and future re-runs expect it.
         const job = await createJobWorkspace(outputsDir, videoId);
         const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
         videoPath = download.videoPath;
@@ -172,16 +168,16 @@ export class TransformController {
           const whisperService = request.sttProvider
             ? createWhisperServiceWith(request.sttProvider)
             : this.deps.whisperService;
-          const job = await createJobWorkspace(this.deps.outputsDir, videoId);
-          const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, job);
-          const whisperResult = await whisperService.transcribe(audio.audioPath, job);
+          const jobWorkspace = await createJobWorkspace(this.deps.outputsDir, videoId);
+          const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, jobWorkspace);
+          const whisperResult = await whisperService.transcribe(audio.audioPath, jobWorkspace);
           const transcriptDoc: TranscriptDocument = {
             ...whisperResult,
             videoId,
             sourceUrl: request.youtubeUrl,
             createdAt: new Date().toISOString(),
           };
-          await this.deps.transcriptService.saveTranscript(transcriptDoc, job);
+          await this.deps.transcriptService.saveTranscript(transcriptDoc, jobWorkspace);
           transcript = transcriptDoc;
         } else {
           this.emit('transcript', { skipped: true });
@@ -189,7 +185,6 @@ export class TransformController {
       }
     } else {
       videoId = request.videoId!;
-      // Re-transform by videoId: source video + transcript already on disk.
       this.emit('download', { skipped: true });
       this.emit('transcript', { skipped: true });
       transcript = await this.deps.transcriptService.loadTranscript(videoId);
@@ -197,10 +192,262 @@ export class TransformController {
       videoPath = join(outputsDir, videoId, 'downloads', `${videoId}.mp4`);
     }
 
-    // Guard: transcript must be available for subsequent stages
     if (!transcript) {
       throw AppError.missingSourceVideo(`No transcript found for ${videoId}.`);
     }
+
+    return { videoId, videoPath, transcript };
+  }
+
+  /**
+   * Generates an original script draft WITHOUT running TTS or video rendering.
+   * Enables human-in-the-loop review and saves TTS API credits.
+   */
+  async draftScript(request: ScriptDraftRequestInput): Promise<Record<string, unknown>> {
+    const { logger } = this.deps;
+    const { videoId, transcript } = await this.resolveTranscriptAndVideo(request);
+
+    const selection = request.selectedClips?.length
+      ? this.selectClips(transcript, request.selectedClips)
+      : request.sourceRange
+      ? this.selectRange(transcript, request.sourceRange.start, request.sourceRange.end)
+      : this.selectMoment(transcript, request.candidateId);
+
+    const clip = {
+      start: selection.momentSegments[0]?.start ?? 0,
+      end: selection.momentSegments.at(-1)?.end ?? 30,
+      text: selection.momentSegments.map((segment) => segment.text).join(' '),
+    };
+    const targetLang = request.language === 'auto' || !request.language
+      ? transcript.language
+      : request.language;
+
+    const angleContext: ContentAngleContext = {
+      candidateId: `candidate_${request.candidateId}`,
+      momentSegments: selection.momentSegments,
+      contextSegments: selection.contextSegments,
+      candidateTitle: 'Viral Moment',
+      candidateHook: '',
+      candidateReason: '',
+      clipStart: clip.start,
+      clipEnd: clip.end,
+      sourceTitle: videoId,
+      sourceChannel: '',
+      sourceLanguage: targetLang,
+      genre: request.genre,
+      selectedClips: request.selectedClips,
+    };
+
+    let angleResult: AngleGenerationResult;
+    this.emit('angle');
+    const rangeCacheKey = request.selectedClips?.length
+      ? request.selectedClips.map((c) => `${c.start}-${c.end}`).join(';')
+      : request.sourceRange
+      ? `${request.sourceRange.start}-${request.sourceRange.end}`
+      : undefined;
+    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey, request.genre, targetLang);
+    const cachedAngle = await this.deps.contentCache?.get<AngleGenerationResult>(angleCacheKey);
+    if (cachedAngle) {
+      logger.info({ cache: 'angle', videoId, candidateId: request.candidateId }, 'Angle generation served from cache');
+      angleResult = cachedAngle;
+    } else {
+      try {
+        angleResult = await this.deps.contentAngleService.generateAngles(angleContext);
+        await this.deps.contentCache?.set(angleCacheKey, angleResult);
+      } catch (err) {
+        logger.warn({ err }, 'Angle generation failed');
+        angleResult = this.fallbackAngle(request.candidateId);
+      }
+    }
+
+    const selectedAngle = angleResult.angles.find(
+      (a) => a.id === request.selectedAngleId || a.id === angleResult.selectedAngleId,
+    ) ?? angleResult.angles[0]!;
+
+    let story: Awaited<ReturnType<IStoryService['buildStory']>> | undefined;
+    this.emit('story');
+    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey, request.genre);
+    const cachedStory = await this.deps.contentCache?.get<Awaited<ReturnType<IStoryService['buildStory']>>>(storyCacheKey);
+    if (cachedStory) {
+      logger.info({ cache: 'story', videoId, candidateId: request.candidateId }, 'Story planning served from cache');
+      story = cachedStory;
+    } else {
+      try {
+        const storySegments = [
+          ...angleContext.contextSegments,
+          ...selection.momentSegments,
+        ];
+        story = await this.deps.storyService.buildStory(storySegments, request.genre);
+        logger.info({ concept: story.concept, beatCount: story.beats.length }, 'Source story selected');
+        await this.deps.contentCache?.set(storyCacheKey, story);
+      } catch (err) {
+        logger.warn({ err }, 'Source story planning failed; using compatibility script mode');
+      }
+    }
+
+    let script: OriginalScript;
+    this.emit('script');
+    const scriptCacheKey = this.cacheKey(
+      'script',
+      videoId,
+      request.candidateId,
+      selectedAngle.id,
+      request.customAngleTitle,
+      request.customHook,
+      request.language,
+      request.genre,
+      rangeCacheKey,
+    );
+    const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
+    if (cachedScript) {
+      logger.info({ cache: 'script', videoId, candidateId: request.candidateId }, 'Script generation served from cache');
+      script = cachedScript;
+    } else {
+      try {
+        const scriptContext = {
+          candidateId: angleResult.candidateId,
+          angleId: selectedAngle.id,
+          angleTitle: request.customAngleTitle ?? selectedAngle.title,
+          angleHook: request.customHook ?? selectedAngle.hook,
+          angleReason: selectedAngle.reason,
+          angleType: selectedAngle.angleType,
+          fixedHook: request.customHook,
+          momentSegments: angleContext.momentSegments,
+          contextSegments: angleContext.contextSegments,
+          story,
+          candidateTitle: angleContext.candidateTitle,
+          candidateHook: angleContext.candidateHook,
+          sourceTitle: angleContext.sourceTitle,
+          sourceChannel: angleContext.sourceChannel,
+          sourceLanguage: angleContext.sourceLanguage,
+          targetLanguage: request.language === 'auto' ? undefined : request.language,
+          genre: request.genre,
+          selectedClips: request.selectedClips,
+        };
+        script = await this.deps.scriptService.generateScript(scriptContext);
+        await this.deps.contentCache?.set(scriptCacheKey, script);
+      } catch (err) {
+        logger.error({ err, targetLang }, 'Script generation failed — using emergency fallback script');
+        script = this.fallbackScript(selectedAngle, targetLang);
+      }
+    }
+
+    const returnedAngle = {
+      ...selectedAngle,
+      ...(request.hookTitle ? { hook: request.hookTitle } : {}),
+      ...(request.customAngleTitle ? { title: request.customAngleTitle } : {}),
+    };
+
+    return {
+      success: true,
+      videoId,
+      candidateId: request.candidateId,
+      angle: returnedAngle,
+      story,
+      storyApplied: story != null,
+      script,
+    };
+  }
+
+  /**
+   * On-demand TTS synthesis for a given custom or reviewed script.
+   * Generates MP3 narration audio without running video rendering.
+   */
+  async synthesizeTts(request: TtsSynthesizeRequestInput): Promise<Record<string, unknown>> {
+    const { logger, outputsDir } = this.deps;
+    const jobId = crypto.randomUUID();
+    let videoId: string;
+    if (request.youtubeUrl) {
+      const id = extractVideoIdFromUrl(request.youtubeUrl);
+      if (!id) throw AppError.invalidUrl();
+      videoId = id;
+    } else {
+      videoId = request.videoId!;
+    }
+
+    const workspaceDir = join(outputsDir, videoId, 'transform', jobId, 'voice');
+    const { ensureDir } = await import('../utils/fs.js');
+    await ensureDir(workspaceDir);
+
+    const { createTtsServiceWith } = await import('../container/index.js');
+    const ttsService = (request.ttsProvider && request.ttsVoice)
+      ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
+      : this.deps.ttsService;
+
+    const lang = request.customScript.language ?? 'id';
+    const customSections = request.customScript.sections.map((s) => ({
+      type: s.type,
+      text: s.text.trim(),
+      spokenText: s.spokenText?.trim() ? s.spokenText.trim() : normalizeForSpeech(s.text.trim(), lang),
+      sourceQuote: s.sourceQuote,
+      evidence: s.evidence,
+      beatId: s.beatId,
+    }));
+    const totalWords = customSections.reduce((sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length, 0);
+    const estDuration = Math.max(10, Math.round(totalWords / 2.5));
+
+    const script: OriginalScript = {
+      candidateId: 'candidate_0',
+      angleId: 'custom_angle',
+      angleTitle: 'Custom Script',
+      language: request.customScript.language ?? 'id',
+      estimatedDurationSeconds: estDuration,
+      sections: customSections,
+      originality: {
+        status: 'PASS',
+        notes: ['Naskah narasi disintesis on-demand'],
+      },
+    };
+
+    const ttsCacheKey = this.cacheKey(
+      'tts',
+      videoId,
+      request.ttsProvider,
+      request.ttsVoice,
+      request.ttsRate,
+      script.language,
+      ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
+    );
+
+    let ttsResult: { outputPath: string; durationSeconds: number; sections?: TTSSectionTiming[] };
+    const { existsSync } = await import('node:fs');
+    const cachedTts = await this.deps.contentCache?.get<{
+      outputPath: string;
+      durationSeconds: number;
+      sections?: TTSSectionTiming[];
+    }>(ttsCacheKey);
+
+    if (cachedTts?.outputPath && existsSync(cachedTts.outputPath)) {
+      logger.info({ cache: 'tts', path: cachedTts.outputPath }, 'synthesizeTts served from cache');
+      ttsResult = cachedTts;
+    } else {
+      this.emit('tts');
+      try {
+        ttsResult = await ttsService.synthesizeScript(script, workspaceDir);
+        await this.deps.contentCache?.set(ttsCacheKey, ttsResult);
+      } catch (err) {
+        logger.error({ err }, 'TTS synthesis failed');
+        throw AppError.internal('Gagal melakukan sintesis audio TTS: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    }
+
+    return {
+      success: true,
+      jobId,
+      videoId,
+      narration: {
+        ...ttsResult,
+        url: ttsResult.outputPath ? this.toMediaUrl(ttsResult.outputPath) : undefined,
+      },
+    };
+  }
+
+  async transform(request: TransformRequestInput): Promise<Record<string, unknown>> {
+    const { logger, outputsDir } = this.deps;
+    const jobId = crypto.randomUUID();
+    logger.info({ jobId }, 'Transform started');
+
+    const { videoId, videoPath, transcript } = await this.resolveTranscriptAndVideo(request);
 
     // Feedback loop: when this run carries user-selected recommended clips,
     // append them to outputs/{videoId}/feedback/ so future ranking work can
@@ -307,9 +554,11 @@ export class TransformController {
 
     if (request.customScript?.sections?.length) {
       logger.info({ sectionCount: request.customScript.sections.length }, 'Using user-provided custom narration script');
+      const lang = request.customScript.language ?? targetLang;
       const customSections = request.customScript.sections.map((s) => ({
         type: s.type,
         text: s.text.trim(),
+        spokenText: s.spokenText?.trim() ? s.spokenText.trim() : normalizeForSpeech(s.text.trim(), lang),
         sourceQuote: s.sourceQuote,
         evidence: s.evidence,
         beatId: s.beatId,
@@ -389,13 +638,50 @@ export class TransformController {
       ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
       : this.deps.ttsService;
 
+    const ttsCacheKey = this.cacheKey(
+      'tts',
+      videoId,
+      request.ttsProvider,
+      request.ttsVoice,
+      request.ttsRate,
+      script.language,
+      ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
+    );
+
     let ttsResult: { outputPath: string; durationSeconds: number; sections?: TTSSectionTiming[] };
-    this.emit('tts');
-    try {
-      ttsResult = await ttsService.synthesizeScript(script, workspaceDir);
-    } catch (err) {
-      logger.warn({ err }, 'TTS failed');
-      ttsResult = { outputPath: '', durationSeconds: script.estimatedDurationSeconds };
+    const { existsSync } = await import('node:fs');
+
+    if (
+      request.existingNarration?.outputPath &&
+      existsSync(request.existingNarration.outputPath)
+    ) {
+      logger.info(
+        { path: request.existingNarration.outputPath },
+        'Using caller-supplied pre-synthesized narration (skipping TTS)',
+      );
+      ttsResult = {
+        outputPath: request.existingNarration.outputPath,
+        durationSeconds: request.existingNarration.durationSeconds,
+        sections: request.existingNarration.sections,
+      };
+      this.emit('tts', { skipped: true });
+      await this.deps.contentCache?.set(ttsCacheKey, ttsResult);
+    } else {
+      const cachedTts = await this.deps.contentCache?.get<typeof ttsResult>(ttsCacheKey);
+      if (cachedTts?.outputPath && existsSync(cachedTts.outputPath)) {
+        logger.info({ cache: 'tts', path: cachedTts.outputPath }, 'TTS served from cache (skipping TTS)');
+        ttsResult = cachedTts;
+        this.emit('tts', { skipped: true });
+      } else {
+        this.emit('tts');
+        try {
+          ttsResult = await ttsService.synthesizeScript(script, workspaceDir);
+          await this.deps.contentCache?.set(ttsCacheKey, ttsResult);
+        } catch (err) {
+          logger.warn({ err }, 'TTS failed');
+          ttsResult = { outputPath: '', durationSeconds: script.estimatedDurationSeconds };
+        }
+      }
     }
 
     // Stage 4: Video Plan

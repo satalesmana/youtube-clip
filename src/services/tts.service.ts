@@ -5,6 +5,7 @@ import type { ITTSProvider } from '../providers/tts/tts.provider.js';
 import type { TTSSectionTiming, TTSSynthesisResult } from '../providers/tts/tts.types.js';
 import type { IWordTimingService } from './word-timing.service.js';
 import type { OriginalScript } from '../types/script.js';
+import { normalizeForSpeech } from '../utils/speech-normalizer.js';
 
 export interface TtsServiceOptions {
   voice: string;
@@ -59,8 +60,12 @@ export class TtsService implements ITtsService {
       const section = narrationSections[index]!;
       const safeName = section.type.replace(/[^a-z0-9]+/gi, '-');
       const outPath = join(voiceDir, `narration-${String(index).padStart(2, '0')}-${safeName}.mp3`);
+      const textToSynthesize = section.spokenText?.trim()
+        ? section.spokenText
+        : normalizeForSpeech(section.text, script.language);
+
       const result = await this.provider.synthesize({
-        text: section.text,
+        text: textToSynthesize,
         voice: this.options.voice,
         rate: this.options.rate,
         outputPath: outPath,
@@ -75,7 +80,7 @@ export class TtsService implements ITtsService {
         await ensureDir(alignDir);
         wordTimings = await this.options.wordAligner.align(
           outPath,
-          section.text,
+          textToSynthesize,
           alignDir,
         );
         if (wordTimings.length > 0) {

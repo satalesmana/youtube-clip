@@ -345,12 +345,27 @@ export class VideoPlanService implements IVideoPlanService {
           const first = rawTimings[startIdx]!;
           const last = rawTimings[Math.max(startIdx, endIdx)]!;
           const chunkTimings = rawTimings.slice(startIdx, Math.max(startIdx + 1, endIdx + 1));
+
+          // Align wordTimings to match display words 1-to-1 so karaoke highlighting
+          // in Remotion stays in sync even when spoken words differ in count.
+          const alignedTimings: Array<{ word: string; start: number; end: number }> = group.map((word, k) => {
+            const tStartIdx = Math.min(chunkTimings.length - 1, Math.floor((k / group.length) * chunkTimings.length));
+            const tEndIdx = Math.min(chunkTimings.length - 1, Math.floor(((k + 1) / group.length) * chunkTimings.length) - 1);
+            const wFirst = chunkTimings[tStartIdx]!;
+            const wLast = chunkTimings[Math.max(tStartIdx, tEndIdx)]!;
+            return {
+              word,
+              start: Number(wFirst.start.toFixed(3)),
+              end: Number(Math.max(wLast.end, wFirst.start + 0.05).toFixed(3)),
+            };
+          });
+
           captions.push({
             start: Number(first.start.toFixed(2)),
             end: Number(Math.max(last.end, first.start + 0.1).toFixed(2)),
             text: group.join(' '),
             highlightWords: this.pickHighlightWords(group),
-            wordTimings: chunkTimings,
+            wordTimings: alignedTimings,
           });
         }
       } else {

@@ -32,10 +32,12 @@ export class RouterProvider implements IOllamaProvider {
       // burn the whole budget thinking and return an empty `content`.
       reasoning_effort: 'low',
       max_tokens: 8192,
-      messages: [
-        // ...(options.system ? [{ role: 'system', content: options.system }] : []),
-        { role: 'user', content: `${options.system} ${options.prompt}` },
-      ],
+      messages: options.system
+        ? [
+            { role: 'system', content: options.system },
+            { role: 'user', content: options.prompt },
+          ]
+        : [{ role: 'user', content: options.prompt }],
     };
 
     this.logger.info({ model: options.model, messages: requestBody.messages }, 'LLM request');

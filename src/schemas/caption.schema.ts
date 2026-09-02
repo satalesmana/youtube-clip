@@ -33,22 +33,22 @@ export const platformCaptionSchema = z.object({
 
 export const llmCaptionItemSchema = z.object({
   title: z.string().optional(),
-  hook: z.string(),
-  body: z.string(),
-  callToAction: z.string(),
-  hashtags: z.array(z.string()),
-  searchKeywords: z.array(z.string()).default([]),
-  strategyExplanation: z.string(),
+  hook: z.string().optional().default(''),
+  body: z.string().optional().default(''),
+  callToAction: z.string().optional().default(''),
+  hashtags: z.array(z.string()).optional().default([]),
+  searchKeywords: z.array(z.string()).optional().default([]),
+  strategyExplanation: z.string().optional().default(''),
   recommendedAudioVibe: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
 
 export const llmCaptionsResponseSchema = z.object({
-  tiktok: llmCaptionItemSchema,
-  instagram: llmCaptionItemSchema,
-  youtube_shorts: llmCaptionItemSchema,
-  x: llmCaptionItemSchema,
-  threads: llmCaptionItemSchema,
+  tiktok: llmCaptionItemSchema.optional(),
+  instagram: llmCaptionItemSchema.optional(),
+  youtube_shorts: llmCaptionItemSchema.optional(),
+  x: llmCaptionItemSchema.optional(),
+  threads: llmCaptionItemSchema.optional(),
 });
 
 export const generateCaptionRequestSchema = z.object({
@@ -86,4 +86,5 @@ export const generateCaptionRequestSchema = z.object({
 
 export type GenerateCaptionRequest = z.infer<typeof generateCaptionRequestSchema>;
 export type PlatformCaptionDto = z.infer<typeof platformCaptionSchema>;
+export type LlmCaptionItem = z.infer<typeof llmCaptionItemSchema>;
 export type LlmCaptionsResponse = z.infer<typeof llmCaptionsResponseSchema>;

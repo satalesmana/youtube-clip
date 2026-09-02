@@ -142,13 +142,21 @@ You transform a viral moment + a chosen content angle into an ORIGINAL narration
 Target narration length: approximately ${targetSeconds} seconds at 150 words per minute (~${targetWords} words total). Write only as much as the available facts support — never pad with generic commentary to reach the target.
 
 Structure the script in this order:
-1. "hook" — a strong curiosity-driven opening (1-2 sentences). When the story supplies a HOOK MOMENT or quotable lines, build the hook from them: open on the most surprising/emotional/controversial detail, not on the beginning of the chronology. Keep the hook tight enough to read within the first 2-3 seconds of the video. If a MANDATORY HOOK is supplied in the input, use that text as the opening hook: if its language matches the target script language, use it verbatim; if its language differs from the target language (e.g. English hook with Indonesian target language), translate/adapt it naturally into the target language so the voiceover narration and subtitles flow seamlessly in one unified language. Write the rest of the script so it flows naturally from that opening.
-2. "context" — briefly set up the situation (1-2 sentences).
-3. "source" — reference the source moment: quote the single most important line from the moment verbatim in "sourceQuote" AND include that same quote naturally in "text" with one short bridging sentence. The "text" field is what the TTS reads.
-4. "commentary" — your original take on why this matters (2-4 sentences).
-5. "analysis" — deeper interpretation, implications, or explanation (2-4 sentences).
-6. "supporting" — an extra fact, comparison, or example that strengthens the analysis (1-3 sentences). OPTIONAL: omit this section entirely (do not include the key at all) when the available transcript evidence does not support an additional point.
-7. "conclusion" — a memorable closing that lands the point (1-2 sentences). For maximum short-form retention, construct the final sentence so it functions as a seamless loop that grammatically and thematically flows directly back into the opening hook line when the video replays.
+- "hook" — a strong curiosity-driven opening (1-2 sentences). When the story supplies a HOOK MOMENT or quotable lines, build the hook from them: open on the most surprising/emotional/controversial detail, not on the beginning of the chronology. Keep the hook tight enough to read within the first 2-3 seconds of the video. If a MANDATORY HOOK is supplied in the input, use that text as the opening hook: if its language matches the target script language, use it verbatim; if its language differs from the target language (e.g. English hook with Indonesian target language), translate/adapt it naturally into the target language so the voiceover narration and subtitles flow seamlessly in one unified language. Write the rest of the script so it flows naturally from that opening.
+- "context" — briefly set up the situation (1-2 sentences).
+- "source" — reference the source moment: quote the single most important line from the moment verbatim in "sourceQuote" AND include that same quote naturally in "text" with one short bridging sentence. The "text" field is what the TTS reads.
+- "commentary" — your original take on why this matters (2-4 sentences).
+- "analysis" — deeper interpretation, implications, or explanation (2-4 sentences).
+- "supporting" — an extra fact, comparison, or example that strengthens the analysis (1-3 sentences). OPTIONAL: omit this section entirely (do not include the key at all) when the available transcript evidence does not support an additional point.
+- "conclusion" — a memorable closing that lands the point (1-2 sentences). For maximum short-form retention, construct the final sentence so it functions as a seamless loop that grammatically and thematically flows directly back into the opening hook line when the video replays.
+
+TEXT vs SPOKEN TEXT (crucial for subtitle display and TTS audio clarity):
+In each section, provide both "text" and "spokenText":
+- "text": The on-screen visual caption text for viewers to read. Keep standard written conventions: numerals (e.g. "226 juta pound", "$100", "50%"), standard proper nouns (e.g. "Tottenham"), and clear punctuation.
+- "spokenText": The pronunciation-optimized text for Text-to-Speech (TTS) audio narration.
+  1. Spell out ALL numbers, decimals, percentages, and currencies as full words in the target language (e.g. in Indonesian: "226" -> "dua ratus dua puluh enam", "15%" -> "lima belas persen", "£" -> "paund").
+  2. Transliterate or phonetically spell foreign proper nouns, clubs, and loanwords so an Indonesian voice reads them clearly and accurately (e.g. "Tottenham" -> "Tot-nem", "Chelsea" -> "Cel-si", "pound" -> "paund").
+  3. Never leave raw digits or unexplained abbreviations in "spokenText".
 
 ORIGINALITY RULES (mandatory):
 - Write the narration in your OWN words. Never copy more than a short verbatim quote (the source section only).
@@ -170,12 +178,12 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
 {
   "language": "id",
   "sections": [
-    { "type": "hook", "beatId": "beat_1", "text": "..." },
-    { "type": "context", "text": "...", "evidence": ["verbatim transcript excerpt"] },
-    { "type": "source", "text": "...", "sourceQuote": "...", "evidence": ["verbatim transcript excerpt"] },
-    { "type": "commentary", "text": "...", "evidence": ["verbatim transcript excerpt"] },
-    { "type": "analysis", "text": "...", "evidence": ["verbatim transcript excerpt"] },
-    { "type": "conclusion", "text": "..." }
+    { "type": "hook", "beatId": "beat_1", "text": "...", "spokenText": "..." },
+    { "type": "context", "text": "...", "spokenText": "...", "evidence": ["verbatim transcript excerpt"] },
+    { "type": "source", "text": "...", "spokenText": "...", "sourceQuote": "...", "evidence": ["verbatim transcript excerpt"] },
+    { "type": "commentary", "text": "...", "spokenText": "...", "evidence": ["verbatim transcript excerpt"] },
+    { "type": "analysis", "text": "...", "spokenText": "...", "evidence": ["verbatim transcript excerpt"] },
+    { "type": "conclusion", "text": "...", "spokenText": "..." }
   ],
   "originality": { "status": "PASS", "notes": ["..."] }
 }`;
