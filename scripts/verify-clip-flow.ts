@@ -228,11 +228,10 @@ async function main(): Promise<void> {
           subtitles?: Array<{ assPath: string }>;
         }) => {
           composerCalls += 1;
-          // Assert segments arrive sorted ascending by start.
+          // Assert segments arrive in expected user-selection order.
           const starts = input.segments.map((s) => s.start);
-          const sorted = [...starts].sort((a, b) => a - b);
-          if (JSON.stringify(starts) !== JSON.stringify(sorted)) {
-            throw new Error(`segments not sorted: ${starts.join(',')}`);
+          if (starts.length !== 2 || starts[0] !== 20 || starts[1] !== 5) {
+            throw new Error(`segments unexpected order: ${starts.join(',')}`);
           }
           // Assert subtitle ASS paths were written before compose.
           for (const sub of input.subtitles ?? []) {

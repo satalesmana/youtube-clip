@@ -1,10 +1,10 @@
 # Flow Process: Video Clip Builder (Activity Diagram)
 
-Diagram alur aktivitas lengkap dari input YouTube URL sampai video jadi siap diputar/diunduh.
+Diagram alur aktivitas lengkap dari riset topik viral, input YouTube URL, sampai video jadi siap diputar/diunduh.
 
 > **Update:** pipeline lama `POST /api/process` (highlight extraction + batch clip render) sudah dihapus.
-> Alur aktif kini tiga tahap: **`/api/hooks/generate`** → **`/api/clips/recommend`** → **`/api/transform`**,
-> plus endpoint restore `GET /api/hooks` dan `GET /api/clips`.
+> Alur aktif kini memiliki beberapa tahap: **`/api/research`** (opsional) → **`/api/hooks/generate`** → **`/api/clips/recommend`** → **`/api/scripts/draft`** (opsional draf naskah tanpa TTS) → **`/api/tts/synthesize`** (opsional preview audio) → **`/api/transform`**,
+> plus endpoint restore/utilities: `GET /api/hooks`, `POST /api/hooks/rerender`, `GET /api/clips`, `GET /api/transcript`, `POST /api/transcript/update`, `GET /api/templates`, `GET /api/captions`, dan `POST /api/captions/generate`.
 >
 > **Tanpa rekomendasi pun pipeline tetap jalan.** Rekomendasi Hook dan Klip Viral sama-sama opsional:
 > transform narasi tanpa hook memakai *momen otomatis* (`selectMoment`, `candidateId` 0 → window ±35
@@ -15,7 +15,13 @@ Diagram alur aktivitas lengkap dari input YouTube URL sampai video jadi siap dip
 
 ```mermaid
 flowchart TD
-    START([🎬 START]) --> INPUT["Input\nYouTube URL"]
+    START([🎬 START]) --> RES{"Mulai dari Riset?"}
+    
+    RES -->|"Ya"| RESEARCH["POST /api/research\nKumpul sinyal viral (RSS, Reddit, dll)\nAI meranking topik & mencocokkan\nvideo YouTube"]
+    RESEARCH --> INPUT["Input\nYouTube URL (dari hasil riset)"]
+    
+    RES -->|"Tidak"| INPUT["Input\nYouTube URL (manual)"]
+    
     INPUT --> RESOLVE{"Video + transcript\nsudah ada di\noutputs/{videoId}/?"}
 
     RESOLVE -->|"Ya"| REUSE["⚡ FAST-PATH\nPakai video & transcript existing\n(tanpa yt-dlp, tanpa Whisper)\nlog: Using existing video and transcript"]
@@ -60,10 +66,10 @@ flowchart TD
     STORY --> SCRIPT["Write Script\nScriptService\noriginal narration\n{hook, body, conclusion}"]
     SCRIPT --> TTS["Synthesize TTS\nTtsService (edge-tts / OpenAI)\n→ narration MP3\n(provider/voice override per request)"]
     TTS --> MODE{"outputMode?"}
-    MODE -->|"narration"| PLAN["Build Video Plan\nVideoPlanService\ntimeline scenes + timing"]
+    MODE -->|"narration"| PLAN["Build Video Plan\nVideoPlanService\ntimeline scenes + timing + watermark"]
     PLAN --> COMPOSE{"Composition Engine\nengine.factory.ts"}
-    COMPOSE -->|Remotion| REMOTION["Remotion Engine\nstage media → public/media/\nrun CLI → CommentaryShort|SportsShort"]
-    COMPOSE -->|"FFmpeg Template"| FFTEMP["FFmpeg Template Engine\ncompose + addAudio mux"]
+    COMPOSE -->|Remotion| REMOTION["Remotion Engine\nstage media → public/media/\nrun CLI → CommentaryShort|SportsShort\n(+ CaptionService if needed)"]
+    COMPOSE -->|"FFmpeg Template"| FFTEMP["FFmpeg Template Engine\ncompose + addAudio mux + watermarks"]
     COMPOSE -->|Fallback| FALL["Fallback\nscale 1080×1920 + pad"]
     MODE -->|"reel"| REEL["ReelComposerService\nintro = styled final-hook-{NN}.mp4 (WYSIWYG)\natau cut sourceRange; planReelSegments\nguard anti-repeat (no second plays twice)\nconcat + segment subtitles\n→ reel.mp4 (tanpa narasi)"]
 
@@ -86,17 +92,53 @@ flowchart TD
     PLAY --> END
 
     %% ── Styling ──
+    classDef pipelineR fill:#3a3a1a,stroke:#facc15,color:#e0e0e0
     classDef pipelineC fill:#3a1a2a,stroke:#e879f9,color:#e0e0e0
     classDef pipelineD fill:#1a3a2a,stroke:#4ade80,color:#e0e0e0
     classDef pipelineB fill:#1a2a3a,stroke:#60a5fa,color:#e0e0e0
     classDef shared fill:#2a2a2a,stroke:#a0a0a0,color:#e0e0e0
     classDef serve fill:#3a2a1a,stroke:#fbbf24,color:#e0e0e0
 
+    class RESEARCH pipelineR
     class H_MOM,H_ANG,H_STORY,H_GEN,H_GUARD,H_SCORE,H_RANK,H_SAVE,H_PREV,RESULT_C,PICK,H_SAVED pipelineC
     class CHUNK,PAR_AI,MERGE,C_SAVE,C_PREV,RESULT_D,SEL_CLIP,C_SAVED pipelineD
     class ANGLE,STORY,SCRIPT,TTS,MODE,PLAN,COMPOSE,REMOTION,FFTEMP,FALL,REEL,OUT,OUT_REEL,RESULT_B pipelineB
-    class START,INPUT,RESOLVE,REUSE,DL,WKSP,AUD,TRANS,SAVE shared
+    class START,RES,INPUT,RESOLVE,REUSE,DL,WKSP,AUD,TRANS,SAVE shared
     class SERVE,PLAY serve
+```
+
+## Sequence Diagram — /api/research (Viral Signal & Topic Research)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as Browser (Web UI)
+    participant API as POST /api/research
+    participant RS as ResearchService
+    participant DP as Data Providers (RSS/Reddit/X/Trends)
+    participant AI as AI Engine (Ollama/Router)
+    participant YT as YouTube Data API
+
+    Browser->>API: { max_trends, language, providers, ... }
+    API->>RS: research(request)
+    
+    par Fetch Signals
+        RS->>DP: Fetch trends from selected providers
+        DP-->>RS: Raw Signals (Topics, Keywords, Articles)
+    end
+    
+    RS->>AI: Evaluate & Rank Topics (AI Model)
+    AI-->>RS: Ranked Trend List with viral scores
+    
+    loop For each top trend
+        RS->>YT: Search YouTube videos based on keywords
+        YT-->>RS: Video Candidates
+        RS->>AI: Re-evaluate video relevance to trend
+        AI-->>RS: Matched Videos
+    end
+    
+    RS-->>API: ResearchResult { trends[], signalCount }
+    API-->>Browser: { success: true, trends, signalCount }
 ```
 
 ## Sequence Diagram — /api/hooks/generate (Hook Recommendation Engine)
@@ -157,7 +199,7 @@ sequenceDiagram
     par Preview render (allSettled, best-effort)
         API->>PR: styled render HookIntroShort → hook-previews/final-hook-{NN}.mp4
         PR-->>API: previewUrl + previewPath + finalDurationSeconds
-        Note over API,PR: gagal → fallback raw cut (PreviewRendererService)<br/>hook-{NN}.mp4. Matikan via env HOOK_PREVIEW_STYLED=0.
+        Note over API,PR: gagal → fallback raw cut (PreviewRendererService)<br/>hook-{NN}.mp4. Matikan via env HOOK_PREVIEW_STYLED=0.<br/>(Gunakan POST /api/hooks/rerender untuk re-render tanpa LLM)
     and
         API-->>Browser: HookRecommendationResult\n{hooks[5] + previewUrl, candidateCount,\n rejectedCount, duplicateCount, generatedAt}
     end
@@ -282,7 +324,7 @@ sequenceDiagram
         API->>ENG: render(videoPlan, assets)
 
         alt Composition Engine = Remotion
-            ENG->>ENG: stage media → public/media/{jobId}/\nremotion render CommentaryShort|SportsShort
+            ENG->>ENG: stage media → public/media/{jobId}/\nremotion render CommentaryShort|SportsShort\n(menyertakan CaptionService/WatermarkFilterService jika aktif)
         else Composition Engine = FFmpeg Template
             ENG->>ENG: compose (FFmpeg filtergraph) + addAudio mux
         else Fallback
@@ -353,7 +395,7 @@ outputs/{videoId}/
 │   ├── audio.wav                  ← extracted audio (FFmpeg)
 │   └── *.tmp                      ← temp files (thumbnail, focal point)
 ├── transcripts/
-│   └── {videoId}.json             ← Whisper transcript (segments + words)
+│   └── {videoId}.json             ← Whisper transcript (bisa di-update via POST /api/transcript/update)
 ├── hooks/                         ← /api/hooks/generate
 │   └── candidate-{N}.json         ← HookRecommendationResult (persist)
 ├── hook-previews/
@@ -365,8 +407,6 @@ outputs/{videoId}/
 ├── clips/                         ← /api/clips/recommend
 │   ├── recommendations.json       ← ClipRecommendResult (persist)
 │   └── clip-001.mp4               ← (legacy /api/process, tak lagi diproduksi)
-├── subtitles/                     ← (legacy /api/process)
-├── thumbnails/                    ← (legacy /api/process)
 ├── metadata/
 │   └── clips.json                 ← (legacy; masih dibaca GET /api/history bila ada)
 ├── render/                        ← /api/transform output (composition engine)
@@ -390,9 +430,13 @@ outputs/{videoId}/
 | Workspace Fast-Path | `resolveTranscript()` di clip/hook/transform controller | Cek `outputs/{videoId}/downloads/{videoId}.mp4` + transcript dulu (`fs.access`) — skip yt-dlp & Whisper untuk video yang sudah pernah diproses |
 | Per-Video Isolation | `createJobWorkspace()` | Semua artifact terisolasi per videoId; `downloadVideo()` wajib terima workspace |
 | Result Persistence + Restore | `hooks/candidate-{N}.json`, `clips/recommendations.json` + `GET /api/hooks`, `GET /api/clips` | Hasil tersimpan ke disk; UI restore tanpa menjalankan pipeline |
+| Pre-Pipeline Research | `ResearchController` | Mengumpulkan sinyal topik viral dari luar (RSS, Reddit, Trends) dan mencocokkan video YouTube secara AI-driven sebelum URL diproses pipeline |
+| Fast Design Testing | `POST /api/hooks/rerender` | Re-render preview hook dengan styling Remotion terbaru tanpa harus memanggil ulang LLM atau transcribe pipeline |
+| Editable Transcripts | `POST /api/transcript/update` | Segmen transkrip yang dikoreksi user disimpan kembali, mempengaruhi hasil caption rendering |
 | Fault Isolation | `Promise.allSettled()` pada preview render (hook & clip controller) | 1 preview gagal ≠ semua gagal |
 | Editorial Cache | `ContentCache` (`outputs/transform-cache/`) | Angle/story/script di-cache per videoId+candidateId+range |
-| Data-Driven Templates | `TemplateService` → `TemplateRendererService` | Renderer tidak tahu layout — template yang define |
+| Decoupled Script Drafting | `POST /api/scripts/draft` + `TransformController.draftScript` | Menyusun draf naskah AI orisinal (Angle → Story → Script) tanpa memanggil TTS sama sekali (hemat kuota & cepat) |
+| On-Demand TTS Synthesis | `POST /api/tts/synthesize` + `TransformController.synthesizeTts` | Menghasilkan audio TTS untuk naskah kustom/hasil review secara on-demand saat user ingin preview audio |
 | Real-Time SSE Progress | `TransformController.onStage` + `server/api/transform.post.ts` | Stream `stage`/`result`/`error` events; UI update tiap stage live |
 | Dual Output Mode | `outputMode: 'reel' \| 'narration'` | Reel = concat range terpilih (ReelComposerService); Narration = script → TTS → video plan → composition engine |
 | No-Selection Default | `TransformController.selectMoment` + guard `transformReel` | Transform tetap jalan tanpa rekomendasi: narasi pakai momen otomatis (35 detik pertama transkrip, headline dari LLM); reel tanpa klip ditolak rapi (toast frontend + refine Zod + guard controller) |
@@ -412,9 +456,6 @@ outputs/{videoId}/
 | `HIGHLIGHT_MIN_SECONDS` | 20 | Durasi minimum klip saat merge & rank (`HighlightService`) |
 | `HIGHLIGHT_MAX_SECONDS` | 60 | Durasi maksimum klip saat merge & rank |
 | `HIGHLIGHT_TOP_N` | 10 | Jumlah klip top-N hasil rank |
-| `CLIP_MIN_SECONDS` | 15 | *(legacy — tidak lagi dipakai service aktif)* |
-| `CLIP_MAX_SECONDS` | 90 | *(legacy — tidak lagi dipakai service aktif)* |
-| `CLIP_MAX_CONCURRENCY` | 2 | *(legacy — tidak lagi dipakai service aktif)* |
 | `COMPOSITION_ENGINE` | `ffmpeg-template` | Engine: `remotion` or `ffmpeg-template` |
 | `TTS_PROVIDER` | `edge-tts` | TTS backend: `edge-tts` or `openai` (bisa di-override per request via `ttsProvider`/`ttsVoice`) |
 | `AI_PROVIDER` | `ollama` | AI backend: `ollama` or `router` |
