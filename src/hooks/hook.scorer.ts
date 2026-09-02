@@ -79,6 +79,7 @@ export class HookScorer implements IHookScorer {
           ),
           temperature: Math.max(0, this.options.temperature - 0.1),
           timeoutMs: this.options.timeoutMs,
+          responseFormat: 'json_object',
           seed: hashSeed('hook-score', ...candidates.map((c) => c.id)),
         });
 

@@ -9,6 +9,8 @@ export interface OllamaChatOptions {
   timeoutMs?: number;
   /** Fixed seed for deterministic output (same prompt + seed → same result). */
   seed?: number;
+  /** Instructs the model to return a JSON object (if supported by provider) */
+  responseFormat?: 'json_object';
 }
 
 interface OllamaChatResponseBody {
@@ -49,6 +51,7 @@ export class OllamaProvider implements IOllamaProvider {
         body: JSON.stringify({
           model: options.model,
           stream: false,
+          ...(options.responseFormat === 'json_object' ? { format: 'json' } : {}),
           messages: [
             ...(options.system ? [{ role: 'system', content: options.system }] : []),
             { role: 'user', content: options.prompt },

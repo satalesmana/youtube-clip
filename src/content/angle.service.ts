@@ -73,8 +73,9 @@ export class ContentAngleService implements IContentAngleService {
           model: this.options.model,
           system: systemPrompt,
           prompt: buildContentAngleUserPrompt(context),
-          temperature: this.options.temperature,
+          temperature: this.options.temperature ?? 0.1,
           timeoutMs: this.options.timeoutMs,
+          responseFormat: 'json_object',
           // Deterministic output: same moment + same context → same angles.
           seed: hashSeed(
             'angle',

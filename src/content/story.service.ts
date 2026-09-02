@@ -114,8 +114,9 @@ export class StoryService implements IStoryService {
         model: this.options.model,
         system: effectiveSystem,
         prompt: `SOURCE TRANSCRIPT:\\n${source}`,
-        temperature: this.options.temperature,
+        temperature: this.options.temperature ?? 0.1,
         timeoutMs: this.options.timeoutMs,
+        responseFormat: 'json_object',
         // Deterministic output: same transcript selection + genre → same story beats.
         seed: hashSeed('story', genre ?? '', ...segments.map((s) => `${s.start}|${s.end}|${s.text}`)),
       });

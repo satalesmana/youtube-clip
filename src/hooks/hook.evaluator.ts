@@ -78,6 +78,7 @@ export class HookEvaluator implements IHookEvaluator {
           // Fact-checking must be conservative.
           temperature: Math.max(0, this.options.temperature - 0.2),
           timeoutMs: this.options.timeoutMs,
+          responseFormat: 'json_object',
           seed: hashSeed('hook-accuracy', ...candidates.map((c) => c.id)),
         });
 

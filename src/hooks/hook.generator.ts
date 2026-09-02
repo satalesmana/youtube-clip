@@ -66,6 +66,7 @@ export class HookGenerator implements IHookGenerator {
           // from variety, grounding checks below keep it honest.
           temperature: Math.min(1, this.options.temperature + 0.2),
           timeoutMs: this.options.timeoutMs,
+          responseFormat: 'json_object',
           seed: hashSeed(
             'hooks',
             context.videoId,

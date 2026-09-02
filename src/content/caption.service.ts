@@ -63,8 +63,9 @@ export class CaptionService implements ICaptionService {
             model: this.options.model,
             system: buildCaptionSystemPrompt(tone, effectiveLang),
             prompt: buildCaptionUserPrompt(context),
-            temperature: this.options.temperature,
+            temperature: this.options.temperature ?? 0.1,
             timeoutMs: this.options.timeoutMs,
+            responseFormat: 'json_object',
             seed: hashSeed(
               'caption',
               context.videoId,

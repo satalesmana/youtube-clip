@@ -25,6 +25,7 @@ export class RouterProvider implements IOllamaProvider {
     const requestBody = {
       model: options.model,
       stream: false,
+      ...(options.responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
       temperature: options.temperature ?? 0.2,
       ...(options.seed !== undefined ? { seed: options.seed } : {}),
       // Keep reasoning short: without this, deepseek-style reasoning models

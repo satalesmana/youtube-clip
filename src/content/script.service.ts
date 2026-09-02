@@ -55,8 +55,9 @@ export class ScriptService implements IScriptService {
           model: this.options.model,
           system: buildScriptSystemPrompt(effectiveContext.targetDurationSeconds ?? 60, effectiveContext.genre),
           prompt: buildScriptUserPrompt(effectiveContext),
-          temperature: this.options.temperature,
+          temperature: this.options.temperature ?? 0.1,
           timeoutMs: this.options.timeoutMs,
+          responseFormat: 'json_object',
           // Deterministic output: same moment + angle + language → same script.
           seed: hashSeed(
             'script',
