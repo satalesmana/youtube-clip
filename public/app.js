@@ -965,7 +965,17 @@
     language: 'id',
     sections: [],
     audioUrl: null,
+    synthesized: null,
   };
+
+  function getScriptVoiceFingerprint() {
+    const provider = $('#transform-tts-provider')?.value || '';
+    const voice = $('#transform-voice')?.value || '';
+    const rate = $('#transform-tts-rate')?.value || '';
+    const lang = scriptState.language || $('#transform-lang')?.value || 'id';
+    const content = scriptState.sections.map((s) => `${s.type}:${(s.text || '').trim()}:${(s.spokenText || '').trim()}`).join('|||');
+    return `${provider}|${voice}|${rate}|${lang}|${content}`;
+  }
 
   const SCRIPT_SECTION_TYPES = [
     { value: 'hook', label: '🪝 Hook (Pembuka)' },
@@ -1038,7 +1048,22 @@
             <button type="button" class="section-action-btn btn-delete" data-action="delete" data-idx="${idx}" title="Hapus seksi">🗑️</button>
           </div>
         </div>
-        <textarea class="script-section-textarea" data-idx="${idx}" placeholder="Tulis narasi untuk seksi ini (akan disuarakan oleh TTS)...">${esc(section.text)}</textarea>
+        <div style="margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+            <span class="small muted" style="font-weight:600;">📺 Teks Layar (Subtitle Visual):</span>
+          </div>
+          <textarea class="script-section-textarea" data-idx="${idx}" placeholder="Tulis narasi untuk subtitle visual (misal: Tottenham menghabiskan 226 juta pound)...">${esc(section.text)}</textarea>
+        </div>
+        <div style="margin-top:6px;">
+          <details style="border-radius:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border:1px solid rgba(255,255,255,0.08);">
+            <summary style="cursor:pointer;font-size:12px;color:var(--text-muted, #aaa);font-weight:500;user-select:none;">
+              🗣️ Pelafalan Suara TTS: <span style="font-style:italic;opacity:0.8;">${section.spokenText ? 'kustom aktif' : 'otomatis (terbilang angka & fonetik)'}</span>
+            </summary>
+            <div style="margin-top:6px;">
+              <textarea class="script-section-spoken-textarea" data-idx="${idx}" style="width:100%;min-height:50px;font-size:13px;border-radius:4px;padding:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.12);color:inherit;box-sizing:border-box;font-family:inherit;" placeholder="Teks yang dibaca audio TTS (misal: Tot-nem menghabiskan dua ratus dua puluh enam juta paund)... Kosongkan untuk auto-normalisasi.">${esc(section.spokenText || '')}</textarea>
+            </div>
+          </details>
+        </div>
       `;
 
       const select = card.querySelector('.script-section-type-select');
@@ -1053,7 +1078,18 @@
         updateScriptMeta();
       });
 
-      setTimeout(() => autoResizeTextarea(textarea), 0);
+      const spokenTextarea = card.querySelector('.script-section-spoken-textarea');
+      if (spokenTextarea) {
+        spokenTextarea.addEventListener('input', (e) => {
+          scriptState.sections[idx].spokenText = e.target.value.trim() || undefined;
+          autoResizeTextarea(e.target);
+        });
+      }
+
+      setTimeout(() => {
+        autoResizeTextarea(textarea);
+        if (spokenTextarea) autoResizeTextarea(spokenTextarea);
+      }, 0);
 
       container.appendChild(card);
     });
@@ -1101,26 +1137,13 @@
       panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     const container = $('#script-sections-container');
-    if (container) container.innerHTML = '<div class="script-loading muted">🤖 AI sedang menyusun draf naskah narasi orisinal…</div>';
+    if (container) container.innerHTML = '<div class="script-loading muted">🤖 AI sedang menyusun draf naskah narasi orisinal (tanpa TTS)…</div>';
 
     try {
-      const blurEnabled = $('#transform-blur-watermark')?.checked || false;
-      const blurMode = $('#transform-blur-mode')?.value || 'preset';
-      const selectedPositions = blurEnabled && blurMode === 'preset'
-        ? $$('#blur-positions .chip-toggle.active').map((c) => c.dataset.position).filter(Boolean)
-        : undefined;
-      const blurWatermark = blurEnabled
-        ? { enabled: true, mode: blurMode, ...(selectedPositions?.length ? { positions: selectedPositions } : {}) }
-        : undefined;
-
       const body = {
         youtubeUrl: url,
-        dryRun: true,
         language: $('#transform-lang')?.value || 'auto',
         sttProvider: $('#transform-stt-provider')?.value || undefined,
-        ttsProvider: $('#transform-tts-provider')?.value || undefined,
-        ttsVoice: $('#transform-voice')?.value || undefined,
-        ttsRate: $('#transform-tts-rate')?.value || undefined,
         genre: $('#transform-genre')?.value || undefined,
         ...(clipState.selected.size > 0 ? { selectedClips: [...clipState.selected.values()] } : {}),
         ...(hookState.selected ? {
@@ -1135,9 +1158,8 @@
         } : {}),
       };
 
-      const res = await apiPost('/api/transform', body);
+      const res = await apiPost('/api/scripts/draft', body);
       const scriptData = res.script || {};
-      const narrationData = res.narration || {};
 
       if (!scriptData.sections?.length) {
         throw new Error('Draf naskah kosong dari server.');
@@ -1145,27 +1167,21 @@
 
       scriptState.active = true;
       scriptState.language = scriptData.language || 'id';
+      scriptState.audioUrl = null;
+      $('#script-audio-preview')?.classList.add('hidden');
+
       scriptState.sections = scriptData.sections.map((s) => ({
         type: s.type || 'context',
         text: s.text || '',
+        spokenText: s.spokenText || undefined,
         sourceQuote: s.sourceQuote,
         evidence: s.evidence,
         beatId: s.beatId,
       }));
 
-      if (narrationData.url) {
-        scriptState.audioUrl = narrationData.url;
-        const player = $('#script-audio-player');
-        const audioWrap = $('#script-audio-preview');
-        const durLabel = $('#audio-preview-duration');
-        if (player) player.src = narrationData.url + '?_v=' + Date.now();
-        if (durLabel) durLabel.textContent = `${fmtDuration(narrationData.durationSeconds || 0)} (${(narrationData.durationSeconds || 0).toFixed(1)}s)`;
-        if (audioWrap) audioWrap.classList.remove('hidden');
-      }
-
       updateScriptMeta();
       renderScriptSections();
-      toast('✅ Draf naskah AI berhasil dibuat! Silakan sesuaikan teks di bawah.', 'success');
+      toast('✅ Draf naskah AI siap! Silakan review & edit teks. Klik "Tes Suara TTS" jika ingin mendengarkan audio.', 'success');
       const statusEl = $('#script-quick-status');
       if (statusEl) statusEl.textContent = '✅ Draf naskah AI siap diedit';
     } catch (err) {
@@ -1192,13 +1208,11 @@
     const btn2 = $('#btn-preview-tts-bottom');
     if (btn1) btn1.disabled = true;
     if (btn2) btn2.disabled = true;
-    toast('🔊 Mengirim naskah ke TTS synthesizer…', 'info');
+    toast('🔊 Menyintesis audio TTS untuk naskah…', 'info');
 
     try {
       const body = {
         youtubeUrl: url,
-        dryRun: true,
-        language: $('#transform-lang')?.value || 'auto',
         ttsProvider: $('#transform-tts-provider')?.value || undefined,
         ttsVoice: $('#transform-voice')?.value || undefined,
         ttsRate: $('#transform-tts-rate')?.value || undefined,
@@ -1208,11 +1222,15 @@
         },
       };
 
-      const res = await apiPost('/api/transform', body);
+      const res = await apiPost('/api/tts/synthesize', body);
       const narrationData = res.narration || {};
 
       if (narrationData.url) {
         scriptState.audioUrl = narrationData.url;
+        scriptState.synthesized = {
+          fingerprint: getScriptVoiceFingerprint(),
+          narration: narrationData,
+        };
         const player = $('#script-audio-player');
         const audioWrap = $('#script-audio-preview');
         const durLabel = $('#audio-preview-duration');
@@ -1250,6 +1268,7 @@
     scriptState.active = false;
     scriptState.sections = [];
     scriptState.audioUrl = null;
+    scriptState.synthesized = null;
     $('#script-editor-panel')?.classList.add('hidden');
     $('#script-audio-preview')?.classList.add('hidden');
     updateScriptMeta();
@@ -1582,6 +1601,18 @@
                     },
                   }
                 : {}),
+              ...(scriptState.active &&
+              scriptState.synthesized &&
+              scriptState.synthesized.fingerprint === getScriptVoiceFingerprint() &&
+              scriptState.synthesized.narration?.outputPath
+                ? {
+                    existingNarration: {
+                      outputPath: scriptState.synthesized.narration.outputPath,
+                      durationSeconds: scriptState.synthesized.narration.durationSeconds,
+                      sections: scriptState.synthesized.narration.sections,
+                    },
+                  }
+                : {}),
             };
           })();
 
@@ -1777,6 +1808,8 @@
           <div class="angle-item">
             <div class="angle-score" style="font-size:11px">${esc(b.role || '?')}</div>
             <div class="angle-title">${esc(b.purpose || b.id)}</div>
+          </div>
+        `).join('')}
       </div>` : ''}
     `;
 
