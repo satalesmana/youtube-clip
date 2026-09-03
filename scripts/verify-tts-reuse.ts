@@ -153,8 +153,6 @@ async function run() {
 
   const tts1 = await controller.synthesizeTts({
     videoId,
-    ttsProvider: 'edge-tts',
-    ttsVoice: 'id-ID-ArdiNeural',
     customScript: customScript1,
   });
 
@@ -164,8 +162,6 @@ async function run() {
   console.log('\n--- 2. synthesizeTts() second call hits contentCache ---');
   const tts2 = await controller.synthesizeTts({
     videoId,
-    ttsProvider: 'edge-tts',
-    ttsVoice: 'id-ID-ArdiNeural',
     customScript: customScript1,
   });
 
@@ -182,8 +178,6 @@ async function run() {
     language: 'id',
     dryRun: true,
     customScript: customScript1,
-    ttsProvider: 'edge-tts',
-    ttsVoice: 'id-ID-ArdiNeural',
     existingNarration: {
       outputPath: dummyNarrationFile,
       durationSeconds: 12.5,
@@ -210,8 +204,6 @@ async function run() {
     language: 'id',
     dryRun: true,
     customScript: customScript1,
-    ttsProvider: 'edge-tts',
-    ttsVoice: 'id-ID-ArdiNeural',
   });
 
   assert(transformWithCache.success === true, 'transform with cache succeeds');
@@ -237,8 +229,6 @@ async function run() {
     language: 'id',
     dryRun: true,
     customScript: customScriptModified,
-    ttsProvider: 'edge-tts',
-    ttsVoice: 'id-ID-ArdiNeural',
   });
 
   assert(transformWithModified.success === true, 'transform with modified script succeeds');
