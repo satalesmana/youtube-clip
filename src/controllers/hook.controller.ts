@@ -64,10 +64,16 @@ export interface HookGenerateRequest {
   /** Force regeneration even when a saved hook result exists on disk. */
   refresh?: boolean;
   /**
+  /**
    * Optional content genre — when supplied, biases angle types, story concept
    * detection, and hook style prioritisation for this genre.
    */
   genre?: 'podcast' | 'sports' | 'gaming' | 'tutorial' | 'commentary' | 'entertainment';
+  /**
+   * Optional custom instruction / tone direction for LLM stages
+   * (e.g. "fokus ke momen lucu", "gaya sarkas", "jelaskan secara sederhana").
+   */
+  customPrompt?: string;
 }
 
 /** Response shape for `POST /api/hooks/generate` (Plan §7). */
@@ -136,8 +142,16 @@ export class HookController {
       sourceChannel: '',
       sourceLanguage: language,
       genre: request.genre as ContentGenre | undefined,
+      customPrompt: request.customPrompt,
     };
-    const angleResult = await this.getAngles(angleContext, videoId, candidateId, request.genre as ContentGenre | undefined, language);
+    const angleResult = await this.getAngles(
+      angleContext,
+      videoId,
+      candidateId,
+      request.genre as ContentGenre | undefined,
+      language,
+      request.customPrompt,
+    );
 
     // Stage: story beats (existing StoryService, cached, optional).
     const story = await this.getStory(
@@ -145,6 +159,7 @@ export class HookController {
       videoId,
       candidateId,
       request.genre as ContentGenre | undefined,
+      request.customPrompt,
     );
 
     // Stage: hook recommendation engine.
@@ -158,6 +173,7 @@ export class HookController {
       language,
       duration: request.duration,
       genre: request.genre as ContentGenre | undefined,
+      customPrompt: request.customPrompt,
     });
 
     const response: HookGenerateResponse = {
@@ -448,8 +464,9 @@ export class HookController {
     candidateId: number,
     genre?: ContentGenre,
     language?: string,
+    customPrompt?: string,
   ): Promise<AngleGenerationResult> {
-    const cacheKey = this.cacheKey('hook-angle', videoId, candidateId, context.clipStart, genre ?? '', language ?? '');
+    const cacheKey = this.cacheKey('hook-angle', videoId, candidateId, context.clipStart, genre ?? '', language ?? '', customPrompt ?? '');
     const cached = await this.deps.contentCache?.get<AngleGenerationResult>(cacheKey);
     if (cached) {
       this.deps.logger.info({ cache: 'hook-angle', videoId, candidateId }, 'Angle generation served from cache');
@@ -485,8 +502,9 @@ export class HookController {
     videoId: string,
     candidateId: number,
     genre?: ContentGenre,
+    customPrompt?: string,
   ): Promise<SourceStory | undefined> {
-    const cacheKey = this.cacheKey('hook-story', videoId, candidateId, segments[0]?.start ?? 0, genre ?? '');
+    const cacheKey = this.cacheKey('hook-story', videoId, candidateId, segments[0]?.start ?? 0, genre ?? '', customPrompt ?? '');
     const cached = await this.deps.contentCache?.get<SourceStory>(cacheKey);
     if (cached) {
       this.deps.logger.info({ cache: 'hook-story', videoId, candidateId }, 'Story planning served from cache');
@@ -494,7 +512,7 @@ export class HookController {
     }
 
     try {
-      const story = await this.deps.storyService.buildStory(segments, genre);
+      const story = await this.deps.storyService.buildStory(segments, genre, customPrompt);
       await this.deps.contentCache?.set(cacheKey, story);
       return story;
     } catch (err) {

@@ -96,6 +96,8 @@ export interface HookGenerationContext {
   durationMax: number;
   /** Optional content genre — biases preferred hook styles in the user prompt. */
   genre?: ContentGenre;
+  /** Optional custom creator instruction / tone direction. */
+  customPrompt?: string;
 }
 
 /** Builds the user prompt for hook candidate generation. */
@@ -112,6 +114,7 @@ export function buildHookGenerationUserPrompt(context: HookGenerationContext): s
     `Requested hook styles: ${context.styles.join(', ')}`,
     `Preferred source clip duration: ${context.durationMin}-${context.durationMax} seconds`,
     genreHint,
+    context.customPrompt ? `CREATOR DIRECTION / TONE: ${context.customPrompt}` : '',
     '',
     'EDITORIAL ANGLES (generate 2-3 hook variants per angle):',
     ...context.angles.map(

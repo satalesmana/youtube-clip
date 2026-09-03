@@ -393,6 +393,7 @@
         language: $('#transform-lang').value || 'auto',
         sttProvider: $('#transform-stt-provider').value || undefined,
         genre: $('#transform-genre')?.value || undefined,
+        customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
         refresh,
       });
       renderHooks(data);
@@ -1145,6 +1146,7 @@
         language: $('#transform-lang')?.value || 'auto',
         sttProvider: $('#transform-stt-provider')?.value || undefined,
         genre: $('#transform-genre')?.value || undefined,
+        customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
         ...(clipState.selected.size > 0 ? { selectedClips: [...clipState.selected.values()] } : {}),
         ...(hookState.selected ? {
           sourceRange: {
@@ -1574,6 +1576,7 @@
               ttsVoice: $('#transform-voice').value || undefined,
               ttsRate: $('#transform-tts-rate')?.value || undefined,
               genre: $('#transform-genre')?.value || undefined,
+              customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
               hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
               channel: { name: $('#transform-channel').value.trim() || undefined },
               dryRun: $('#transform-dry-run')?.checked || false,
@@ -1820,6 +1823,7 @@
         jobId: result.jobId,
         sourceTitle: result.angle?.title || result.videoId,
         genre: $('#transform-genre')?.value || undefined,
+        customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
         scriptText: result.script?.sections?.map((s) => s.text).join(' '),
       };
       const captionsCard = createViralCaptionsCard(result.captions, captionContext);
@@ -1847,6 +1851,7 @@
             customContext: {
               sourceTitle: result.angle?.title || result.videoId,
               genre: $('#transform-genre')?.value || undefined,
+              customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
               scriptText: result.script?.sections?.map((s) => s.text).join(' '),
               storyConcept: result.story?.concept,
               durationSeconds: result.videoPlan?.duration || result.reel?.durationSeconds,
@@ -2029,6 +2034,7 @@
             customContext: {
               sourceTitle: ctx.sourceTitle || captionData.sourceTitle,
               genre: ctx.genre || $('#transform-genre')?.value,
+              customPrompt: ctx.customPrompt || $('#transform-custom-prompt')?.value.trim() || undefined,
               scriptText: ctx.scriptText,
             },
           });

@@ -77,6 +77,7 @@ export const generateCaptionRequestSchema = z.object({
       scriptText: z.string().optional(),
       storyConcept: z.string().optional(),
       durationSeconds: z.number().optional(),
+      customPrompt: z.string().max(500).optional(),
     })
     .optional(),
 }).refine((data) => Boolean(data.videoId) || Boolean(data.youtubeUrl) || Boolean(data.customContext?.sourceTitle), {

@@ -37,6 +37,8 @@ export interface HookRecommendationInput {
   duration?: { min?: number; max?: number };
   /** Optional content genre — biases hook style prioritisation in the generation prompt. */
   genre?: ContentGenre;
+  /** Optional custom creator instruction / tone direction. */
+  customPrompt?: string;
 }
 
 /** Runs the full hook recommendation pipeline for one video. */
@@ -89,6 +91,7 @@ export class HookService implements IHookService {
       durationMin: input.duration?.min ?? this.options.durationMin ?? 1.5,
       durationMax: input.duration?.max ?? this.options.durationMax ?? 5,
       genre: input.genre,
+      customPrompt: input.customPrompt,
     };
     const candidates = await this.generator.generate(context);
 

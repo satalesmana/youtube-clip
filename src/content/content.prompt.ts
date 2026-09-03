@@ -21,12 +21,23 @@ function buildAngleGenreGuidance(genre: ContentGenre): string {
   ].join('\n');
 }
 
+/** Builds the creator custom guidance block injected into LLM system prompts. */
+function buildCustomPromptGuidance(customPrompt?: string): string {
+  if (!customPrompt || !customPrompt.trim()) return '';
+  return [
+    '',
+    '## Creator Custom Direction & Tone:',
+    `The creator provided this specific instruction: "${customPrompt.trim()}".`,
+    'Prioritise this direction when deciding angles, tone, pacing, emphasis, and narrative framing.',
+  ].join('\n');
+}
+
 /**
  * Builds the system prompt for the content-angle generation stage.
  * When a genre is supplied, a guidance block is injected that biases the LLM
  * toward angle types and tone that work best for that genre.
  */
-export function buildContentAngleSystemPrompt(genre?: ContentGenre): string {
+export function buildContentAngleSystemPrompt(genre?: ContentGenre, customPrompt?: string): string {
   const base = `You are a viral content strategist for short-form video (TikTok, YouTube Shorts, Instagram Reels).
 
 Your job is to propose multiple EDITORIAL ANGLES for a single viral moment taken from a source video. An editorial angle is a fresh, original way to present the moment — the "point of view" that makes the new short content different from the raw source clip.
@@ -57,7 +68,10 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
   ],
   "selectedAngleId": "angle_01"
 }`;
-  return genre ? base + buildAngleGenreGuidance(genre) : base;
+  let prompt = base;
+  if (genre) prompt += buildAngleGenreGuidance(genre);
+  if (customPrompt) prompt += buildCustomPromptGuidance(customPrompt);
+  return prompt;
 }
 
 /**
@@ -132,8 +146,9 @@ function buildScriptGenreGuidance(genre: ContentGenre): string {
  *   Injected so the LLM never writes more narration than the video can hold.
  * @param genre Optional content genre — when supplied, injects genre-specific
  *   pacing and tone guidance that shapes how sections are weighted.
+ * @param customPrompt Optional creator custom instruction or tone direction.
  */
-export function buildScriptSystemPrompt(targetSeconds = 60, genre?: ContentGenre): string {
+export function buildScriptSystemPrompt(targetSeconds = 60, genre?: ContentGenre, customPrompt?: string): string {
   const targetWords = Math.round((targetSeconds / 60) * 150);
   const base = `You are a short-form video scriptwriter (TikTok, YouTube Shorts, Instagram Reels) specializing in original editorial content.
 
@@ -186,8 +201,12 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
     { "type": "conclusion", "text": "...", "spokenText": "..." }
   ],
   "originality": { "status": "PASS", "notes": ["..."] }
-}`;
-  return genre ? base + buildScriptGenreGuidance(genre) : base;
+}
+`;
+  let prompt = base;
+  if (genre) prompt += buildScriptGenreGuidance(genre);
+  if (customPrompt) prompt += buildCustomPromptGuidance(customPrompt);
+  return prompt;
 }
 
 
@@ -221,6 +240,8 @@ export interface ScriptContext {
   targetLanguage?: string;
   /** Optional content genre — when supplied, conditions pacing and tone in the system prompt. */
   genre?: ContentGenre;
+  /** Optional custom instruction / tone direction from user. */
+  customPrompt?: string;
   /** Optional user-selected multi-clip sequence. */
   selectedClips?: Array<{ start: number; end: number; title?: string }>;
 }

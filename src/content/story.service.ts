@@ -11,7 +11,9 @@ import type { ContentGenre } from '../types/genre.js';
 import { getGenrePreset } from '../types/genre.js';
 
 export interface StoryServiceOptions { model: string; temperature: number; timeoutMs: number; maxRetries: number; }
-export interface IStoryService { buildStory(segments: TranscriptSegment[], genre?: ContentGenre): Promise<SourceStory>; }
+export interface IStoryService {
+  buildStory(segments: TranscriptSegment[], genre?: ContentGenre, customPrompt?: string): Promise<SourceStory>;
+}
 
 /** Builds a genre-specific guidance block appended to the story system prompt. */
 function buildStoryGenreGuidance(genre: ContentGenre): string {
@@ -33,6 +35,17 @@ function buildStoryGenreGuidance(genre: ContentGenre): string {
     `- Beat count: ${beatInstruction}`,
     `- Tone: ${preset.toneDescription}`,
     `Override these biases only when the transcript content genuinely calls for a different treatment.`,
+  ].join('\n');
+}
+
+/** Builds a creator custom direction block appended to the story system prompt. */
+function buildStoryCustomPromptGuidance(customPrompt?: string): string {
+  if (!customPrompt || !customPrompt.trim()) return '';
+  return [
+    '',
+    '## Creator Custom Direction & Tone:',
+    `The creator provided this specific instruction: "${customPrompt.trim()}".`,
+    'Prioritise story beats, turning points, and key moments that align with this direction.',
   ].join('\n');
 }
 
@@ -103,13 +116,15 @@ Separately identify the single strongest opening cut in "hookMoment": the exact 
 export class StoryService implements IStoryService {
   constructor(private readonly provider: IOllamaProvider, private readonly options: StoryServiceOptions, private readonly logger: Logger) {}
 
-  async buildStory(segments: TranscriptSegment[], genre?: ContentGenre): Promise<SourceStory> {
+  async buildStory(segments: TranscriptSegment[], genre?: ContentGenre, customPrompt?: string): Promise<SourceStory> {
     if (segments.length === 0) throw AppError.validation('Cannot build a story from an empty transcript selection.');
     const source = segments.map((s) => `[${s.start.toFixed(2)} -> ${s.end.toFixed(2)}] ${s.text}`).join('\\n');
-    // Compose the effective system prompt: append genre guidance when genre is supplied.
-    const effectiveSystem = genre ? SYSTEM + buildStoryGenreGuidance(genre) : SYSTEM;
+    // Compose the effective system prompt: append genre guidance and custom prompt guidance when supplied.
+    let effectiveSystem = SYSTEM;
+    if (genre) effectiveSystem += buildStoryGenreGuidance(genre);
+    if (customPrompt) effectiveSystem += buildStoryCustomPromptGuidance(customPrompt);
     return retry(async () => {
-      this.logger.info({ segmentCount: segments.length, genre }, 'Building source story');
+      this.logger.info({ segmentCount: segments.length, genre, customPrompt }, 'Building source story');
       const raw = await this.provider.chat({
         model: this.options.model,
         system: effectiveSystem,
@@ -117,8 +132,8 @@ export class StoryService implements IStoryService {
         temperature: this.options.temperature ?? 0.1,
         timeoutMs: this.options.timeoutMs,
         responseFormat: 'json_object',
-        // Deterministic output: same transcript selection + genre → same story beats.
-        seed: hashSeed('story', genre ?? '', ...segments.map((s) => `${s.start}|${s.end}|${s.text}`)),
+        // Deterministic output: same transcript selection + genre + customPrompt → same story beats.
+        seed: hashSeed('story', genre ?? '', customPrompt ?? '', ...segments.map((s) => `${s.start}|${s.end}|${s.text}`)),
       });
       const parsed = parseLlmJson(raw) as Record<string, unknown>;
       // Pre-process: truncate evidence arrays to max 2 items before schema validation

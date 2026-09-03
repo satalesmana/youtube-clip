@@ -64,6 +64,8 @@ export interface CaptionGenerationContext {
   videoLanguage?: string;
   targetLanguage?: string;
   genre?: string;
+  /** Optional custom creator instruction or tone direction. */
+  customPrompt?: string;
   tone?: CaptionTone;
   angle?: {
     title: string;

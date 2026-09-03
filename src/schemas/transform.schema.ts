@@ -159,6 +159,11 @@ export const transformRequestSchema = z.object({
    */
   genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment']).optional(),
   /**
+   * Optional custom instruction / tone direction for LLM stages
+   * (e.g. "fokus ke momen lucu", "gaya sarkas", "jelaskan secara sederhana").
+   */
+  customPrompt: z.string().max(500).optional(),
+  /**
    * Watermark blurring settings.
    * - `false` / absent — disabled (default, no blur).
    * - `true`           — shorthand for `{ enabled: true, mode: "preset" }` (blurs all four corners).

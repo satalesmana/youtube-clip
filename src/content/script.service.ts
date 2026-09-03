@@ -54,7 +54,11 @@ export class ScriptService implements IScriptService {
 
         const raw = await this.provider.chat({
           model: this.options.model,
-          system: buildScriptSystemPrompt(effectiveContext.targetDurationSeconds ?? 60, effectiveContext.genre),
+          system: buildScriptSystemPrompt(
+            effectiveContext.targetDurationSeconds ?? 60,
+            effectiveContext.genre,
+            effectiveContext.customPrompt,
+          ),
           prompt: buildScriptUserPrompt(effectiveContext),
           temperature: this.options.temperature ?? 0.1,
           timeoutMs: this.options.timeoutMs,
@@ -67,6 +71,7 @@ export class ScriptService implements IScriptService {
             effectiveContext.angleId,
             effectiveContext.angleTitle,
             effectiveContext.targetLanguage,
+            effectiveContext.customPrompt ?? '',
             ...effectiveContext.momentSegments.map((segment) => `${segment.start}|${segment.end}|${segment.text}`),
           ),
         });

@@ -40,6 +40,8 @@ export interface ContentAngleContext {
   sourceLanguage?: string;
   /** Optional content genre — conditions angle type priorities and tone. */
   genre?: ContentGenre;
+  /** Optional custom instruction / tone direction from user. */
+  customPrompt?: string;
   /** Optional user-selected multi-clip sequence. */
   selectedClips?: Array<{ start: number; end: number; title?: string }>;
 }
@@ -67,7 +69,7 @@ export class ContentAngleService implements IContentAngleService {
         this.logger.info({ candidateId: context.candidateId }, 'Generating content angles');
 
         const maxAngles = this.options.maxAngles ?? 5;
-        const systemPrompt = `${buildContentAngleSystemPrompt(context.genre)}\n\nGenerate at most ${maxAngles} angles.`;
+        const systemPrompt = `${buildContentAngleSystemPrompt(context.genre, context.customPrompt)}\n\nGenerate at most ${maxAngles} angles.`;
 
         const raw = await this.provider.chat({
           model: this.options.model,
@@ -83,6 +85,7 @@ export class ContentAngleService implements IContentAngleService {
             context.candidateId,
             context.clipStart,
             context.clipEnd,
+            context.customPrompt ?? '',
             ...context.momentSegments.map((segment) => `${segment.start}|${segment.end}|${segment.text}`),
           ),
         });

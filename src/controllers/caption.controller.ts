@@ -78,6 +78,7 @@ export class CaptionController {
       sourceTitle: custom?.sourceTitle || (videoId ? `Video ${videoId}` : 'Video Viral Highlight'),
       sourceChannel: custom?.sourceChannel,
       genre: custom?.genre,
+      customPrompt: custom?.customPrompt,
       targetLanguage: request.language === 'auto' ? undefined : request.language,
       tone: request.tone,
       durationSeconds: custom?.durationSeconds,

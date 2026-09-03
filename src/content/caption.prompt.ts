@@ -121,6 +121,7 @@ export function buildCaptionUserPrompt(context: CaptionGenerationContext): strin
     `- Video Title: ${context.sourceTitle}`,
     context.sourceChannel ? `- Source Channel / Creator: ${context.sourceChannel}` : '',
     context.genre ? `- Content Genre: ${context.genre}` : '',
+    context.customPrompt ? `- Creator Instruction / Tone: ${context.customPrompt}` : '',
     context.targetLanguage ? `- Language: ${context.targetLanguage}` : '',
     context.durationSeconds ? `- Output Duration: ${context.durationSeconds}s` : '',
   ];

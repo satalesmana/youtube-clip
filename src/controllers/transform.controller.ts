@@ -235,6 +235,7 @@ export class TransformController {
       sourceChannel: '',
       sourceLanguage: targetLang,
       genre: request.genre,
+      customPrompt: request.customPrompt,
       selectedClips: request.selectedClips,
     };
 
@@ -245,7 +246,7 @@ export class TransformController {
       : request.sourceRange
       ? `${request.sourceRange.start}-${request.sourceRange.end}`
       : undefined;
-    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey, request.genre, targetLang);
+    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey, request.genre, targetLang, request.customPrompt);
     const cachedAngle = await this.deps.contentCache?.get<AngleGenerationResult>(angleCacheKey);
     if (cachedAngle) {
       logger.info({ cache: 'angle', videoId, candidateId: request.candidateId }, 'Angle generation served from cache');
@@ -266,7 +267,7 @@ export class TransformController {
 
     let story: Awaited<ReturnType<IStoryService['buildStory']>> | undefined;
     this.emit('story');
-    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey, request.genre);
+    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey, request.genre, request.customPrompt);
     const cachedStory = await this.deps.contentCache?.get<Awaited<ReturnType<IStoryService['buildStory']>>>(storyCacheKey);
     if (cachedStory) {
       logger.info({ cache: 'story', videoId, candidateId: request.candidateId }, 'Story planning served from cache');
@@ -277,7 +278,7 @@ export class TransformController {
           ...angleContext.contextSegments,
           ...selection.momentSegments,
         ];
-        story = await this.deps.storyService.buildStory(storySegments, request.genre);
+        story = await this.deps.storyService.buildStory(storySegments, request.genre, request.customPrompt);
         logger.info({ concept: story.concept, beatCount: story.beats.length }, 'Source story selected');
         await this.deps.contentCache?.set(storyCacheKey, story);
       } catch (err) {
@@ -297,6 +298,7 @@ export class TransformController {
       request.language,
       request.genre,
       rangeCacheKey,
+      request.customPrompt,
     );
     const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
     if (cachedScript) {
@@ -322,6 +324,7 @@ export class TransformController {
           sourceLanguage: angleContext.sourceLanguage,
           targetLanguage: request.language === 'auto' ? undefined : request.language,
           genre: request.genre,
+          customPrompt: request.customPrompt,
           selectedClips: request.selectedClips,
         };
         script = await this.deps.scriptService.generateScript(scriptContext);
@@ -493,6 +496,7 @@ export class TransformController {
       sourceChannel: '',
       sourceLanguage: targetLang,
       genre: request.genre,
+      customPrompt: request.customPrompt,
       selectedClips: request.selectedClips,
     };
 
@@ -505,7 +509,7 @@ export class TransformController {
       : request.sourceRange
       ? `${request.sourceRange.start}-${request.sourceRange.end}`
       : undefined;
-    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey, request.genre, targetLang);
+    const angleCacheKey = this.cacheKey('angle', videoId, request.candidateId, rangeCacheKey, request.genre, targetLang, request.customPrompt);
     const cachedAngle = await this.deps.contentCache?.get<AngleGenerationResult>(angleCacheKey);
     if (cachedAngle) {
       logger.info({ cache: 'angle', videoId, candidateId: request.candidateId }, 'Angle generation served from cache');
@@ -526,7 +530,7 @@ export class TransformController {
 
     let story: Awaited<ReturnType<IStoryService['buildStory']>> | undefined;
     this.emit('story');
-    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey, request.genre);
+    const storyCacheKey = this.cacheKey('story', videoId, request.candidateId, rangeCacheKey, request.genre, request.customPrompt);
     const cachedStory = await this.deps.contentCache?.get<Awaited<ReturnType<IStoryService['buildStory']>>>(storyCacheKey);
     if (cachedStory) {
       logger.info({ cache: 'story', videoId, candidateId: request.candidateId }, 'Story planning served from cache');
@@ -538,7 +542,7 @@ export class TransformController {
           ...angleContext.contextSegments,
           ...selection.momentSegments,
         ];
-        story = await this.deps.storyService.buildStory(storySegments, request.genre);
+        story = await this.deps.storyService.buildStory(storySegments, request.genre, request.customPrompt);
         logger.info({ concept: story.concept, beatCount: story.beats.length }, 'Source story selected');
         await this.deps.contentCache?.set(storyCacheKey, story);
       } catch (err) {
@@ -589,6 +593,7 @@ export class TransformController {
         request.language,
         request.genre,
         rangeCacheKey,
+        request.customPrompt,
       );
       const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
       if (cachedScript) {
@@ -614,6 +619,7 @@ export class TransformController {
             sourceLanguage: angleContext.sourceLanguage,
             targetLanguage: request.language === 'auto' ? undefined : request.language,
             genre: request.genre,
+            customPrompt: request.customPrompt,
             selectedClips: request.selectedClips,
           };
           script = await this.deps.scriptService.generateScript(scriptContext);
@@ -722,6 +728,7 @@ export class TransformController {
       sourceChannel: angleContext.sourceChannel,
       targetLanguage: captionTargetLang,
       genre: request.genre,
+      customPrompt: request.customPrompt,
       angle: {
         title: returnedAngle.title,
         hook: returnedAngle.hook,
@@ -929,6 +936,7 @@ export class TransformController {
       sourceTitle: request.hookTitle || (request.selectedClips[0]?.title ? `Reel: ${request.selectedClips[0].title}` : `Reel ${videoId}`),
       targetLanguage: request.language === 'auto' ? undefined : request.language,
       genre: request.genre,
+      customPrompt: request.customPrompt,
       angle: request.hookTitle ? { title: request.hookTitle, hook: request.hookTitle } : undefined,
       clips: request.selectedClips.map((c) => ({ start: c.start, end: c.end, title: c.title })),
       durationSeconds: reel.durationSeconds,
@@ -982,6 +990,7 @@ export class TransformController {
     sourceChannel?: string;
     targetLanguage?: string;
     genre?: string;
+    customPrompt?: string;
     angle?: { title: string; hook?: string; angleType?: string; reason?: string };
     script?: { sections: Array<{ type: string; text: string }>; estimatedDurationSeconds?: number };
     story?: { concept?: string; premise?: string };
@@ -997,6 +1006,7 @@ export class TransformController {
         sourceChannel: params.sourceChannel,
         targetLanguage: params.targetLanguage,
         genre: params.genre,
+        customPrompt: params.customPrompt,
         angle: params.angle,
         script: params.script,
         story: params.story,
