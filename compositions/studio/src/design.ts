@@ -1,5 +1,6 @@
 import { loadFont } from '@remotion/google-fonts/BreeSerif';
 import { loadFont as loadHookFont } from '@remotion/google-fonts/ArchivoBlack';
+import { loadFont as loadAntonFont } from '@remotion/google-fonts/Anton';
 
 export type Theme = {
   id: string;
@@ -95,6 +96,23 @@ export const GOLD_THEME: Theme = {
   surface: '#0A0A0A',
 };
 
+/**
+ * Official Sports theme:
+ * Electric Neon Yellow accent, Crimson Red highlight, deep stadium dark surface.
+ */
+export const SPORTS_THEME: Theme = {
+  id: 'sports',
+  accent: '#FFE600',
+  accent2: '#FF2A2A',
+  cardBg: 'rgba(7, 10, 20, 0.92)',
+  cardText: '#FFFFFF',
+  cardStroke: '#FFE600',
+  stroke: '#000000',
+  fill: '#FFFFFF',
+  gradient: ['#070A14', '#151C2E'],
+  surface: '#070A14',
+};
+
 const hashString = (s: string): number => {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
@@ -119,5 +137,13 @@ export const FONT = loadFont('normal', {
  * big, center-aligned, high-contrast sans for the opening claim.
  */
 export const HOOK_FONT = loadHookFont('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+/**
+ * Aggressive condensed sans-serif for sports — high-energy, authoritative,
+ * and standard across modern sports broadcast graphics & viral shorts.
+ */
+export const SPORTS_FONT = loadAntonFont('normal', {
   subsets: ['latin'],
 }).fontFamily;

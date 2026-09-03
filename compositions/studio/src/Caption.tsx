@@ -2,7 +2,7 @@ import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remo
 import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { quickEnter } from './animation';
-import { FONT } from './design';
+import { FONT, SPORTS_FONT } from './design';
 import type { Theme } from './design';
 import type { PlanCaption } from './types';
 
@@ -20,13 +20,19 @@ export const SAFE_AREA = {
   channelBottom: 140,
 };
 
-const fitTextSize = (text: string, withinWidth: number, cap: number, min: number): number => {
+const fitTextSize = (
+  text: string,
+  fontFamily: string,
+  withinWidth: number,
+  cap: number,
+  min: number,
+): number => {
   if (!text) {
     return cap;
   }
   const { fontSize } = fitText({
     text,
-    fontFamily: FONT,
+    fontFamily,
     withinWidth,
   });
   return Math.max(min, Math.min(fontSize, cap));
@@ -68,6 +74,9 @@ export const Caption: React.FC<{
         Math.floor((frame / Math.max(1, durationFrames)) * nWords) + 1,
       );
 
+  const isSports = theme.id === 'sports';
+  const captionFont = isSports ? SPORTS_FONT : FONT;
+
   const renderTokens = (text: string, syncWords = false) => {
     let wordIdx = 0;
     return text.split(/(\s+)/).map((token, i) => {
@@ -75,12 +84,25 @@ export const Caption: React.FC<{
       const isWord = trimmed.length > 0;
       const spoken = syncWords && isWord && wordIdx < spokenCount;
       const isHighlight = highlightSet.has(trimmed.toLowerCase());
-      const color = isHighlight || spoken ? theme.accent : undefined;
+      const isEmphasized = isHighlight || spoken;
+      const color = isEmphasized ? theme.accent : undefined;
       if (isWord) {
         wordIdx += 1;
       }
       return (
-        <span key={i} style={color ? { color } : undefined}>
+        <span
+          key={i}
+          style={{
+            ...(color ? { color } : {}),
+            ...(isSports && isEmphasized
+              ? {
+                  textShadow: `0 0 20px ${theme.accent}, 0 0 35px rgba(255, 230, 0, 0.4)`,
+                  display: 'inline-block',
+                  transform: 'scale(1.05)',
+                }
+              : {}),
+          }}
+        >
           {token}
         </span>
       );
@@ -91,7 +113,7 @@ export const Caption: React.FC<{
     return null;
   }
 
-  const fitted = fitTextSize(caption.text, width * 0.9, 96, 44);
+  const fitted = fitTextSize(caption.text, captionFont, width * 0.9, isSports ? 104 : 96, 44);
 
   return (
     <AbsoluteFill
@@ -103,9 +125,13 @@ export const Caption: React.FC<{
           lineHeight: 1.12,
           textAlign: 'center',
           textTransform: 'uppercase',
-          fontFamily: FONT,
+          fontFamily: captionFont,
+          fontStyle: isSports ? 'italic' : 'normal',
+          letterSpacing: isSports ? 2 : undefined,
           color: theme.fill,
-          WebkitTextStroke: `${Math.max(2, Math.round(fitted / 12))}px ${theme.stroke}`,
+          WebkitTextStroke: isSports
+            ? `${Math.max(4, Math.round(fitted / 9))}px #000000`
+            : `${Math.max(2, Math.round(fitted / 12))}px ${theme.stroke}`,
           paintOrder: 'stroke fill',
           maxWidth: width * 0.92,
           whiteSpace: 'normal',

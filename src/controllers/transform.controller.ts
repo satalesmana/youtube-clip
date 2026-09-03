@@ -776,7 +776,8 @@ export class TransformController {
     const hookRange = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
       ? { start: request.sourceRange.start, end: request.sourceRange.end }
       : undefined;
-    const templateOrStyle = request.style ?? request.template ?? 'commentary';
+    const autoStyle = request.genre === 'sports' ? 'sports' : undefined;
+    const templateOrStyle = request.style ?? request.template ?? autoStyle ?? 'commentary';
     const outputVideo = await this.renderVideo(
       videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine, request.blur_watermark,
     );

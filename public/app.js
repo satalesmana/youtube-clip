@@ -1576,6 +1576,7 @@
               ttsVoice: $('#transform-voice').value || undefined,
               ttsRate: $('#transform-tts-rate')?.value || undefined,
               genre: $('#transform-genre')?.value || undefined,
+              style: $('#transform-genre')?.value === 'sports' ? 'sports' : undefined,
               customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
               hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
               channel: { name: $('#transform-channel').value.trim() || undefined },

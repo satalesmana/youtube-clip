@@ -48,7 +48,12 @@ export const SceneBackground: React.FC<{
     offset: number,
     duration: number,
   ) => {
+    const isSports = theme.id === 'sports';
     const kbScale = kenBurnsScale(localFrame, duration);
+    const punchScale = isSports && isFirst && localFrame < 15
+      ? interpolate(localFrame, [0, 12], [1.10, 1], { extrapolateRight: 'clamp' })
+      : 1;
+    const effectiveScale = kbScale * punchScale;
     const assetUrl = toAssetUrl(videoSrc);
 
     return (
@@ -65,9 +70,13 @@ export const SceneBackground: React.FC<{
             style={{
               width: '100%',
               height: '100%',
-              filter: 'blur(28px) brightness(0.65)',
-              WebkitFilter: 'blur(28px) brightness(0.65)',
-              transform: 'scale(1.15)',
+              filter: isSports
+                ? 'blur(34px) brightness(0.42)'
+                : 'blur(28px) brightness(0.65)',
+              WebkitFilter: isSports
+                ? 'blur(34px) brightness(0.42)'
+                : 'blur(28px) brightness(0.65)',
+              transform: 'scale(1.20)',
             }}
           />
         </AbsoluteFill>
@@ -89,8 +98,10 @@ export const SceneBackground: React.FC<{
             style={{
               width: '100%',
               height: '100%',
-              scale: kbScale,
-              boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+              scale: effectiveScale,
+              boxShadow: isSports
+                ? '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 2px rgba(255, 230, 0, 0.25)'
+                : '0 10px 40px rgba(0, 0, 0, 0.6)',
             }}
           />
         </AbsoluteFill>

@@ -1,7 +1,7 @@
 import { Composition, registerRoot } from 'remotion';
 import { AIShort, DEFAULT_SKIN } from './AIShort';
 import { HookIntroShort } from './HookIntroShort';
-import { GOLD_THEME } from './design';
+import { GOLD_THEME, SPORTS_THEME } from './design';
 import { InterviewOverlay } from './InterviewOverlay';
 import { SportsOverlay } from './SportsOverlay';
 import type { Skin } from './AIShort';
@@ -13,7 +13,7 @@ const FPS = 30;
 /** Available composition styles - add new ones here */
 const SKINS: Record<string, Skin> = {
   commentary: DEFAULT_SKIN,
-  sports: { id: 'sports', Overlay: SportsOverlay },
+  sports: { id: 'sports', theme: SPORTS_THEME, Overlay: SportsOverlay },
   interview: { id: 'interview', theme: GOLD_THEME, Overlay: InterviewOverlay },
 };
 
