@@ -17,7 +17,22 @@ export const scriptSectionSchema = z.object({
   text: z.string().min(1),
   spokenText: z.string().optional(),
   sourceQuote: z.string().optional(),
-  evidence: z.array(z.string().min(6)).max(3).optional(),
+  evidence: z
+    .preprocess((val) => {
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        return trimmed.length > 0 ? [trimmed] : undefined;
+      }
+      if (Array.isArray(val)) {
+        const cleaned = val
+          .map((item) => (typeof item === 'string' ? item.trim() : String(item ?? '').trim()))
+          .filter(Boolean);
+        return cleaned.length > 0 ? cleaned : undefined;
+      }
+      return undefined;
+    }, z.array(z.string()).optional())
+    .optional(),
   beatId: z.string().min(1).optional(),
 });
 

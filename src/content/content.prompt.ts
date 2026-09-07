@@ -255,12 +255,6 @@ export interface TranscriptSegmentLike {
 
 /** Builds the user prompt containing the angle + moment transcript. */
 export function buildScriptUserPrompt(context: ScriptContext): string {
-  const isCrossLingual = Boolean(
-    context.targetLanguage &&
-    context.sourceLanguage &&
-    context.targetLanguage.toLowerCase() !== context.sourceLanguage.toLowerCase(),
-  );
-
   const lines = [
     ...(context.targetLanguage
       ? [
@@ -333,12 +327,8 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
     ...(context.fixedHook?.trim()
       ? [
         '',
-        isCrossLingual
-          ? `USER-SELECTED HOOK (Translate & adapt to ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}):`
-          : 'MANDATORY HOOK (user-selected):',
-        isCrossLingual
-          ? `Translate and adapt this hook naturally into ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage} as the opening hook section text so all voiceover narration flows seamlessly in ${context.targetLanguage === 'id' ? 'Bahasa Indonesia' : context.targetLanguage}: "${context.fixedHook.trim()}"`
-          : `The "hook" section MUST be exactly this text, verbatim — do not paraphrase, translate, shorten, or rewrite it: "${context.fixedHook.trim()}"`,
+        'MANDATORY HOOK (user-selected):',
+        `The "hook" section MUST be exactly this text, verbatim — do not paraphrase, translate, shorten, or rewrite it: "${context.fixedHook.trim()}"`,
       ]
       : []),
     '',

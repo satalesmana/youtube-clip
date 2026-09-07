@@ -321,7 +321,19 @@
           const hint = el.querySelector('.hook-clear-hint');
           if (hint) hint.textContent = isSel ? '✅ Dipilih' : 'pilih';
         });
-        if (hookState.selected) toast(`Hook #${hook.rank} dipakai untuk transform`, 'success');
+        if (hookState.selected) {
+          toast(`Hook #${hook.rank} dipakai untuk transform`, 'success');
+          if (scriptState && scriptState.active && scriptState.sections?.length > 0) {
+            const hookIdx = scriptState.sections.findIndex((s) => s.type === 'hook');
+            const hookText = hookState.selected.spokenHook?.text || hookState.selected.headline?.text || '';
+            if (hookIdx !== -1 && hookText) {
+              scriptState.sections[hookIdx].text = hookText;
+              scriptState.sections[hookIdx].spokenText = hookText;
+              renderScriptSections();
+              updateScriptMeta();
+            }
+          }
+        }
       };
       item.addEventListener('click', select);
       item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } });

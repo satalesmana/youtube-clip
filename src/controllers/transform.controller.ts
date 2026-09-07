@@ -331,7 +331,7 @@ export class TransformController {
         await this.deps.contentCache?.set(scriptCacheKey, script);
       } catch (err) {
         logger.error({ err, targetLang }, 'Script generation failed — using emergency fallback script');
-        script = this.fallbackScript(selectedAngle, targetLang);
+        script = this.fallbackScript(selectedAngle, targetLang, request.customHook);
       }
     }
 
@@ -626,7 +626,7 @@ export class TransformController {
           await this.deps.contentCache?.set(scriptCacheKey, script);
         } catch (err) {
           logger.error({ err, targetLang }, 'Script generation failed — using emergency fallback script');
-          script = this.fallbackScript(selectedAngle, targetLang);
+          script = this.fallbackScript(selectedAngle, targetLang, request.customHook);
         }
       }
     }
@@ -1203,15 +1203,16 @@ export class TransformController {
     };
   }
 
-  private fallbackScript(angle: ContentAngle, language: string): OriginalScript {
+  private fallbackScript(angle: ContentAngle, language: string, customHook?: string): OriginalScript {
     const isId = language === 'id';
+    const hookText = customHook?.trim() || angle.hook;
     return {
       candidateId: '',
       angleId: angle.id,
       angleTitle: angle.title,
       language,
       sections: [
-        { type: 'hook', text: angle.hook },
+        { type: 'hook', text: hookText, spokenText: hookText },
         { type: 'context', text: isId ? 'Berikut adalah fakta penting seputar momen ini.' : 'Here is the key context behind this moment.' },
         { type: 'commentary', text: angle.reason },
         { type: 'conclusion', text: isId ? 'Itulah momen luar biasa yang baru saja terjadi.' : 'That concludes this incredible moment.' },

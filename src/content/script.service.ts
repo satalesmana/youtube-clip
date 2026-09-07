@@ -78,6 +78,15 @@ export class ScriptService implements IScriptService {
 
         this.logger.debug({ candidateId: context.candidateId }, 'Validating script response');
         const parsed = parseLlmJson(raw);
+        if (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).sections)) {
+          for (const section of (parsed as { sections: Record<string, unknown>[] }).sections) {
+            if (Array.isArray(section.evidence)) {
+              section.evidence = section.evidence
+                .map((e) => (typeof e === 'string' ? e.trim() : String(e ?? '').trim()))
+                .filter(Boolean);
+            }
+          }
+        }
         const result = originalScriptResponseSchema.safeParse(parsed);
 
         if (!result.success) {
@@ -203,20 +212,25 @@ function validateTranscriptGrounding(sections: ScriptSection[], context: ScriptC
     if (evidence.length === 0 && !isCrossLingual) {
       throw AppError.llmInvalidResponse(`Script section "${section.type}" is missing transcript evidence.`);
     }
+    const validQuotes: string[] = [];
     for (const quote of evidence) {
       const normalizedQuote = normalizeForMatch(quote);
-      if (!transcript.includes(normalizedQuote)) {
-        if (isCrossLingual) {
-          logger?.debug({ quote, sectionType: section.type }, 'Evidence quote in cross-lingual mode differs from source transcript');
-        } else {
-          throw AppError.llmInvalidResponse(
-            `Script section "${section.type}" contains evidence not found in the supplied transcript.`,
-          );
-        }
-      } else {
+      if (transcript.includes(normalizedQuote)) {
+        validQuotes.push(quote);
         evidenceUsed.add(normalizedQuote);
+      } else if (isCrossLingual) {
+        logger?.debug({ quote, sectionType: section.type }, 'Evidence quote in cross-lingual mode differs from source transcript');
+        validQuotes.push(quote);
+      } else {
+        logger?.debug({ quote, sectionType: section.type }, 'Evidence quote not verbatim in source transcript');
       }
     }
+    if (validQuotes.length === 0 && !isCrossLingual) {
+      throw AppError.llmInvalidResponse(
+        `Script section "${section.type}" contains evidence not found in the supplied transcript.`,
+      );
+    }
+    section.evidence = validQuotes;
   }
 
   const source = sections.find((section) => section.type === 'source');
@@ -272,19 +286,8 @@ function enforceFixedHook(sections: ScriptSection[], context: ScriptContext): vo
     sections.unshift({ type: 'hook', text: fixedHook });
     return;
   }
-  // When targetLanguage is specified and differs from sourceLanguage, preserve the LLM's
-  // translated/adapted hook text instead of overwriting it with the original language string.
-  const isCrossLingual = Boolean(
-    context.targetLanguage &&
-    context.sourceLanguage &&
-    context.targetLanguage.toLowerCase() !== context.sourceLanguage.toLowerCase(),
-  );
-  if (!isCrossLingual || !hook.text?.trim()) {
-    hook.text = fixedHook;
-    hook.spokenText = normalizeForSpeech(fixedHook, context.targetLanguage ?? 'id');
-  } else if (!hook.spokenText?.trim()) {
-    hook.spokenText = normalizeForSpeech(hook.text, context.targetLanguage ?? 'id');
-  }
+  hook.text = fixedHook;
+  hook.spokenText = normalizeForSpeech(fixedHook, context.targetLanguage ?? 'id');
   // A user-selected hook is not a verbatim source quote — drop stale
   // grounding metadata that no longer matches the replaced text.
   delete hook.beatId;
