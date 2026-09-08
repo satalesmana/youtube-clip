@@ -732,6 +732,7 @@ const youtubeSearchProvider = new YouTubeSearchProvider(
     maxResults: env.YOUTUBE_SEARCH_MAX_RESULTS,
     timeoutMs: env.YOUTUBE_SEARCH_TIMEOUT_MS,
     ytDlpBinaryPath: env.YT_DLP_BINARY_PATH,
+    maxAgeDays: env.YOUTUBE_SEARCH_MAX_AGE_DAYS,
   },
   researchLogger.child({ component: 'youtube-search.provider' }),
 );
@@ -779,6 +780,7 @@ export const captionService = new CaptionService(
     timeoutMs: aiProvider.timeoutMs,
     maxRetries: aiProvider.maxRetries,
     outputsDir: paths.outputs,
+    creditTemplate: env.CAPTION_CREDIT_TEMPLATE,
   },
   createLogger('caption.service'),
 );

@@ -26,16 +26,33 @@ export class CaptionController {
     const { logger, captionService } = this.deps;
     const videoId = this.resolveVideoId(request);
 
+    const requestedPlatforms = request.platforms?.length
+      ? request.platforms
+      : request.platform
+      ? [request.platform]
+      : undefined;
+
     // Fast-path: Check for cached captions when not forcing refresh
     if (videoId && !request.refresh) {
       const saved = await captionService.getSavedCaptions(videoId, request.jobId);
       if (saved && (!request.tone || saved.tone === request.tone)) {
-        logger.info({ videoId, jobId: request.jobId, tone: saved.tone }, 'Returning saved viral captions from disk');
-        return {
-          ...saved,
-          success: true,
-          cached: true,
-        };
+        const hasAllRequested = !requestedPlatforms || requestedPlatforms.every((p) => Boolean(saved.captions[p]));
+        if (hasAllRequested) {
+          logger.info({ videoId, jobId: request.jobId, tone: saved.tone }, 'Returning saved viral captions from disk');
+          const filteredCaptions = requestedPlatforms
+            ? Object.fromEntries(
+                requestedPlatforms
+                  .filter((p) => Boolean(saved.captions[p]))
+                  .map((p) => [p, saved.captions[p]!]),
+              )
+            : saved.captions;
+          return {
+            ...saved,
+            captions: filteredCaptions,
+            success: true,
+            cached: true,
+          };
+        }
       }
     }
 
@@ -71,6 +88,11 @@ export class CaptionController {
     videoId?: string,
   ): Promise<CaptionGenerationContext> {
     const custom = request.customContext;
+    const requestedPlatforms = request.platforms?.length
+      ? request.platforms
+      : request.platform
+      ? [request.platform]
+      : undefined;
 
     const baseContext: CaptionGenerationContext = {
       videoId: videoId || 'custom_video',
@@ -81,6 +103,8 @@ export class CaptionController {
       customPrompt: custom?.customPrompt,
       targetLanguage: request.language === 'auto' ? undefined : request.language,
       tone: request.tone,
+      platforms: requestedPlatforms,
+      creditTemplate: request.creditTemplate,
       durationSeconds: custom?.durationSeconds,
     };
 

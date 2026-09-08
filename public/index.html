@@ -541,6 +541,54 @@
                 </div>
               </div>
             </div>
+
+            <!-- Platform Caption Media Sosial -->
+            <div class="checkbox-row" style="margin-top: 10px;">
+              <label class="checkbox-item">
+                <input type="checkbox" id="transform-generate-captions" checked />
+                <span>📱 Generate Caption Viral (Medsos Multi-Platform)</span>
+              </label>
+            </div>
+            <div id="caption-platforms-options" class="form-row" style="margin-top:6px;padding-left:24px;">
+              <div class="input-group">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <label class="label-main" style="margin-bottom:0;">Pilih Platform Target</label>
+                  <div style="display:flex; gap:6px;">
+                    <button type="button" class="btn small ghost" id="btn-select-all-platforms" style="padding:2px 8px;font-size:11px;">Pilih Semua</button>
+                    <button type="button" class="btn small ghost" id="btn-deselect-all-platforms" style="padding:2px 8px;font-size:11px;">Batal Pilih</button>
+                  </div>
+                </div>
+                <div class="provider-chips" id="caption-platforms">
+                  <button type="button" class="chip-toggle active" data-platform="tiktok">🎵 TikTok</button>
+                  <button type="button" class="chip-toggle active" data-platform="instagram">📸 IG Reels</button>
+                  <button type="button" class="chip-toggle active" data-platform="youtube_shorts">🔴 YT Shorts</button>
+                  <button type="button" class="chip-toggle active" data-platform="x">𝕏 Twitter / X</button>
+                  <button type="button" class="chip-toggle active" data-platform="threads">🧵 Threads</button>
+                  <button type="button" class="chip-toggle active" data-platform="facebook">👥 FB Feed</button>
+                  <button type="button" class="chip-toggle active" data-platform="facebook_reels">🎬 FB Reels</button>
+                </div>
+                <p class="stt-hint muted small" style="margin-top:6px;">
+                  AI akan menyusun hook, gaya copy, CTA, dan hashtag sesuai algoritma platform yang dipilih.
+                </p>
+
+                <!-- Format Credit / Atribusi Sumber Video -->
+                <div class="input-group" style="margin-top: 14px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label class="label-main" style="margin-bottom:0;">Format Credit / Atribusi Sumber</label>
+                    <span class="muted small" id="caption-credit-status" style="font-weight:600; color:var(--blue, #4d9fff);">Aktif</span>
+                  </div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                    <button type="button" class="btn small ghost active" id="btn-credit-preset-short" title="Format singkat default: 📹 Credit: @{channel}" style="padding:3px 9px;font-size:11.5px;">📹 Format Singkat</button>
+                    <button type="button" class="btn small ghost" id="btn-credit-preset-url" title="Format dengan link: 🎬 Source: {channel} | {url}" style="padding:3px 9px;font-size:11.5px;">🎬 Sertakan URL</button>
+                    <button type="button" class="btn small ghost" id="btn-credit-preset-none" title="Tanpa credit / kosongkan" style="padding:3px 9px;font-size:11.5px;">🚫 Nonaktifkan</button>
+                  </div>
+                  <input type="text" id="transform-caption-credit" value="📹 Credit: @{channel}" placeholder="Contoh: 📹 Credit: @{channel} (kosongkan jika tanpa credit)" />
+                  <p class="stt-hint muted small" style="margin-top:6px;">
+                    Gunakan <code>{channel}</code> untuk nama creator/channel sumber dan <code>{url}</code> untuk tautan video YouTube. Kosongkan jika tidak ingin mencantumkan credit.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <button class="btn primary full" id="btn-transform">

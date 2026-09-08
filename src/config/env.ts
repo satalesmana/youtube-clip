@@ -117,6 +117,14 @@ const envSchema = z
     YOUTUBE_SEARCH_MAX_RESULTS: z.coerce.number().int().positive().default(5),
     // Timeout per YouTube search request in milliseconds.
     YOUTUBE_SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+    // Only include videos uploaded within the last N days (0 = no filter).
+    YOUTUBE_SEARCH_MAX_AGE_DAYS: z.coerce.number().int().min(0).default(30),
+
+    // --- Caption credit / attribution ---
+    // Template for the source-credit line appended to every generated caption.
+    // Supported placeholders: {channel} = source channel name, {url} = source video URL.
+    // Set to an empty string to disable the credit line entirely.
+    CAPTION_CREDIT_TEMPLATE: z.string().default('\ud83d\udcf9 Credit: @{channel}'),
 
     // News RSS feeds (comma-separated). Each entry may include an optional
     // `[label]` prefix and a `:lang` suffix, e.g.

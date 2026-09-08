@@ -6,7 +6,11 @@ export const socialPlatformSchema = z.enum([
   'youtube_shorts',
   'x',
   'threads',
+  'facebook',
+  'facebook_reels',
 ]);
+
+
 
 export const captionToneSchema = z.enum([
   'viral_hype',
@@ -49,7 +53,11 @@ export const llmCaptionsResponseSchema = z.object({
   youtube_shorts: llmCaptionItemSchema.optional(),
   x: llmCaptionItemSchema.optional(),
   threads: llmCaptionItemSchema.optional(),
+  facebook: llmCaptionItemSchema.optional(),
+  facebook_reels: llmCaptionItemSchema.optional(),
 });
+
+
 
 export const generateCaptionRequestSchema = z.object({
   /** Target video ID from outputs/ directory. */
@@ -64,6 +72,10 @@ export const generateCaptionRequestSchema = z.object({
   language: z.enum(['auto', 'id', 'en']).default('auto'),
   /** Optional single platform filter. When omitted, all platforms are generated. */
   platform: socialPlatformSchema.optional(),
+  /** Optional list of platforms to generate. Overrides platform if provided. */
+  platforms: z.array(socialPlatformSchema).optional(),
+  /** Custom credit template overriding env default. Supports {channel} and {url}. Empty string disables credit. */
+  creditTemplate: z.string().optional(),
   /** Force regeneration even if a cached result exists. */
   refresh: z.boolean().default(false),
   /** Optional manual context override (e.g. from an in-memory transform result). */

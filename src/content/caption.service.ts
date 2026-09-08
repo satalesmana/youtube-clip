@@ -30,6 +30,12 @@ export interface CaptionServiceOptions {
   timeoutMs: number;
   maxRetries: number;
   outputsDir: string;
+  /**
+   * Template string for the source-credit line appended to every caption.
+   * Placeholders: `{channel}` → source channel name, `{url}` → source video URL.
+   * Empty string → no credit appended.
+   */
+  creditTemplate: string;
 }
 
 export interface ICaptionService {
@@ -49,9 +55,20 @@ export class CaptionService implements ICaptionService {
     const lang = context.targetLanguage || context.videoLanguage || 'auto';
     const effectiveLang = lang === 'auto' ? 'id' : lang;
 
+    /**
+     * Resolve the credit line from the configured template.
+     * Only populated when both a template and a source channel are known.
+     */
+    const creditLine = this.buildCreditLine(context);
+
+    const allPlatforms: SocialPlatform[] = ['tiktok', 'instagram', 'youtube_shorts', 'x', 'threads', 'facebook', 'facebook_reels'];
+    const targetPlatforms: SocialPlatform[] = context.platforms && context.platforms.length > 0
+      ? context.platforms.filter((p) => allPlatforms.includes(p))
+      : allPlatforms;
+
     this.logger.info(
-      { videoId: context.videoId, jobId: context.jobId, tone, lang: effectiveLang },
-      'Generating viral social captions for all platforms',
+      { videoId: context.videoId, jobId: context.jobId, tone, lang: effectiveLang, platforms: targetPlatforms },
+      'Generating viral social captions for target platforms',
     );
 
     let parsedResult: Partial<Record<SocialPlatform, LlmCaptionItem>> | null = null;
@@ -61,7 +78,7 @@ export class CaptionService implements ICaptionService {
         async () => {
           const raw = await this.provider.chat({
             model: this.options.model,
-            system: buildCaptionSystemPrompt(tone, effectiveLang),
+            system: buildCaptionSystemPrompt(tone, effectiveLang, targetPlatforms),
             prompt: buildCaptionUserPrompt(context),
             temperature: this.options.temperature ?? 0.1,
             timeoutMs: this.options.timeoutMs,
@@ -78,12 +95,11 @@ export class CaptionService implements ICaptionService {
           });
 
           const json = parseLlmJson(raw);
-          const platforms: SocialPlatform[] = ['tiktok', 'instagram', 'youtube_shorts', 'x', 'threads'];
           const extractedMap: Partial<Record<SocialPlatform, LlmCaptionItem>> = {};
 
           if (typeof json === 'object' && json !== null) {
             const rawObj = json as Record<string, unknown>;
-            for (const p of platforms) {
+            for (const p of targetPlatforms) {
               const rawItem = rawObj[p];
               if (rawItem && typeof rawItem === 'object') {
                 const itemRes = llmCaptionItemSchema.safeParse(rawItem);
@@ -124,13 +140,12 @@ export class CaptionService implements ICaptionService {
     }
 
     const fallback = generateFallbackCaptions(context);
-    const platforms: SocialPlatform[] = ['tiktok', 'instagram', 'youtube_shorts', 'x', 'threads'];
-    const captionMap: Record<SocialPlatform, PlatformCaption> = {} as Record<SocialPlatform, PlatformCaption>;
+    const captionMap: Partial<Record<SocialPlatform, PlatformCaption>> = {};
 
-    for (const p of platforms) {
+    for (const p of targetPlatforms) {
       const item = parsedResult?.[p];
       if (item && (item.hook || item.body || item.title)) {
-        const formatted = assembleFormattedCaption(p, item);
+        const formatted = assembleFormattedCaption(p, item, creditLine);
         captionMap[p] = {
           platform: p,
           title: item.title,
@@ -141,11 +156,12 @@ export class CaptionService implements ICaptionService {
           formattedCaption: formatted,
           searchKeywords: item.searchKeywords || [],
           characterCount: formatted.length,
+          creditLine: creditLine || undefined,
           strategyExplanation: item.strategyExplanation || '',
           recommendedAudioVibe: item.recommendedAudioVibe,
           tags: item.tags,
         };
-      } else {
+      } else if (fallback.captions[p]) {
         captionMap[p] = fallback.captions[p];
       }
     }
@@ -165,6 +181,25 @@ export class CaptionService implements ICaptionService {
     await this.saveCaptions(result);
 
     return result;
+  }
+
+  /**
+   * Resolves `{channel}` and `{url}` placeholders in `creditTemplate`
+   * (context override or configured fallback) using the given generation context.
+   * Returns an empty string when the template is empty or when {channel} is required but missing.
+   */
+  private buildCreditLine(context: CaptionGenerationContext): string {
+    const template = context.creditTemplate !== undefined ? context.creditTemplate : this.options.creditTemplate;
+    if (!template || !template.trim()) return '';
+
+    if (template.includes('{channel}') && !context.sourceChannel) {
+      return '';
+    }
+
+    return template
+      .replace(/\{channel\}/g, context.sourceChannel ?? '')
+      .replace(/\{url\}/g, context.sourceUrl ?? '')
+      .trim();
   }
 
   /**

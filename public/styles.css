@@ -244,6 +244,12 @@ input[type="checkbox"] {
   background: var(--card-2); color: var(--text); border: 1px solid var(--border);
 }
 .btn.ghost:hover { border-color: var(--blue); }
+.btn.ghost.active {
+  border-color: var(--blue);
+  background: rgba(77, 159, 255, 0.15);
+  color: #ffffff;
+  box-shadow: 0 0 0 1px var(--blue);
+}
 .btn.secondary {
   background: var(--bg-soft); color: var(--text); border: 1px solid var(--border);
 }
@@ -1627,6 +1633,16 @@ input[type="checkbox"] {
 .platform-tab[data-platform="threads"].active {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(147, 51, 234, 0.2));
   border-color: #c084fc;
+  color: #ffffff;
+}
+.platform-tab[data-platform="facebook"].active {
+  background: linear-gradient(135deg, rgba(24, 119, 242, 0.25), rgba(13, 90, 190, 0.25));
+  border-color: #1877f2;
+  color: #ffffff;
+}
+.platform-tab[data-platform="facebook_reels"].active {
+  background: linear-gradient(135deg, rgba(24, 119, 242, 0.2), rgba(220, 39, 67, 0.2));
+  border-color: #2e89ff;
   color: #ffffff;
 }
 

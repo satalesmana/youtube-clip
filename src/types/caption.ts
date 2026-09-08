@@ -1,7 +1,9 @@
 /**
  * Social media platforms supported for viral caption generation.
  */
-export type SocialPlatform = 'tiktok' | 'instagram' | 'youtube_shorts' | 'x' | 'threads';
+export type SocialPlatform = 'tiktok' | 'instagram' | 'youtube_shorts' | 'x' | 'threads' | 'facebook' | 'facebook_reels';
+
+
 
 /**
  * Editorial tones available for caption copywriting.
@@ -36,6 +38,11 @@ export interface PlatformCaption {
   recommendedAudioVibe?: string;
   /** Search tags (comma-separated for YouTube metadata). */
   tags?: string[];
+  /**
+   * Ready-to-paste attribution/credit line for the source creator, e.g.
+   * `"📹 Credit: @ChannelName"`. Empty string or undefined = no credit shown.
+   */
+  creditLine?: string;
 }
 
 /**
@@ -48,7 +55,7 @@ export interface VideoCaptionResult {
   channelName?: string;
   language: string;
   tone: CaptionTone;
-  captions: Record<SocialPlatform, PlatformCaption>;
+  captions: Partial<Record<SocialPlatform, PlatformCaption>>;
   generatedAt: string;
   cached?: boolean;
 }
@@ -61,12 +68,22 @@ export interface CaptionGenerationContext {
   jobId?: string;
   sourceTitle: string;
   sourceChannel?: string;
+  /** Full URL of the original source video (e.g. `https://www.youtube.com/watch?v=...`). */
+  sourceUrl?: string;
   videoLanguage?: string;
   targetLanguage?: string;
   genre?: string;
   /** Optional custom creator instruction or tone direction. */
   customPrompt?: string;
   tone?: CaptionTone;
+  /** Optional target platforms to generate captions for. Defaults to all platforms if omitted. */
+  platforms?: SocialPlatform[];
+  /**
+   * Custom credit line template overriding the system default.
+   * Supports `{channel}` and `{url}` placeholders.
+   * Set to empty string `""` to disable credit in captions.
+   */
+  creditTemplate?: string;
   angle?: {
     title: string;
     hook?: string;

@@ -203,6 +203,80 @@
     }
   });
 
+  /* ---------- Caption Platforms toggle & selectors ---------- */
+  $('#transform-generate-captions')?.addEventListener('change', function () {
+    const opts = $('#caption-platforms-options');
+    if (this.checked) {
+      opts?.classList.remove('hidden');
+    } else {
+      opts?.classList.add('hidden');
+    }
+  });
+
+  $('#btn-select-all-platforms')?.addEventListener('click', () => {
+    $$('#caption-platforms .chip-toggle').forEach((c) => c.classList.add('active'));
+  });
+
+  $('#btn-deselect-all-platforms')?.addEventListener('click', () => {
+    $$('#caption-platforms .chip-toggle').forEach((c) => c.classList.remove('active'));
+  });
+
+  function getSelectedCaptionPlatforms() {
+    const isEnabled = $('#transform-generate-captions')?.checked ?? true;
+    if (!isEnabled) return [];
+    return $$('#caption-platforms .chip-toggle.active')
+      .map((c) => c.dataset.platform)
+      .filter(Boolean);
+  }
+
+  /* ---------- Caption Credit Presets & Input ---------- */
+  const creditInput = $('#transform-caption-credit');
+  const creditStatus = $('#caption-credit-status');
+  const btnCreditShort = $('#btn-credit-preset-short');
+  const btnCreditUrl = $('#btn-credit-preset-url');
+  const btnCreditNone = $('#btn-credit-preset-none');
+
+  function updateCreditPresetUI() {
+    const val = creditInput ? creditInput.value.trim() : '';
+    btnCreditShort?.classList.toggle('active', val === '📹 Credit: @{channel}');
+    btnCreditUrl?.classList.toggle('active', val === '🎬 Source: {channel} | {url}');
+    btnCreditNone?.classList.toggle('active', val === '');
+
+    if (creditStatus) {
+      if (!val) {
+        creditStatus.textContent = 'Nonaktif';
+        creditStatus.style.color = 'var(--muted, #8a8f98)';
+      } else {
+        creditStatus.textContent = 'Aktif';
+        creditStatus.style.color = 'var(--blue, #4d9fff)';
+      }
+    }
+  }
+
+  btnCreditShort?.addEventListener('click', () => {
+    if (creditInput) creditInput.value = '📹 Credit: @{channel}';
+    updateCreditPresetUI();
+  });
+
+  btnCreditUrl?.addEventListener('click', () => {
+    if (creditInput) creditInput.value = '🎬 Source: {channel} | {url}';
+    updateCreditPresetUI();
+  });
+
+  btnCreditNone?.addEventListener('click', () => {
+    if (creditInput) creditInput.value = '';
+    updateCreditPresetUI();
+  });
+
+  creditInput?.addEventListener('input', updateCreditPresetUI);
+
+  function getCaptionCreditTemplate() {
+    const isEnabled = $('#transform-generate-captions')?.checked ?? true;
+    if (!isEnabled) return undefined;
+    const input = $('#transform-caption-credit');
+    return input ? input.value : undefined;
+  }
+
   /* ---------- TTS Provider → dynamic voice list ---------- */
   const TTS_VOICES = {
     'edge-tts': [
@@ -1551,6 +1625,10 @@
 
     try {
       const outputMode = $('#transform-output-mode')?.value || 'narration';
+      const generateCaptions = $('#transform-generate-captions')?.checked ?? true;
+      const captionPlatforms = getSelectedCaptionPlatforms();
+      const captionCreditTemplate = getCaptionCreditTemplate();
+
       // Mode Reel tidak memakai engine/STT/bahasa/TTS/channel/badge —
       // field tersebut hanya dikirim di mode Narasi.
       const body = outputMode === 'reel'
@@ -1559,6 +1637,9 @@
             outputMode,
             selectedClips: [...clipState.selected.values()],
             dryRun: $('#transform-dry-run')?.checked || false,
+            generateCaptions,
+            ...(captionPlatforms.length > 0 ? { captionPlatforms } : {}),
+            ...(captionCreditTemplate !== undefined ? { captionCreditTemplate } : {}),
             // Hook terpilih jadi intro reel; backend memangkas detik yang
             // tumpang tindih dengan klip agar tidak ada yang berulang.
             // Saat preview final (gaya clipper) tersedia, file itu dipakai
@@ -1593,6 +1674,9 @@
               hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
               channel: { name: $('#transform-channel').value.trim() || undefined },
               dryRun: $('#transform-dry-run')?.checked || false,
+              generateCaptions,
+              ...(captionPlatforms.length > 0 ? { captionPlatforms } : {}),
+              ...(captionCreditTemplate !== undefined ? { captionCreditTemplate } : {}),
               ...(blurWatermark ? { blur_watermark: blurWatermark } : {}),
               ...(clipState.selected.size > 0
                 ? { selectedClips: [...clipState.selected.values()] }
@@ -1848,7 +1932,7 @@
       captionSection.style.marginTop = '14px';
       captionSection.innerHTML = `
         <button type="button" class="btn secondary small full" style="padding:10px;" id="btn-gen-captions-inline">
-          📱 Generate Caption Viral (TikTok, Reels, Shorts, X, Threads)
+          📱 Generate Caption Viral (TikTok, Reels, Shorts, X, Threads, FB)
         </button>
       `;
       captionSection.querySelector('#btn-gen-captions-inline')?.addEventListener('click', async (e) => {
@@ -1856,11 +1940,15 @@
         btn.disabled = true;
         btn.textContent = '⏳ Menulis caption viral dengan AI…';
         try {
+          const platforms = getSelectedCaptionPlatforms();
+          const creditTemplate = getCaptionCreditTemplate();
           const res = await apiPost('/api/captions/generate', {
             videoId: result.videoId,
             jobId: result.jobId,
             tone: 'viral_hype',
             language: $('#transform-lang')?.value || 'auto',
+            ...(platforms.length > 0 ? { platforms } : {}),
+            ...(creditTemplate !== undefined ? { creditTemplate } : {}),
             customContext: {
               sourceTitle: result.angle?.title || result.videoId,
               genre: $('#transform-genre')?.value || undefined,
@@ -1934,17 +2022,37 @@
       sweetSpot: 'Diskusi Komunitas & Balasan Panjang',
       maxChar: 500,
     },
+    facebook: {
+      name: 'Facebook Feed',
+      icon: '👥',
+      sweetSpot: '2–3 paragraf (Share ke Teman & Keluarga)',
+      maxChar: 63206,
+    },
+    facebook_reels: {
+      name: 'Facebook Reels',
+      icon: '🎬',
+      sweetSpot: 'Pendek & punchy (Discovery Non-Followers)',
+      maxChar: 2200,
+    },
   };
 
   function createViralCaptionsCard(captionData, ctx = {}) {
     const card = document.createElement('div');
     card.className = 'viral-captions-card';
 
-    let currentPlatform = 'tiktok';
-    let currentTone = captionData.tone || 'viral_hype';
     const captions = { ...captionData.captions };
+    const availablePlatforms = Object.keys(captions).filter((p) => PLATFORM_META[p]);
+    let currentPlatform = availablePlatforms.includes('tiktok')
+      ? 'tiktok'
+      : (availablePlatforms[0] || 'tiktok');
+    let currentTone = captionData.tone || 'viral_hype';
 
     function renderContent() {
+      const activePlatformList = availablePlatforms.length > 0 ? availablePlatforms : Object.keys(PLATFORM_META);
+      if (!activePlatformList.includes(currentPlatform)) {
+        currentPlatform = activePlatformList[0] || 'tiktok';
+      }
+
       const pData = captions[currentPlatform] || {};
       const meta = PLATFORM_META[currentPlatform] || { name: currentPlatform, icon: '📱', maxChar: 2000, sweetSpot: '' };
       const formatted = pData.formattedCaption || '';
@@ -1970,11 +2078,10 @@
         </div>
 
         <div class="platform-tabs">
-          <button type="button" class="platform-tab ${currentPlatform === 'tiktok' ? 'active' : ''}" data-platform="tiktok">🎵 TikTok</button>
-          <button type="button" class="platform-tab ${currentPlatform === 'instagram' ? 'active' : ''}" data-platform="instagram">📸 Instagram Reels</button>
-          <button type="button" class="platform-tab ${currentPlatform === 'youtube_shorts' ? 'active' : ''}" data-platform="youtube_shorts">🔴 YouTube Shorts</button>
-          <button type="button" class="platform-tab ${currentPlatform === 'x' ? 'active' : ''}" data-platform="x">𝕏 Twitter / X</button>
-          <button type="button" class="platform-tab ${currentPlatform === 'threads' ? 'active' : ''}" data-platform="threads">🧵 Threads</button>
+          ${activePlatformList.map((p) => {
+            const m = PLATFORM_META[p] || { name: p, icon: '📱' };
+            return `<button type="button" class="platform-tab ${currentPlatform === p ? 'active' : ''}" data-platform="${p}">${m.icon} ${m.name}</button>`;
+          }).join('')}
         </div>
 
         ${pData.strategyExplanation ? `
@@ -2044,6 +2151,8 @@
             tone: newTone,
             language: $('#transform-lang')?.value || 'auto',
             refresh: true,
+            ...(activePlatformList.length > 0 ? { platforms: activePlatformList } : {}),
+            ...(getCaptionCreditTemplate() !== undefined ? { creditTemplate: getCaptionCreditTemplate() } : {}),
             customContext: {
               sourceTitle: ctx.sourceTitle || captionData.sourceTitle,
               genre: ctx.genre || $('#transform-genre')?.value,

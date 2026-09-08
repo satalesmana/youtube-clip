@@ -11,6 +11,11 @@ export interface YouTubeSearchProviderOptions {
   timeoutMs: number;
   /** yt-dlp binary path (used for the fallback search). */
   ytDlpBinaryPath: string;
+  /**
+   * Only return videos uploaded within the last N days.
+   * Set to 0 (or omit) to disable the filter and return all videos.
+   */
+  maxAgeDays?: number;
 }
 
 export interface IYouTubeSearchProvider {
@@ -55,15 +60,20 @@ export class YouTubeSearchProvider implements IYouTubeSearchProvider {
 
   /** Primary: YouTube Data API v3 `search.list` + `videos.list` for details. */
   private async searchViaApi(query: string): Promise<YouTubeVideoResult[] | null> {
-    const { apiKey, maxResults, timeoutMs } = this.options;
+    const { apiKey, maxResults, timeoutMs, maxAgeDays } = this.options;
     const baseUrl = 'https://www.googleapis.com/youtube/v3';
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const searchUrl =
+      let searchUrl =
         `${baseUrl}/search?part=snippet&type=video&maxResults=${maxResults}` +
         `&q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey!)}`;
+
+      if (maxAgeDays && maxAgeDays > 0) {
+        const publishedAfter = new Date(Date.now() - maxAgeDays * 86_400_000).toISOString();
+        searchUrl += `&publishedAfter=${encodeURIComponent(publishedAfter)}`;
+      }
 
       const searchResponse = await fetch(searchUrl, { signal: controller.signal });
       const searchBody = (await searchResponse.json()) as YouTubeSearchApiResponse;
@@ -130,10 +140,16 @@ export class YouTubeSearchProvider implements IYouTubeSearchProvider {
 
   /** Fallback: `yt-dlp "ytsearchN:query" --print` with flat-playlist. */
   private async searchViaYtDlp(query: string): Promise<YouTubeVideoResult[]> {
-    const { maxResults } = this.options;
+    const { maxResults, maxAgeDays } = this.options;
     const template = ['%(id)s', '%(title)s', '%(channel)s', '%(duration)s', '%(view_count)s', '%(upload_date)s'].join(
       FIELD_SEPARATOR,
     );
+
+    /** Earliest allowed upload date as `YYYYMMDD` string, or undefined if no filter. */
+    const minUploadDate =
+      maxAgeDays && maxAgeDays > 0
+        ? formatYtDlpDate(new Date(Date.now() - maxAgeDays * 86_400_000))
+        : undefined;
 
     try {
       const { stdout } = await runCommand(
@@ -142,6 +158,7 @@ export class YouTubeSearchProvider implements IYouTubeSearchProvider {
           `ytsearch${maxResults}:${query}`,
           '--flat-playlist',
           '--no-warnings',
+          ...(minUploadDate ? ['--match-filter', `upload_date>=${minUploadDate}`] : []),
           '--print',
           template,
         ],
@@ -192,4 +209,12 @@ function parseYtDlpDate(uploadDate: string): string | undefined {
   const match = /^(\d{4})(\d{2})(\d{2})$/.exec(uploadDate);
   if (!match) return undefined;
   return `${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z`;
+}
+
+/** Formats a {@link Date} as the `YYYYMMDD` string expected by yt-dlp's `--match-filter`. */
+function formatYtDlpDate(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
 }

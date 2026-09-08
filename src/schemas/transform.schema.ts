@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { socialPlatformSchema } from './caption.schema.js';
 
 /** Request schema for `POST /api/transform`. */
 export const transformRequestSchema = z.object({
@@ -187,6 +188,16 @@ export const transformRequestSchema = z.object({
       blur_strength: z.coerce.number().int().min(5).max(50).optional(),
     }),
   ]).optional(),
+  /** Target social platforms for auto caption generation. Defaults to all platforms if omitted. */
+  captionPlatforms: z.array(socialPlatformSchema).optional(),
+  /**
+   * Custom credit line template for social media captions.
+   * Supports placeholders: `{channel}` and `{url}`.
+   * Empty string `""` disables credit.
+   */
+  captionCreditTemplate: z.string().optional(),
+  /** Whether to generate viral captions during transform. Defaults to true. */
+  generateCaptions: z.boolean().default(true),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

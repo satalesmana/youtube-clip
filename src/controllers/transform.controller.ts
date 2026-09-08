@@ -32,7 +32,7 @@ import type { ContentCache } from '../services/content-cache.service.js';
 import type { ReelComposerService, ReelSegment, ReelSegmentSubtitle } from '../services/reel-composer.service.js';
 import type { IWatermarkFilterService } from '../services/watermark-filter.service.js';
 import type { ICaptionService } from '../content/caption.service.js';
-import type { VideoCaptionResult } from '../types/caption.js';
+import type { VideoCaptionResult, SocialPlatform } from '../types/caption.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
 import { normalizeForSpeech } from '../utils/speech-normalizer.js';
@@ -721,28 +721,33 @@ export class TransformController {
     };
 
     const captionTargetLang = request.language === 'auto' ? undefined : request.language;
-    const captions = await this.generateCaptionsForTransform({
-      videoId,
-      jobId,
-      sourceTitle: angleContext.sourceTitle || `Video ${videoId}`,
-      sourceChannel: angleContext.sourceChannel,
-      targetLanguage: captionTargetLang,
-      genre: request.genre,
-      customPrompt: request.customPrompt,
-      angle: {
-        title: returnedAngle.title,
-        hook: returnedAngle.hook,
-        angleType: returnedAngle.angleType,
-        reason: returnedAngle.reason,
-      },
-      script: {
-        sections: script.sections.map((s) => ({ type: s.type, text: s.text })),
-        estimatedDurationSeconds: script.estimatedDurationSeconds,
-      },
-      story: story ? { concept: story.concept, premise: story.premise } : undefined,
-      clips: request.selectedClips,
-      durationSeconds: videoPlan.duration,
-    });
+    const captions = request.generateCaptions !== false
+      ? await this.generateCaptionsForTransform({
+          videoId,
+          jobId,
+          sourceTitle: angleContext.sourceTitle || `Video ${videoId}`,
+          sourceChannel: angleContext.sourceChannel,
+          sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          targetLanguage: captionTargetLang,
+          genre: request.genre,
+          customPrompt: request.customPrompt,
+          platforms: request.captionPlatforms,
+          creditTemplate: request.captionCreditTemplate,
+          angle: {
+            title: returnedAngle.title,
+            hook: returnedAngle.hook,
+            angleType: returnedAngle.angleType,
+            reason: returnedAngle.reason,
+          },
+          script: {
+            sections: script.sections.map((s) => ({ type: s.type, text: s.text })),
+            estimatedDurationSeconds: script.estimatedDurationSeconds,
+          },
+          story: story ? { concept: story.concept, premise: story.premise } : undefined,
+          clips: request.selectedClips,
+          durationSeconds: videoPlan.duration,
+        })
+      : undefined;
 
     // Dry-run mode
     if (request.dryRun) {
@@ -931,17 +936,22 @@ export class TransformController {
       fileName: 'reel',
     });
 
-    const reelCaptions = await this.generateCaptionsForTransform({
-      videoId,
-      jobId,
-      sourceTitle: request.hookTitle || (request.selectedClips[0]?.title ? `Reel: ${request.selectedClips[0].title}` : `Reel ${videoId}`),
-      targetLanguage: request.language === 'auto' ? undefined : request.language,
-      genre: request.genre,
-      customPrompt: request.customPrompt,
-      angle: request.hookTitle ? { title: request.hookTitle, hook: request.hookTitle } : undefined,
-      clips: request.selectedClips.map((c) => ({ start: c.start, end: c.end, title: c.title })),
-      durationSeconds: reel.durationSeconds,
-    });
+    const reelCaptions = request.generateCaptions !== false
+      ? await this.generateCaptionsForTransform({
+          videoId,
+          jobId,
+          sourceTitle: request.hookTitle || (request.selectedClips[0]?.title ? `Reel: ${request.selectedClips[0].title}` : `Reel ${videoId}`),
+          sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          targetLanguage: request.language === 'auto' ? undefined : request.language,
+          genre: request.genre,
+          customPrompt: request.customPrompt,
+          platforms: request.captionPlatforms,
+          creditTemplate: request.captionCreditTemplate,
+          angle: request.hookTitle ? { title: request.hookTitle, hook: request.hookTitle } : undefined,
+          clips: request.selectedClips.map((c) => ({ start: c.start, end: c.end, title: c.title })),
+          durationSeconds: reel.durationSeconds,
+        })
+      : undefined;
 
     return {
       success: true,
@@ -989,9 +999,13 @@ export class TransformController {
     jobId: string;
     sourceTitle: string;
     sourceChannel?: string;
+    /** Full URL of the original source video (used to populate the {url} credit placeholder). */
+    sourceUrl?: string;
     targetLanguage?: string;
     genre?: string;
     customPrompt?: string;
+    platforms?: SocialPlatform[];
+    creditTemplate?: string;
     angle?: { title: string; hook?: string; angleType?: string; reason?: string };
     script?: { sections: Array<{ type: string; text: string }>; estimatedDurationSeconds?: number };
     story?: { concept?: string; premise?: string };
@@ -1005,9 +1019,12 @@ export class TransformController {
         jobId: params.jobId,
         sourceTitle: params.sourceTitle,
         sourceChannel: params.sourceChannel,
+        sourceUrl: params.sourceUrl,
         targetLanguage: params.targetLanguage,
         genre: params.genre,
         customPrompt: params.customPrompt,
+        platforms: params.platforms,
+        creditTemplate: params.creditTemplate,
         angle: params.angle,
         script: params.script,
         story: params.story,
