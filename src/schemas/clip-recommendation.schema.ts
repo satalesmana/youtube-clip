@@ -25,6 +25,14 @@ export const clipRecommendRequestSchema = z.object({
    * `auto`/omitted lets the model match the transcript's language.
    */
   language: z.string().min(1).optional(),
+  /**
+   * Optional content genre hint.
+   * For `match-highlight`, a short or empty transcript is expected and treated
+   * as non-fatal. The clip controller will return a warning instead of an error
+   * so the UI can prompt the user to use `outputMode: 'reel'` with manual
+   * `selectedClips` instead of LLM-based highlight detection.
+   */
+  genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment', 'match-highlight']).optional(),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

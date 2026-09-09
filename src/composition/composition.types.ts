@@ -22,6 +22,18 @@ export interface CompositionAssets {
   videoId?: string;
   /** Optional custom creator logo image path */
   creatorLogo?: string;
+  /**
+   * Audio output mode for the final render.
+   * - `strip_original`  — (default) Replace source audio with TTS narration.
+   * - `keep_original`   — Preserve source audio, no TTS mixing.
+   * - `voice_over`      — Mix TTS narration on top of attenuated source audio.
+   */
+  audioMode?: import('../types/audio-mode.js').AudioMode;
+  /**
+   * Linear volume level for the source audio when audioMode is `voice_over`.
+   * Range: 0.0–1.0. Defaults to 0.3 (≈ −10 dB).
+   */
+  sourceAudioVolume?: number;
 }
 
 /** Output from a successful render. */

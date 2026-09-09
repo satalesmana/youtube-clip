@@ -164,7 +164,7 @@ export const transformRequestSchema = z.object({
    * - `commentary`    — opinion, news analysis, explainer
    * - `entertainment` — comedy, lifestyle, vlog, reaction
    */
-  genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment']).optional(),
+  genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment', 'match-highlight']).optional(),
   /**
    * Optional custom instruction / tone direction for LLM stages
    * (e.g. "fokus ke momen lucu", "gaya sarkas", "jelaskan secara sederhana").
@@ -204,6 +204,22 @@ export const transformRequestSchema = z.object({
   captionCreditTemplate: z.string().optional(),
   /** Whether to generate viral captions during transform. Defaults to true. */
   generateCaptions: z.boolean().default(true),
+  /**
+   * Audio output mode for the final video.
+   *
+   * - `strip_original` — (default) Remove source audio, use TTS narration only.
+   * - `keep_original`  — Preserve source audio (crowd, music, SFX); TTS is
+   *                       skipped and the LLM script is used for subtitles only.
+   *                       This is the automatic default for genre `match-highlight`.
+   * - `voice_over`     — Mix TTS narration over the source audio.
+   *                       Source audio is attenuated to `sourceAudioVolume`.
+   */
+  audioMode: z.enum(['strip_original', 'keep_original', 'voice_over']).optional(),
+  /**
+   * Linear volume level for the source audio when `audioMode` is `voice_over`.
+   * Range: 0.0 (silent) to 1.0 (full). Defaults to 0.3 (≈ −10 dB).
+   */
+  sourceAudioVolume: z.number().min(0).max(1).optional(),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

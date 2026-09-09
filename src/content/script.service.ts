@@ -58,6 +58,7 @@ export class ScriptService implements IScriptService {
             effectiveContext.targetDurationSeconds ?? 60,
             effectiveContext.genre,
             effectiveContext.customPrompt,
+            effectiveContext.audioMode,
           ),
           prompt: buildScriptUserPrompt(effectiveContext),
           temperature: this.options.temperature ?? 0.1,

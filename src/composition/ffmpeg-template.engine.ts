@@ -66,8 +66,14 @@ export class FfmpegTemplateCompositionEngine implements ICompositionEngine {
         logger,
       });
 
-      // Add audio
-      await this.addAudio(outputPath, assets.narration, plan.duration);
+      // Add audio using the requested mode.
+      await this.addAudio(
+        outputPath,
+        assets.narration,
+        plan.duration,
+        assets.audioMode,
+        assets.sourceAudioVolume,
+      );
 
       const stats = await import('node:fs/promises').then(m => m.stat(outputPath));
       const duration = await probeDurationSeconds({ binaryPath: 'ffmpeg', inputPath: outputPath });
@@ -83,20 +89,67 @@ export class FfmpegTemplateCompositionEngine implements ICompositionEngine {
     }
   }
 
-  private async addAudio(videoPath: string, audioPath: string, duration: number): Promise<void> {
+  /**
+   * Applies the requested audio mode to `videoPath`:
+   *
+   * - `keep_original`  — Source audio is already embedded; no FFmpeg pass needed.
+   * - `strip_original` — (default) Replaces source audio track with the TTS narration.
+   * - `voice_over`     — Mixes TTS narration on top of the source audio, attenuating
+   *                      the source by `sourceAudioVolume` (default 0.3 ≈ −10 dB).
+   */
+  private async addAudio(
+    videoPath: string,
+    audioPath: string,
+    duration: number,
+    audioMode: import('../types/audio-mode.js').AudioMode = 'strip_original',
+    sourceAudioVolume = 0.3,
+  ): Promise<void> {
     const { runCommand } = await import('../utils/exec.js');
-    const tempPath = join(videoPath, '..', 'temp.mp4');
 
-    await runCommand('ffmpeg', [
-      '-y', '-i', videoPath,
-      '-i', audioPath,
-      '-c:v', 'copy',
-      '-c:a', 'aac', '-b:a', '192k',
-      '-map', '0:v', '-map', '1:a',
-      '-t', String(duration),
-      '-shortest',
-      tempPath,
-    ]);
+    if (audioMode === 'keep_original') {
+      // Source audio is already in the video from the template renderer.
+      // No additional FFmpeg pass is needed.
+      this.logger.info({ audioMode }, 'Audio mode: keep_original — retaining source audio as-is');
+      return;
+    }
+
+    const tempPath = videoPath.replace(/\.mp4$/, '.audio-temp.mp4');
+
+    if (audioMode === 'voice_over' && audioPath) {
+      // Mix TTS narration over attenuated source audio.
+      // [0:v] = video track (muxed), [0:a] = source audio, [1:a] = TTS narration.
+      const vol = Math.min(1, Math.max(0, sourceAudioVolume));
+      this.logger.info({ audioMode, sourceAudioVolume: vol }, 'Audio mode: voice_over — mixing TTS over source audio');
+
+      await runCommand('ffmpeg', [
+        '-y',
+        '-i', videoPath,       // [0] video with source audio
+        '-i', audioPath,       // [1] TTS narration
+        '-filter_complex', `[0:a]volume=${vol}[bg];[1:a][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+        '-map', '0:v',
+        '-map', '[aout]',
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '192k',
+        '-t', String(duration),
+        tempPath,
+      ], { logger: this.logger });
+    } else {
+      // strip_original (default): replace source audio with TTS narration only.
+      this.logger.info({ audioMode }, 'Audio mode: strip_original — replacing source audio with TTS narration');
+
+      await runCommand('ffmpeg', [
+        '-y',
+        '-i', videoPath,
+        '-i', audioPath,
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '192k',
+        '-map', '0:v',
+        '-map', '1:a',
+        '-t', String(duration),
+        '-shortest',
+        tempPath,
+      ], { logger: this.logger });
+    }
 
     await rename(tempPath, videoPath);
   }

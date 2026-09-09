@@ -117,11 +117,37 @@ export function buildContentAngleUserPrompt(context: ContentAngleContext): strin
 // ── Script generation ───────────────────────────────────────────────────
 
 /** Builds the genre-specific pacing block appended to the script system prompt. */
-function buildScriptGenreGuidance(genre: ContentGenre, targetSeconds = 60): string {
+function buildScriptGenreGuidance(genre: ContentGenre, targetSeconds = 60, audioMode?: import('../types/audio-mode.js').AudioMode): string {
   const preset = getGenrePreset(genre);
   if (!preset) return '';
   const { narrativePacing, toneDescription, beatCountRange, label } = preset;
 
+  // ── match-highlight: subtitle-only mode ──────────────────────────────────
+  // When audioMode is keep_original (or defaulted for this genre), the script
+  // is used exclusively as on-screen captions — not read aloud by TTS.
+  // Guide the LLM to write caption-friendly text, not voiceover prose.
+  if (genre === 'match-highlight') {
+    const captionNote =
+      audioMode === 'voice_over'
+        ? 'This script will be read aloud as a voice-over on top of the original audio AND displayed as subtitles.'
+        : 'IMPORTANT: This script will be displayed as on-screen subtitles/captions ONLY — it will NOT be read aloud by TTS. Write for the eye, not the ear.';
+
+    return [
+      '',
+      `## Genre Context: ${label}`,
+      `This script is for a match highlight video. Special rules apply:`,
+      captionNote,
+      `- Each section must be a SINGLE SHORT sentence (max 10 words) readable within 2–3 seconds on screen.`,
+      `- Only narrate what the VISUALS CANNOT SHOW: the scoreline, the exact minute, the player name, the tactical significance.`,
+      `- DO NOT describe actions already visible in the footage (e.g. avoid "the player runs toward the goal").`,
+      `- Tone: ${toneDescription}`,
+      `- Beat count: ${beatCountRange.min}–${beatCountRange.max}. Each beat = one critical match moment.`,
+      `- The \"hook\" section must name the exact moment or outcome (e.g. "90'+3 — the goal that changed everything").`,
+      `Override these rules only when the transcript clearly supplies context the camera cannot convey.`,
+    ].join('\n');
+  }
+
+  // ── All other genres ─────────────────────────────────────────────────────
   const isLonger = targetSeconds > 60;
   const pacingInstruction =
     narrativePacing === 'fast'
@@ -152,8 +178,10 @@ function buildScriptGenreGuidance(genre: ContentGenre, targetSeconds = 60): stri
  * @param genre Optional content genre — when supplied, injects genre-specific
  *   pacing and tone guidance that shapes how sections are weighted.
  * @param customPrompt Optional creator custom instruction or tone direction.
+ * @param audioMode Optional audio mode — passed to genre guidance so match-highlight
+ *   knows whether to produce subtitle-only text or voice-over narration.
  */
-export function buildScriptSystemPrompt(targetSeconds = 60, genre?: ContentGenre, customPrompt?: string): string {
+export function buildScriptSystemPrompt(targetSeconds = 60, genre?: ContentGenre, customPrompt?: string, audioMode?: import('../types/audio-mode.js').AudioMode): string {
   const targetWords = Math.round((targetSeconds / 60) * 150);
   const isLonger = targetSeconds > 60;
 
@@ -226,7 +254,7 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
 }
 `;
   let prompt = base;
-  if (genre) prompt += buildScriptGenreGuidance(genre, targetSeconds);
+  if (genre) prompt += buildScriptGenreGuidance(genre, targetSeconds, audioMode);
   if (customPrompt) prompt += buildCustomPromptGuidance(customPrompt);
   return prompt;
 }
@@ -266,6 +294,12 @@ export interface ScriptContext {
   customPrompt?: string;
   /** Optional user-selected multi-clip sequence. */
   selectedClips?: Array<{ start: number; end: number; title?: string }>;
+  /**
+   * Optional audio output mode — passed into genre-specific script guidance.
+   * When `keep_original` and genre is `match-highlight`, the LLM is instructed
+   * to produce caption-only text instead of full voiceover narration.
+   */
+  audioMode?: import('../types/audio-mode.js').AudioMode;
 }
 
 /** Minimal shape of a transcript segment used by the script prompt. */

@@ -14,12 +14,13 @@ import type { HookStyle } from '../hooks/hook.types.js';
  * did before this feature was added.
  */
 export type ContentGenre =
-  | 'podcast'        // Long-form interview, talk show, conversation
-  | 'sports'         // Live sports, highlights, match recap
-  | 'gaming'         // Gameplay, esports, game review / commentary
-  | 'tutorial'       // How-to, education, step-by-step walkthrough
-  | 'commentary'     // Opinion, analysis, news commentary / explainer
-  | 'entertainment'; // Comedy, lifestyle, vlog, reaction
+  | 'podcast'          // Long-form interview, talk show, conversation
+  | 'sports'           // Live sports, highlights, match recap
+  | 'gaming'           // Gameplay, esports, game review / commentary
+  | 'tutorial'         // How-to, education, step-by-step walkthrough
+  | 'commentary'       // Opinion, analysis, news commentary / explainer
+  | 'entertainment'    // Comedy, lifestyle, vlog, reaction
+  | 'match-highlight'; // Match highlight reel: goals, dramatic moments, critical plays
 
 /**
  * Narrative pacing for a genre: how fast beats should escalate and how much
@@ -218,6 +219,29 @@ export const GENRE_PRESETS: Record<ContentGenre, GenrePreset> = {
     toneDescription:
       'Relatable, fun, and emotionally engaging — the viewer wants to be entertained and surprised; personality beats polish every time.',
     beatCountRange: { min: 4, max: 6 },
+  },
+
+  'match-highlight': {
+    label: 'Match Highlight',
+    preferredAngleTypes: [
+      'storytelling',
+      'what-you-missed',
+      'commentary',
+      'comparison',
+      'analysis',
+    ],
+    preferredStoryConcepts: [
+      'turning-point',
+      'comeback',
+      'claim-consequence',
+      'character-journey',
+      'discovery-explainer',
+    ],
+    hookStyleHints: ['shock', 'story', 'statistic', 'fear'],
+    narrativePacing: 'fast',
+    toneDescription:
+      'Visceral, stadium-atmosphere — narrate only what the visuals cannot show: the scoreline, the minute, the player name, the tactical context. Crowd noise and silence are part of the story. Every word must earn its place on screen.',
+    beatCountRange: { min: 3, max: 4 },
   },
 };
 

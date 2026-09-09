@@ -1687,7 +1687,9 @@
               ttsVoice: $('#transform-voice').value || undefined,
               ttsRate: $('#transform-tts-rate')?.value || undefined,
               genre: $('#transform-genre')?.value || undefined,
-              style: $('#transform-genre')?.value === 'sports' ? 'sports' : undefined,
+              style: (($('#transform-genre')?.value === 'sports') || ($('#transform-genre')?.value === 'match-highlight'))
+                ? 'sports'
+                : undefined,
               customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
               hookBadge: $('#transform-hook-badge')?.value.trim() || undefined,
               channel: { name: $('#transform-channel').value.trim() || undefined },
@@ -1698,6 +1700,14 @@
               ...(captionCreditTemplate !== undefined ? { captionCreditTemplate } : {}),
               ...(blurWatermark ? { blur_watermark: blurWatermark } : {}),
               ...(selectedClipsList ? { selectedClips: selectedClipsList } : {}),
+              // Audio mode: read from UI; undefined = backend uses genre default
+              ...(() => {
+                const mode = $$('#audio-mode-chips .audio-mode-chip.active')[0]?.dataset.mode;
+                const vol = parseInt($('#transform-source-volume')?.value || '30', 10);
+                return mode && mode !== 'strip_original'
+                  ? { audioMode: mode, ...(mode === 'voice_over' ? { sourceAudioVolume: vol / 100 } : {}) }
+                  : {};
+              })(),
               ...(hookState.selected
                 ? {
                     sourceRange: {
@@ -2472,4 +2482,71 @@
       voiceSelect.value = isFemale ? pair.female : pair.male;
     });
   }
+
+  // ── Audio Mode: chip toggle + volume slider ─────────────────────────────
+  // Keeps the UI state in sync with the audio-mode-chips selection.
+  const AUDIO_MODE_HINTS = {
+    strip_original: 'Audio asli video dihapus dan diganti sepenuhnya dengan narasi TTS.',
+    keep_original:  'Audio asli (crowd, musik, SFX) dipertahankan. TTS dilewati — narasi LLM tampil sebagai subtitle saja.',
+    voice_over:     'Narasi TTS di-mix di atas audio asli. Volume crowd dikecilkan sesuai slider di bawah.',
+  };
+
+  function getSelectedAudioMode() {
+    return $$('#audio-mode-chips .audio-mode-chip.active')[0]?.dataset.mode || 'strip_original';
+  }
+
+  function setAudioMode(mode) {
+    $$('#audio-mode-chips .audio-mode-chip').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+      btn.setAttribute('aria-pressed', btn.dataset.mode === mode ? 'true' : 'false');
+    });
+    const hintEl = $('#audio-mode-hint');
+    if (hintEl) hintEl.textContent = AUDIO_MODE_HINTS[mode] || '';
+    const volumeRow = $('#audio-volume-row');
+    volumeRow?.classList.toggle('hidden', mode !== 'voice_over');
+  }
+
+  // Chip clicks
+  $$('#audio-mode-chips .audio-mode-chip').forEach((btn) => {
+    btn.addEventListener('click', () => setAudioMode(btn.dataset.mode));
+  });
+
+  // Volume slider label sync
+  const sourceVolumeSlider = $('#transform-source-volume');
+  const volumePctLabel = $('#volume-pct-label');
+  if (sourceVolumeSlider && volumePctLabel) {
+    sourceVolumeSlider.addEventListener('input', () => {
+      volumePctLabel.textContent = `${sourceVolumeSlider.value}%`;
+    });
+  }
+
+  // Genre → audio mode auto-set:
+  // match-highlight defaults to keep_original unless user already changed it.
+  const genreSelectEl = $('#transform-genre');
+  if (genreSelectEl) {
+    genreSelectEl.addEventListener('change', () => {
+      const genre = genreSelectEl.value;
+      const current = getSelectedAudioMode();
+      if (genre === 'match-highlight' && current === 'strip_original') {
+        setAudioMode('keep_original');
+        showToast('Audio Mode otomatis diubah ke "Pertahankan Audio Asli" untuk genre Match Highlight.', 'info');
+      } else if (genre !== 'match-highlight' && current === 'keep_original') {
+        setAudioMode('strip_original');
+      }
+    });
+  }
+
+  // Hide audio mode section in Reel mode (not applicable)
+  const audioModeSection = $('#audio-mode-section');
+  function syncAudioModeVisibility() {
+    const isReel = (outputModeSelect?.value || 'narration') === 'reel';
+    audioModeSection?.classList.toggle('hidden', isReel);
+  }
+  if (outputModeSelect) {
+    outputModeSelect.addEventListener('change', syncAudioModeVisibility);
+    syncAudioModeVisibility();
+  }
+
+  // Init on load
+  setAudioMode(getSelectedAudioMode());
 })();

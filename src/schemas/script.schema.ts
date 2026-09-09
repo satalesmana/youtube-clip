@@ -85,7 +85,7 @@ export const scriptDraftRequestSchema = z
     /** STT engine selection. */
     sttProvider: z.enum(['faster-whisper', 'whisper-cpp', 'whisperx', 'openai']).optional(),
     /** Optional content genre for the source video. */
-    genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment']).optional(),
+    genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment', 'match-highlight']).optional(),
     /** Optional custom instruction / tone direction for script drafting. */
     customPrompt: z.string().max(500).optional(),
     /** Selected clips from `/api/clips/recommend`. */

@@ -36,6 +36,7 @@ import type { VideoCaptionResult, SocialPlatform } from '../types/caption.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
 import { normalizeForSpeech } from '../utils/speech-normalizer.js';
+import { resolveAudioMode } from '../types/audio-mode.js';
 
 export type TransformStage = 'download' | 'transcript' | 'angle' | 'story' | 'script' | 'tts' | 'plan' | 'render';
 
@@ -627,6 +628,7 @@ export class TransformController {
             customPrompt: request.customPrompt,
             selectedClips: request.selectedClips,
             targetDurationSeconds,
+            audioMode: resolveAudioMode(request.audioMode, request.genre),
           };
           script = await this.deps.scriptService.generateScript(scriptContext);
           await this.deps.contentCache?.set(scriptCacheKey, script);
@@ -638,32 +640,27 @@ export class TransformController {
     }
 
     // Stage 3: TTS
+    // Resolve the effective audio mode (respects genre defaults).
+    const audioMode = resolveAudioMode(request.audioMode, request.genre);
+
+    // When audioMode is 'keep_original', TTS synthesis is intentionally
+    // skipped — the LLM script is used for subtitles/captions only, and the
+    // source video's original audio track is preserved during rendering.
     const workspaceDir = join(outputsDir, videoId, 'transform', jobId, 'voice');
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(workspaceDir);
 
-    // Use per-request TTS provider/voice when specified, otherwise fall back
-    // to the env-configured default service. Voice↔language pairing is the
-    // frontend's responsibility (it syncs the dropdown on change).
-    const { createTtsServiceWith } = await import('../container/index.js');
-    const ttsService = (request.ttsProvider && request.ttsVoice)
-      ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
-      : this.deps.ttsService;
-
-    const ttsCacheKey = this.cacheKey(
-      'tts',
-      videoId,
-      request.ttsProvider,
-      request.ttsVoice,
-      request.ttsRate,
-      script.language,
-      ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
-    );
-
     let ttsResult: { outputPath: string; durationSeconds: number; sections?: TTSSectionTiming[] };
     const { existsSync } = await import('node:fs');
 
-    if (
+    if (audioMode === 'keep_original') {
+      logger.info({ audioMode, genre: request.genre }, 'Skipping TTS synthesis — audioMode is keep_original');
+      // Use clip duration as narration duration so the video plan can still
+      // calculate scene timings for subtitle placement.
+      const clipDuration = (clip.end - clip.start) > 0 ? clip.end - clip.start : script.estimatedDurationSeconds;
+      ttsResult = { outputPath: '', durationSeconds: clipDuration, sections: [] };
+      this.emit('tts', { skipped: true });
+    } else if (
       request.existingNarration?.outputPath &&
       existsSync(request.existingNarration.outputPath)
     ) {
@@ -677,8 +674,38 @@ export class TransformController {
         sections: request.existingNarration.sections,
       };
       this.emit('tts', { skipped: true });
+
+      // Use per-request TTS provider/voice when specified, otherwise fall back
+      // to the env-configured default service.
+      const { createTtsServiceWith } = await import('../container/index.js');
+      const ttsService = (request.ttsProvider && request.ttsVoice)
+        ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
+        : this.deps.ttsService;
+      const ttsCacheKey = this.cacheKey(
+        'tts', videoId, request.ttsProvider, request.ttsVoice, request.ttsRate,
+        script.language, ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
+      );
       await this.deps.contentCache?.set(ttsCacheKey, ttsResult);
+      void ttsService; // suppress unused warning
     } else {
+      // Use per-request TTS provider/voice when specified, otherwise fall back
+      // to the env-configured default service. Voice↔language pairing is the
+      // frontend's responsibility (it syncs the dropdown on change).
+      const { createTtsServiceWith } = await import('../container/index.js');
+      const ttsService = (request.ttsProvider && request.ttsVoice)
+        ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
+        : this.deps.ttsService;
+
+      const ttsCacheKey = this.cacheKey(
+        'tts',
+        videoId,
+        request.ttsProvider,
+        request.ttsVoice,
+        request.ttsRate,
+        script.language,
+        ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
+      );
+
       const cachedTts = await this.deps.contentCache?.get<typeof ttsResult>(ttsCacheKey);
       if (cachedTts?.outputPath && existsSync(cachedTts.outputPath)) {
         logger.info({ cache: 'tts', path: cachedTts.outputPath }, 'TTS served from cache (skipping TTS)');
@@ -787,10 +814,13 @@ export class TransformController {
     const hookRange = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
       ? { start: request.sourceRange.start, end: request.sourceRange.end }
       : undefined;
-    const autoStyle = request.genre === 'sports' ? 'sports' : undefined;
+    const autoStyle = (request.genre === 'sports' || request.genre === 'match-highlight')
+      ? 'sports'
+      : undefined;
     const templateOrStyle = request.style ?? request.template ?? autoStyle ?? 'commentary';
     const outputVideo = await this.renderVideo(
       videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine, request.blur_watermark,
+      { audioMode, sourceAudioVolume: request.sourceAudioVolume },
     );
 
     return {
@@ -1069,6 +1099,8 @@ export class TransformController {
     hookRange?: { start: number; end: number },
     engine?: TransformRequestInput['engine'],
     blurWatermark?: TransformRequestInput['blur_watermark'],
+    /** Audio output settings derived from the request's audioMode / genre. */
+    audioOptions?: { audioMode: import('../types/audio-mode.js').AudioMode; sourceAudioVolume?: number },
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
     const { ensureDir } = await import('../utils/fs.js');
@@ -1129,6 +1161,8 @@ export class TransformController {
       engine,
       style: this.toCompositionStyle(templateId),
       templateId,
+      audioMode: audioOptions?.audioMode,
+      sourceAudioVolume: audioOptions?.sourceAudioVolume,
     };
 
     try {

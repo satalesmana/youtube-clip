@@ -165,6 +165,7 @@
                   <option value="" selected>Auto / General (tanpa preset)</option>
                   <option value="podcast">🎙️ Podcast / Interview</option>
                   <option value="sports">⚽ Olahraga / Sports</option>
+                  <option value="match-highlight">🏆 Match Highlight (pertandingan)</option>
                   <option value="gaming">🎮 Gaming / Esports</option>
                   <option value="tutorial">💡 Tutorial / Edukasi</option>
                   <option value="commentary">📰 Komentari / Berita</option>
@@ -375,6 +376,52 @@
             <p class="muted small hidden" id="reel-mode-hint">
               Mode Reel: klip terpilih digabung langsung dengan audio aslinya —
               engine, STT, bahasa, dan TTS tidak dipakai.
+            </p>
+          </div>
+
+          <!-- ═══ STEP 6b: Mode Audio ═══ -->
+          <div class="workflow-section" id="audio-mode-section">
+            <div class="workflow-label">
+              <span class="step-num">6b</span> Mode Audio
+              <span class="optional-label">(opsional)</span>
+            </div>
+
+            <!-- Audio mode selector chips -->
+            <div class="audio-mode-chips" id="audio-mode-chips" role="radiogroup" aria-label="Mode Audio">
+              <button type="button" class="audio-mode-chip active" data-mode="strip_original" title="Hapus audio asli, ganti dengan narasi TTS">
+                <span class="amchip-icon">🔇</span>
+                <span class="amchip-label">Tanpa Audio Asli</span>
+                <span class="amchip-sub">Audio diganti narasi TTS</span>
+              </button>
+              <button type="button" class="audio-mode-chip" data-mode="keep_original" title="Pertahankan audio asli (crowd, musik) — narasi jadi subtitle saja, TTS dilewati">
+                <span class="amchip-icon">🔊</span>
+                <span class="amchip-label">Pertahankan Audio Asli</span>
+                <span class="amchip-sub">TTS dilewati, narasi → subtitle</span>
+              </button>
+              <button type="button" class="audio-mode-chip" data-mode="voice_over" title="Mix narasi TTS di atas audio asli (volume asli dikecilkan)">
+                <span class="amchip-icon">🎙️</span>
+                <span class="amchip-label">Voice Over</span>
+                <span class="amchip-sub">TTS + audio asli dimix</span>
+              </button>
+            </div>
+
+            <!-- Source audio volume: hanya muncul saat voice_over dipilih -->
+            <div id="audio-volume-row" class="audio-volume-row hidden">
+              <label class="label-main" for="transform-source-volume">
+                Volume Audio Asli
+                <span class="volume-pct-badge" id="volume-pct-label">30%</span>
+              </label>
+              <div class="volume-slider-wrap">
+                <span class="vol-icon">🔇</span>
+                <input type="range" id="transform-source-volume" min="0" max="100" value="30" step="5" />
+                <span class="vol-icon">🔊</span>
+              </div>
+              <p class="stt-hint muted small">Volume crowd / musik / SFX asli saat di-mix dengan narasi TTS. Nilai lebih rendah = narasi lebih dominan.</p>
+            </div>
+
+            <!-- Hint yang berubah sesuai mode -->
+            <p class="stt-hint muted small" id="audio-mode-hint">
+              Audio asli video dihapus dan diganti sepenuhnya dengan narasi TTS.
             </p>
           </div>
 
