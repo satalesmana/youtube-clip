@@ -83,6 +83,12 @@ export const transformRequestSchema = z.object({
     title: z.string().optional(),
   })).min(1).optional(),
   /**
+   * Optional target narration / video duration in seconds.
+   * If omitted, automatically derived from selectedClips, hook sourceRange,
+   * or candidate moment.
+   */
+  targetDuration: z.number().positive().optional(),
+  /**
    * Server path of the selected hook's styled final intro video
    * (`hook.previewPath` from `/api/hooks/generate`). When provided and the
    * file exists, the reel opens with that exact file (WYSIWYG) instead of

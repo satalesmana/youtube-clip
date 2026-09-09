@@ -1227,13 +1227,23 @@
     if (container) container.innerHTML = '<div class="script-loading muted">🤖 AI sedang menyusun draf naskah narasi orisinal (tanpa TTS)…</div>';
 
     try {
+      const selectedClipsList = clipState.selected.size > 0 ? [...clipState.selected.values()] : undefined;
+      const totalClipDur = selectedClipsList?.reduce((sum, c) => sum + Math.max(0, (c.durationSeconds ?? (c.end - c.start))), 0);
+      const hookDur = hookState.selected?.source ? Math.max(0, (hookState.selected.source.end ?? 30) - (hookState.selected.source.start ?? 0)) : undefined;
+      const targetDuration = totalClipDur && totalClipDur > 0
+        ? Math.round(totalClipDur)
+        : hookDur && hookDur > 0
+        ? Math.round(hookDur)
+        : undefined;
+
       const body = {
         youtubeUrl: url,
         language: $('#transform-lang')?.value || 'auto',
         sttProvider: $('#transform-stt-provider')?.value || undefined,
         genre: $('#transform-genre')?.value || undefined,
         customPrompt: $('#transform-custom-prompt')?.value.trim() || undefined,
-        ...(clipState.selected.size > 0 ? { selectedClips: [...clipState.selected.values()] } : {}),
+        ...(targetDuration ? { targetDuration } : {}),
+        ...(selectedClipsList ? { selectedClips: selectedClipsList } : {}),
         ...(hookState.selected ? {
           sourceRange: {
             start: hookState.selected.source?.start ?? 0,
@@ -1660,6 +1670,14 @@
             const blurWatermark = blurEnabled
               ? { enabled: true, mode: blurMode, ...(selectedPositions?.length ? { positions: selectedPositions } : {}) }
               : undefined;
+            const selectedClipsList = clipState.selected.size > 0 ? [...clipState.selected.values()] : undefined;
+            const totalClipDur = selectedClipsList?.reduce((sum, c) => sum + Math.max(0, (c.durationSeconds ?? (c.end - c.start))), 0);
+            const hookDur = hookState.selected?.source ? Math.max(0, (hookState.selected.source.end ?? 30) - (hookState.selected.source.start ?? 0)) : undefined;
+            const targetDuration = totalClipDur && totalClipDur > 0
+              ? Math.round(totalClipDur)
+              : hookDur && hookDur > 0
+              ? Math.round(hookDur)
+              : undefined;
             return {
               youtubeUrl: url,
               engine: 'remotion',
@@ -1675,12 +1693,11 @@
               channel: { name: $('#transform-channel').value.trim() || undefined },
               dryRun: $('#transform-dry-run')?.checked || false,
               generateCaptions,
+              ...(targetDuration ? { targetDuration } : {}),
               ...(captionPlatforms.length > 0 ? { captionPlatforms } : {}),
               ...(captionCreditTemplate !== undefined ? { captionCreditTemplate } : {}),
               ...(blurWatermark ? { blur_watermark: blurWatermark } : {}),
-              ...(clipState.selected.size > 0
-                ? { selectedClips: [...clipState.selected.values()] }
-                : {}),
+              ...(selectedClipsList ? { selectedClips: selectedClipsList } : {}),
               ...(hookState.selected
                 ? {
                     sourceRange: {

@@ -288,6 +288,7 @@ export class TransformController {
 
     let script: OriginalScript;
     this.emit('script');
+    const targetDurationSeconds = this.resolveTargetDurationSeconds(request, clip);
     const scriptCacheKey = this.cacheKey(
       'script',
       videoId,
@@ -299,6 +300,7 @@ export class TransformController {
       request.genre,
       rangeCacheKey,
       request.customPrompt,
+      targetDurationSeconds ? `dur_${targetDurationSeconds}` : undefined,
     );
     const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
     if (cachedScript) {
@@ -326,6 +328,7 @@ export class TransformController {
           genre: request.genre,
           customPrompt: request.customPrompt,
           selectedClips: request.selectedClips,
+          targetDurationSeconds,
         };
         script = await this.deps.scriptService.generateScript(scriptContext);
         await this.deps.contentCache?.set(scriptCacheKey, script);
@@ -583,6 +586,7 @@ export class TransformController {
         },
       };
     } else {
+      const targetDurationSeconds = this.resolveTargetDurationSeconds(request, clip);
       const scriptCacheKey = this.cacheKey(
         'script',
         videoId,
@@ -594,6 +598,7 @@ export class TransformController {
         request.genre,
         rangeCacheKey,
         request.customPrompt,
+        targetDurationSeconds ? `dur_${targetDurationSeconds}` : undefined,
       );
       const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
       if (cachedScript) {
@@ -621,6 +626,7 @@ export class TransformController {
             genre: request.genre,
             customPrompt: request.customPrompt,
             selectedClips: request.selectedClips,
+            targetDurationSeconds,
           };
           script = await this.deps.scriptService.generateScript(scriptContext);
           await this.deps.contentCache?.set(scriptCacheKey, script);
@@ -1378,6 +1384,38 @@ export class TransformController {
     const relativePath = relative(this.deps.outputsDir, path);
     const safePath = relativePath.split(sep).map(encodeURIComponent).join('/');
     return `/api/media/${safePath}`;
+  }
+
+  /**
+   * Resolves the target narration duration in seconds.
+   * Prioritizes explicit targetDuration, then cumulative selectedClips duration,
+   * then hook sourceRange duration, then candidate moment duration.
+   */
+  private resolveTargetDurationSeconds(
+    request: {
+      targetDuration?: number;
+      selectedClips?: Array<{ start: number; end: number }>;
+      sourceRange?: { start: number; end: number };
+    },
+    clip: { start: number; end: number },
+  ): number | undefined {
+    if (request.targetDuration && request.targetDuration > 0) {
+      return Math.round(request.targetDuration);
+    }
+    if (request.selectedClips?.length) {
+      const sum = request.selectedClips.reduce(
+        (acc, c) => acc + Math.max(0, c.end - c.start),
+        0,
+      );
+      if (sum > 0) return Math.round(sum);
+    }
+    if (request.sourceRange && request.sourceRange.end > request.sourceRange.start) {
+      return Math.round(request.sourceRange.end - request.sourceRange.start);
+    }
+    if (clip.end > clip.start) {
+      return Math.round(clip.end - clip.start);
+    }
+    return undefined;
   }
 
   /** Stable cache key (hex hash) from content identifiers — safe as a filename. */

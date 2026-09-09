@@ -72,6 +72,7 @@ export class ScriptService implements IScriptService {
             effectiveContext.angleTitle,
             effectiveContext.targetLanguage,
             effectiveContext.customPrompt ?? '',
+            effectiveContext.targetDurationSeconds ? String(effectiveContext.targetDurationSeconds) : '',
             ...effectiveContext.momentSegments.map((segment) => `${segment.start}|${segment.end}|${segment.text}`),
           ),
         });

@@ -99,6 +99,8 @@ export const scriptDraftRequestSchema = z
       )
       .min(1)
       .optional(),
+    /** Optional explicit target duration in seconds for narration. */
+    targetDuration: z.number().positive().optional(),
   })
   .refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
     message: 'Provide exactly one of: youtubeUrl OR videoId.',

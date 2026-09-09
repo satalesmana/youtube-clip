@@ -117,17 +117,22 @@ export function buildContentAngleUserPrompt(context: ContentAngleContext): strin
 // ── Script generation ───────────────────────────────────────────────────
 
 /** Builds the genre-specific pacing block appended to the script system prompt. */
-function buildScriptGenreGuidance(genre: ContentGenre): string {
+function buildScriptGenreGuidance(genre: ContentGenre, targetSeconds = 60): string {
   const preset = getGenrePreset(genre);
   if (!preset) return '';
   const { narrativePacing, toneDescription, beatCountRange, label } = preset;
 
+  const isLonger = targetSeconds > 60;
   const pacingInstruction =
     narrativePacing === 'fast'
-      ? 'Keep the script tight and punchy. The "analysis" and "reflection" sections should be brief (1-2 sentences max) or omitted entirely when beats do not justify them. Every word must earn its place — no padding.'
+      ? isLonger
+        ? 'Keep the narration high-energy, visceral, and fast-paced, but sustain the storytelling across the full duration by narrating the action, dramatic turns, and sequence of events in detail across the clips.'
+        : 'Keep the script tight and punchy. The "analysis" and "reflection" sections should be brief (1-2 sentences max) or omitted entirely when beats do not justify them. Every word must earn its place — no padding.'
       : narrativePacing === 'reflective'
         ? 'Deeper "analysis" and "supporting" sections are expected and welcome — the audience wants to understand the "why". Aim for 2-4 sentences per analytical section when evidence supports it.'
-        : 'Maintain a clear, balanced structure. "analysis" sections should be concise but substantive — 2-3 sentences each.';
+        : isLonger
+          ? 'Maintain a clear, authoritative structure. Fully elaborate on context, background facts, and analytical insights so the narration comfortably spans the full runtime without trailing off early.'
+          : 'Maintain a clear, balanced structure. "analysis" sections should be concise but substantive — 2-3 sentences each.';
 
   return [
     '',
@@ -150,20 +155,37 @@ function buildScriptGenreGuidance(genre: ContentGenre): string {
  */
 export function buildScriptSystemPrompt(targetSeconds = 60, genre?: ContentGenre, customPrompt?: string): string {
   const targetWords = Math.round((targetSeconds / 60) * 150);
-  const base = `You are a short-form video scriptwriter (TikTok, YouTube Shorts, Instagram Reels) specializing in original editorial content.
+  const isLonger = targetSeconds > 60;
 
-You transform a viral moment + a chosen content angle into an ORIGINAL narration script. The script must provide substantive editorial value — context, commentary, analysis, explanation — and must NOT simply repeat or re-cut the source.
+  const lengthGuideline = isLonger
+    ? `Target narration length: approximately ${targetSeconds} seconds at 150 words per minute (~${targetWords} words total). The selected video footage is ${targetSeconds} seconds long; your voiceover narration MUST comfortably fill this entire duration (~${targetWords} words). Do not write a short summary that leaves the video silent or prematurely ends. Elaborate on the context, chronological story developments, quotes, and analytical implications so that viewers are guided through all ${targetSeconds} seconds.`
+    : `Target narration length: approximately ${targetSeconds} seconds at 150 words per minute (~${targetWords} words total). Write only as much as the available facts support — never pad with generic commentary to reach the target.`;
 
-Target narration length: approximately ${targetSeconds} seconds at 150 words per minute (~${targetWords} words total). Write only as much as the available facts support — never pad with generic commentary to reach the target.
-
-Structure the script in this order:
+  const structureGuideline = isLonger
+    ? `Structure the script in this order (expanded for ${targetSeconds}s / ~${targetWords} words):
+- "hook" — a strong curiosity-driven opening (1-2 sentences, ~2-4s). When the story supplies a HOOK MOMENT or quotable lines, open on the most surprising/emotional detail. If a MANDATORY HOOK is supplied, use/translate it naturally.
+- "context" — set up the situation and backstory thoroughly (2-4 sentences).
+- "source" — reference the source moment: quote the key line verbatim in "sourceQuote" AND weave it naturally into "text" with a substantive lead-in (1-2 sentences).
+- "commentary" — your original perspective on why this happened and why it matters (3-6 sentences).
+- "analysis" — deeper breakdown, tactical/editorial implications, and causes (3-6 sentences).
+- "supporting" — an extra fact, comparison, or background detail that reinforces the point (2-4 sentences).
+- "conclusion" — a memorable closing that lands the core message (1-2 sentences), designed to seamlessly loop back to the hook.`
+    : `Structure the script in this order:
 - "hook" — a strong curiosity-driven opening (1-2 sentences). When the story supplies a HOOK MOMENT or quotable lines, build the hook from them: open on the most surprising/emotional/controversial detail, not on the beginning of the chronology. Keep the hook tight enough to read within the first 2-3 seconds of the video. If a MANDATORY HOOK is supplied in the input, use that text as the opening hook: if its language matches the target script language, use it verbatim; if its language differs from the target language (e.g. English hook with Indonesian target language), translate/adapt it naturally into the target language so the voiceover narration and subtitles flow seamlessly in one unified language. Write the rest of the script so it flows naturally from that opening.
 - "context" — briefly set up the situation (1-2 sentences).
 - "source" — reference the source moment: quote the single most important line from the moment verbatim in "sourceQuote" AND include that same quote naturally in "text" with one short bridging sentence. The "text" field is what the TTS reads.
 - "commentary" — your original take on why this matters (2-4 sentences).
 - "analysis" — deeper interpretation, implications, or explanation (2-4 sentences).
 - "supporting" — an extra fact, comparison, or example that strengthens the analysis (1-3 sentences). OPTIONAL: omit this section entirely (do not include the key at all) when the available transcript evidence does not support an additional point.
-- "conclusion" — a memorable closing that lands the point (1-2 sentences). For maximum short-form retention, construct the final sentence so it functions as a seamless loop that grammatically and thematically flows directly back into the opening hook line when the video replays.
+- "conclusion" — a memorable closing that lands the point (1-2 sentences). For maximum short-form retention, construct the final sentence so it functions as a seamless loop that grammatically and thematically flows directly back into the opening hook line when the video replays.`;
+
+  const base = `You are a short-form video scriptwriter (TikTok, YouTube Shorts, Instagram Reels) specializing in original editorial content.
+
+You transform a viral moment + a chosen content angle into an ORIGINAL narration script. The script must provide substantive editorial value — context, commentary, analysis, explanation — and must NOT simply repeat or re-cut the source.
+
+${lengthGuideline}
+
+${structureGuideline}
 
 TEXT vs SPOKEN TEXT (crucial for subtitle display and TTS audio clarity):
 In each section, provide both "text" and "spokenText":
@@ -204,7 +226,7 @@ Return ONLY valid JSON matching this exact schema, with no other text, no Markdo
 }
 `;
   let prompt = base;
-  if (genre) prompt += buildScriptGenreGuidance(genre);
+  if (genre) prompt += buildScriptGenreGuidance(genre, targetSeconds);
   if (customPrompt) prompt += buildCustomPromptGuidance(customPrompt);
   return prompt;
 }
@@ -253,8 +275,11 @@ export interface TranscriptSegmentLike {
   text: string;
 }
 
-/** Builds the user prompt containing the angle + moment transcript. */
+/** Builds the user prompt for the original-script generation stage. */
 export function buildScriptUserPrompt(context: ScriptContext): string {
+  const targetSec = context.targetDurationSeconds ?? 60;
+  const targetWords = Math.round((targetSec / 60) * 150);
+
   const lines = [
     ...(context.targetLanguage
       ? [
@@ -278,7 +303,12 @@ export function buildScriptUserPrompt(context: ScriptContext): string {
         '',
         `User Selected Multi-Clip Sequence (${context.selectedClips.length} clips):`,
         ...context.selectedClips.map((c, i) => `Clip ${i + 1}: [${c.start.toFixed(2)}s -> ${c.end.toFixed(2)}s] ${c.title ? `("${c.title}")` : ''}`),
-        'Write a continuous voiceover narration that bridges these selected moments chronologically, creating smooth narrative transitions between them.',
+        `Total sequence duration: approximately ${targetSec} seconds (~${targetWords} words total). Write a continuous voiceover narration that bridges these selected moments chronologically, creating smooth narrative transitions between them and pacing the narration to comfortably fill the full ~${targetSec}s duration.`,
+      ]
+      : targetSec !== 60
+      ? [
+        '',
+        `Target footage duration: approximately ${targetSec} seconds (~${targetWords} words total). Ensure narration length and pacing matches this duration.`,
       ]
       : []),
     '',
