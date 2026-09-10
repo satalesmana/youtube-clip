@@ -205,6 +205,14 @@ function validateTranscriptGrounding(sections: ScriptSection[], context: ScriptC
   const transcript = [...context.momentSegments, ...(context.contextSegments ?? [])]
     .map((segment) => normalizeForMatch(segment.text))
     .join(' ');
+
+  // Bypass grounding validation if the transcript is effectively empty and we have 
+  // an alternative source of context (customPrompt) or a genre that commonly lacks speech.
+  if (!transcript.trim() && (context.genre === 'match-highlight' || context.customPrompt)) {
+    logger?.info({ genre: context.genre, hasCustomPrompt: !!context.customPrompt }, 'Bypassing transcript grounding validation due to empty transcript');
+    return;
+  }
+
   const groundedTypes = new Set(['context', 'source', 'commentary', 'analysis', 'supporting']);
   const evidenceUsed = new Set<string>();
 
