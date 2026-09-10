@@ -128,6 +128,10 @@ interface OpenAiWhisperSegment {
 interface OpenAiWhisperResponse {
   language?: string;
   duration?: number;
+  text?: string;
+  transcription?: string;
+  transcript?: string;
+  words?: OpenAiWhisperWord[];
   segments?: OpenAiWhisperSegment[];
 }
 
@@ -139,7 +143,9 @@ function isRealWordToken(text: string): boolean {
 
 // ── OpenAI STT oversized-audio chunking ─────────────────────────────────
 // The /audio/transcriptions endpoint rejects uploads above 25 MB (HTTP 413).
-const DEFAULT_MAX_UPLOAD_MB = 24;
+// However, very long files (even if < 25 MB) can cause OpenAI's API to hang or
+// timeout on their end. We force chunking at 8 MB (~16 mins) for stability.
+const DEFAULT_MAX_UPLOAD_MB = 8;
 /** MP3 bitrate used for chunk files — 64 kbps mono is plenty for STT. */
 const CHUNK_BITRATE_KBPS = 64;
 /** Headroom multiplier so chunks never flirt with the exact limit. */
@@ -165,7 +171,7 @@ export class WhisperService implements IWhisperService {
   constructor(
     private readonly options: WhisperServiceOptions,
     private readonly logger: Logger,
-  ) {}
+  ) { }
 
   async transcribe(
     audioPath: string,
@@ -356,7 +362,7 @@ export class WhisperService implements IWhisperService {
     if (!baseUrl || !apiKey) {
       throw AppError.validation(
         'OpenAI STT requires OPENAI_WHISPER_BASE_URL and OPENAI_WHISPER_API_KEY ' +
-          '(or STT via a local provider like faster-whisper).',
+        '(or STT via a local provider like faster-whisper).',
       );
     }
 
@@ -371,8 +377,8 @@ export class WhisperService implements IWhisperService {
     if (!this.options.openai?.ffmpegBinaryPath) {
       throw AppError.internal(
         `Audio "${audioPath}" is ${(size / 1024 / 1024).toFixed(1)} MB, above the ` +
-          `${(maxBytes / 1024 / 1024).toFixed(0)} MB STT upload limit, but no FFmpeg binary is ` +
-          'configured to split it. Set FFMPEG_BINARY_PATH.',
+        `${(maxBytes / 1024 / 1024).toFixed(0)} MB STT upload limit, but no FFmpeg binary is ` +
+        'configured to split it. Set FFMPEG_BINARY_PATH.',
       );
     }
 
@@ -453,7 +459,7 @@ export class WhisperService implements IWhisperService {
     if (!baseUrl || !apiKey) {
       throw AppError.validation(
         'OpenAI STT requires OPENAI_WHISPER_BASE_URL and OPENAI_WHISPER_API_KEY ' +
-          '(or STT via a local provider like faster-whisper).',
+        '(or STT via a local provider like faster-whisper).',
       );
     }
 
@@ -461,11 +467,12 @@ export class WhisperService implements IWhisperService {
 
     // Cascade: some endpoints/models reject `verbose_json` or word-level
     // granularity (e.g. whisper-1 or gateway-routed models). Degrade
-    // gracefully: verbose_json+word → verbose_json → plain json.
+    // gracefully: verbose_json+word → verbose_json+segment → verbose_json (standard whisper-large-v3) → plain json.
     const attempts: { response_format: string; wordTimestamps: boolean; granularity: string[] }[] =
       [
         { response_format: 'verbose_json', wordTimestamps: true, granularity: ['word', 'segment'] },
         { response_format: 'verbose_json', wordTimestamps: false, granularity: ['segment'] },
+        { response_format: 'verbose_json', wordTimestamps: false, granularity: [] },
         { response_format: 'json', wordTimestamps: false, granularity: [] },
       ];
 
@@ -486,10 +493,22 @@ export class WhisperService implements IWhisperService {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}` },
         body: form,
+        signal: AbortSignal.timeout(300000), // 5 minute hard timeout
       });
 
       if (response.ok) {
-        return this.normalizeOpenAiResponse((await response.json()) as OpenAiWhisperResponse);
+        const payload = (await response.json()) as OpenAiWhisperResponse;
+        this.logger.info(
+          {
+            hasSegments: Array.isArray(payload.segments) && payload.segments.length > 0,
+            segmentCount: payload.segments?.length ?? 0,
+            hasWords: Array.isArray(payload.words) && payload.words.length > 0,
+            wordCount: payload.words?.length ?? 0,
+            hasText: Boolean(payload.text || payload.transcription || payload.transcript),
+          },
+          'Received OpenAI STT response',
+        );
+        return this.normalizeOpenAiResponse(payload);
       }
 
       lastError = new Error(
@@ -508,22 +527,148 @@ export class WhisperService implements IWhisperService {
 
   /** Normalizes an OpenAI audio/transcriptions payload into TranscriptResult. */
   private normalizeOpenAiResponse(raw: OpenAiWhisperResponse): TranscriptResult {
-    const segments: TranscriptSegment[] = (raw.segments ?? []).map((segment) => ({
-      start: segment.start,
-      end: segment.end,
-      text: segment.text.trim(),
-      words: segment.words?.map((word): WordTimestamp => ({
-        word: word.word.trim(),
-        start: word.start,
-        end: word.end,
-      })),
-    }));
+    // 1. Direct segments from raw.segments if available
+    let segments: TranscriptSegment[] = (raw.segments ?? [])
+      .map((segment) => ({
+        start: segment.start,
+        end: segment.end,
+        text: segment.text.trim(),
+        words: segment.words?.map((word): WordTimestamp => ({
+          word: word.word.trim(),
+          start: word.start,
+          end: word.end,
+        })),
+      }))
+      .filter((s) => s.text.length > 0);
+
+    // 2. Fallback: if segments is empty, but root-level words exist
+    if (segments.length === 0 && raw.words && raw.words.length > 0) {
+      this.logger.info({ wordCount: raw.words.length }, 'Synthesizing segments from OpenAI root-level words array');
+      segments = this.buildSegmentsFromWords(raw.words);
+    }
+
+    // 3. Fallback: if still empty, but text exists (e.g. from plain json or third-party gateways)
+    const rawText = (
+      raw.text ??
+      raw.transcription ??
+      raw.transcript ??
+      (raw as Record<string, unknown>).data?.toString() ??
+      ''
+    ).trim();
+
+    if (segments.length === 0 && rawText.length > 0) {
+      this.logger.warn(
+        { textLength: rawText.length, duration: raw.duration },
+        'Synthesizing segments from raw text (no segment timestamps provided in OpenAI response)',
+      );
+      segments = this.buildSegmentsFromText(rawText, raw.duration);
+    }
+
+    const durationSeconds = raw.duration && raw.duration > 0
+      ? raw.duration
+      : segments.at(-1)?.end ?? 0;
 
     return {
       language: raw.language ?? this.options.language,
-      durationSeconds: raw.duration ?? segments.at(-1)?.end ?? 0,
+      durationSeconds,
       segments,
     };
+  }
+
+  /** Groups flat word timestamps into natural sentences/segments. */
+  private buildSegmentsFromWords(words: OpenAiWhisperWord[]): TranscriptSegment[] {
+    const segments: TranscriptSegment[] = [];
+    let currentWords: WordTimestamp[] = [];
+    let currentText: string[] = [];
+
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const wordText = w.word.trim();
+      if (!wordText) continue;
+
+      currentWords.push({
+        word: wordText,
+        start: w.start,
+        end: w.end,
+      });
+      currentText.push(wordText);
+
+      const isPunctuationEnd = /[.?!…\n]$/.test(wordText);
+      const nextWord = words[i + 1];
+      const hasPause = nextWord ? nextWord.start - w.end >= 0.8 : false;
+      const isLongEnough = currentWords.length >= 12;
+
+      if (isPunctuationEnd || hasPause || isLongEnough || i === words.length - 1) {
+        segments.push({
+          start: currentWords[0].start,
+          end: currentWords[currentWords.length - 1].end,
+          text: currentText.join(' ').replace(/\s+([.,?!])/g, '$1'),
+          words: [...currentWords],
+        });
+        currentWords = [];
+        currentText = [];
+      }
+    }
+
+    return segments;
+  }
+
+  /** Splits raw text into sentence-level segments with estimated proportional timestamps. */
+  private buildSegmentsFromText(text: string, duration?: number): TranscriptSegment[] {
+    const sentences = text
+      .split(/(?<=[.?!…\n])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (sentences.length === 0) {
+      if (text.trim().length > 0) sentences.push(text.trim());
+      else return [];
+    }
+
+    const chunks: string[] = [];
+    for (const s of sentences) {
+      const words = s.split(/\s+/);
+      if (words.length <= 25) {
+        chunks.push(s);
+      } else {
+        for (let i = 0; i < words.length; i += 15) {
+          chunks.push(words.slice(i, i + 15).join(' '));
+        }
+      }
+    }
+
+    const totalChars = chunks.reduce((acc, c) => acc + c.length, 0);
+    // Rough speaking rate: ~15 characters per second if duration not given
+    const effectiveDuration = duration && duration > 0 ? duration : Math.max(1, totalChars / 15);
+
+    const segments: TranscriptSegment[] = [];
+    let currentTime = 0;
+
+    for (const chunk of chunks) {
+      const chunkRatio = totalChars > 0 ? chunk.length / totalChars : 1 / chunks.length;
+      const chunkDuration = Math.max(0.5, chunkRatio * effectiveDuration);
+      const start = currentTime;
+      const end = Math.min(effectiveDuration, currentTime + chunkDuration);
+
+      const words = chunk.split(/\s+/).filter(Boolean);
+      const wordDuration = words.length > 0 ? (end - start) / words.length : 0;
+      const wordTimestamps: WordTimestamp[] = words.map((w, idx) => ({
+        word: w,
+        start: Number((start + idx * wordDuration).toFixed(2)),
+        end: Number((start + (idx + 1) * wordDuration).toFixed(2)),
+      }));
+
+      segments.push({
+        start: Number(start.toFixed(2)),
+        end: Number(end.toFixed(2)),
+        text: chunk,
+        words: wordTimestamps,
+      });
+
+      currentTime = end;
+    }
+
+    return segments;
   }
 
   /** Parses `extraArgs` shell string into an array, returning `[]` when empty. */

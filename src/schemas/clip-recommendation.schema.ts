@@ -33,6 +33,13 @@ export const clipRecommendRequestSchema = z.object({
    * `selectedClips` instead of LLM-based highlight detection.
    */
   genre: z.enum(['podcast', 'sports', 'gaming', 'tutorial', 'commentary', 'entertainment', 'match-highlight']).optional(),
+  /**
+   * Clip detection method:
+   * - 'auto': Try transcript LLM first; if empty or zero clips, fallback to audio spike detection.
+   * - 'transcript': Strict transcript LLM analysis only.
+   * - 'audio-spike': Direct FFmpeg audio loudness spike detection (best for crowd roars / goals).
+   */
+  detectionMethod: z.enum(['auto', 'transcript', 'audio-spike']).default('auto').optional(),
 }).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
   message: 'Provide exactly one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

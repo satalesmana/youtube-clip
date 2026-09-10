@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { AppError } from '../utils/errors.js';
 import { extractVideoIdFromUrl } from '../utils/youtube-id.js';
 import { createJobWorkspace } from '../utils/workspace.js';
@@ -80,16 +80,32 @@ export class TranscriptController {
       );
     }
 
-    logger.info({ videoId }, 'Downloading video and transcribing audio for transcript view/edit');
     const job = await createJobWorkspace(this.deps.outputsDir, videoId);
-    const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
+
+    // Check if video file is already downloaded in workspace before re-fetching
+    let videoPath: string | undefined;
+    for (const ext of ['mp4', 'mkv', 'webm', 'mov']) {
+      const candidate = join(job.downloads, `${videoId}.${ext}`);
+      if (await access(candidate).then(() => true).catch(() => false)) {
+        videoPath = candidate;
+        break;
+      }
+    }
+
+    if (videoPath) {
+      logger.info({ videoId, videoPath }, 'Using existing downloaded video for transcript view/edit');
+    } else {
+      logger.info({ videoId }, 'Downloading video and transcribing audio for transcript view/edit');
+      const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
+      videoPath = download.videoPath;
+    }
 
     const { createWhisperServiceWith } = await import('../container/index.js');
     const whisperService = request.sttProvider
       ? createWhisperServiceWith(request.sttProvider)
       : this.deps.whisperService;
 
-    const audio = await this.deps.transcriptService.extractAudio(download.videoPath, videoId, job);
+    const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, job);
     const whisperResult = await whisperService.transcribe(audio.audioPath, job);
 
     const transcriptDoc: TranscriptDocument = {

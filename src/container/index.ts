@@ -614,6 +614,7 @@ export const clipController = new ClipController({
   previewRenderer,
   outputsDir: paths.outputs,
   logger: createLogger('clips.controller'),
+  ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
 });
 
 /** Entry point for `GET /api/transcript` and `POST /api/transcript/update`. */

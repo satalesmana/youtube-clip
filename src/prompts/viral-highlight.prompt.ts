@@ -10,34 +10,84 @@ import type { TranscriptChunk } from '../types/transcript.js';
  * hallucination. Duration bounds are injected from config so the prompt can
  * never contradict the clamp/min-filter applied later in the pipeline.
  */
-export function buildViralHighlightSystemPrompt(options: {
-  minSeconds: number;
-  maxSeconds: number;
-  language?: string;
-}): string {
-  return `You are a viral content strategist for short-form video (TikTok, YouTube Shorts, Instagram Reels).
+function getGenreClipCriteria(genre?: string): string {
+  switch (genre) {
+    case 'match-highlight':
+    case 'sports':
+      return `For sports and match highlights:
+- Identify EVERY key event and scoring opportunity in the commentary: GOALS, penalty kicks, dangerous shots on goal, spectacular saves, red cards, or intense crowd/commentary surges.
+- Each goal or key event MUST be isolated as its own separate candidate clip (covering the lead-up, the goal/action itself, and the celebration/commentary reaction).
+- DO NOT discard clips just because commentary is brief (e.g. shouting player names or "GOAL!"). In sports, short explosive moments ARE the most viral clips.
+- Score clips based on game-changing significance, excitement, and reaction intensity.`;
 
-You analyze a TRANSCRIPT ONLY — you cannot see video frames or hear audio. Judge every moment purely by what is said and how it reads as text. Never claim to detect visual events (goals, crashes, replays, gestures); when a moment seems visual, rely only on spoken words that describe it.
+    case 'podcast':
+      return `For podcasts and long-form interviews:
+- Target "aha" revelations, deeply vulnerable personal stories, counterintuitive insights, or controversial statements.
+- Prioritize segments where the guest speaks with high emotional authenticity or reveals an insider secret.
+- Must open with a strong curiosity gap in the first 3 seconds.
+- Score clips based on intellectual intrigue, quotability, and emotional resonance.`;
 
-Your task: identify the moments with the highest probability of becoming viral short-form clips. Every clip you return must last between ${options.minSeconds} and ${options.maxSeconds} seconds.${languageMetadataInstruction(options.language)}
+    case 'gaming':
+      return `For gaming and esports:
+- Focus on clutch plays, unbelievable skill moments, hilarious fails, sudden rage/hype reactions, plot twists, or final boss victories.
+- Prioritize high-energy commentary, fast pacing, and triumphant or chaotic payoffs.
+- Score clips based on hype factor, humor, and jaw-dropping gameplay intensity.`;
 
-A strong clip:
+    case 'tutorial':
+      return `For tutorials and educational content:
+- Pinpoint the single most actionable "golden nugget", secret tip, common mistake to avoid, or productivity hack.
+- The clip must feel immediately useful: clear problem → unexpected solution → instant value.
+- Avoid slow setup; extract the exact portion where the breakthrough technique is demonstrated.
+- Score clips based on practical utility, clarity, and "mind-blown" factor.`;
+
+    case 'commentary':
+      return `For news commentary and explainers:
+- Identify bold opinions, provocative hot takes, expose of hidden truths, or dismantling of popular misconceptions.
+- Focus on compelling arguments with high contrast, sharp rhetoric, or debate-triggering conclusions.
+- Score clips based on controversy potential, persuasive power, and discussion-generating value.`;
+
+    case 'entertainment':
+      return `For entertainment, comedy, and lifestyle:
+- Extract laugh-out-loud punchlines, shocking surprises, relatable awkward moments, or intense emotional interactions.
+- Prioritize spontaneous personality, charisma, and funny reactions described in speech.
+- Score clips based on pure amusement, shareability, and viral watch-to-the-end appeal.`;
+
+    default:
+      return `A strong clip:
 - Opens with a powerful hook within the first few seconds.
 - Creates curiosity immediately.
 - Is emotionally engaging, surprising, or counterintuitive.
 - Teaches something valuable or reframes how the viewer sees a topic.
 - Tells a complete mini-story: setup → tension → payoff.
-- Contains a quotable line worth captioning.
+- Contains a quotable line worth captioning.`;
+  }
+}
+
+export function buildViralHighlightSystemPrompt(options: {
+  minSeconds: number;
+  maxSeconds: number;
+  language?: string;
+  genre?: string;
+}): string {
+  const criteria = getGenreClipCriteria(options.genre);
+
+  return `You are a viral content strategist for short-form video (TikTok, YouTube Shorts, Instagram Reels).
+
+You analyze a TRANSCRIPT ONLY — you cannot see video frames or hear audio. Judge every moment purely by what is said and how it reads as text. When a moment seems visual, rely on spoken words, excitement, player mentions, and commentary that describe it.
+
+Your task: identify the moments with the highest probability of becoming viral short-form clips. Every clip you return must last between ${options.minSeconds} and ${options.maxSeconds} seconds.${languageMetadataInstruction(options.language)}
+
+${criteria}
 
 Avoid segments that:
 - Are sponsorships, promotions, or calls-to-action.
 - Repeat content that appears elsewhere in the video.
 - Open with long introductions or small talk.
-- Only work on screen (visual gags the transcript does not describe).
+- Only work on screen without any commentary reaction.
 
 Scoring — use the full 0-100 scale consistently:
-- 90-100: exceptional, can't-scroll-past moment.
-- 70-89: strong clip, clear hook and payoff.
+- 90-100: exceptional, can't-scroll-past moment (e.g. decisive goal, stunning climax).
+- 70-89: strong clip, clear hook, goal or payoff.
 - 50-69: good but flawed (slow open, missing payoff).
 - Below 50: weak; only return these if nothing better exists in the excerpt.
 Do NOT inflate every candidate; an honest spread makes ranking meaningful.
@@ -70,21 +120,43 @@ export function buildViralHighlightUserPrompt(chunk: TranscriptChunk): string {
 
 // ── Second pass: global rerank of the top candidates ────────────────────────
 
+function getGenreRerankGuidance(genre?: string): string {
+  switch (genre) {
+    case 'match-highlight':
+    case 'sports':
+      return `\nSpecial rule for sports / match-highlight: Retain EVERY distinct goal, penalty, and major match incident as separate individual clips. Do not discard goals just because the spoken text is short or concise.\n`;
+    case 'podcast':
+      return `\nSpecial rule for podcasts: Prioritize deep curiosity hooks, profound "aha" moments, and quotable insights over mundane conversational banter.\n`;
+    case 'gaming':
+      return `\nSpecial rule for gaming: Prioritize clutch plays, hype reactions, and comedic fails over slow gameplay walkthrough sections.\n`;
+    case 'tutorial':
+      return `\nSpecial rule for tutorials: Prioritize actionable, punchy tips that deliver standalone breakthrough value.\n`;
+    case 'commentary':
+      return `\nSpecial rule for commentary: Prioritize strong, debate-provoking arguments and bold revelations.\n`;
+    case 'entertainment':
+      return `\nSpecial rule for entertainment: Prioritize maximum comedic timing, emotional peaks, and shareable punchlines.\n`;
+    default:
+      return '';
+  }
+}
+
 /**
  * System prompt for the rerank pass. First-pass analysis judges each chunk in
  * isolation; this pass sees ALL surviving candidates side by side and picks
  * the true best-of-the-video set.
  */
-export function buildRerankSystemPrompt(language?: string): string {
-  return `You are a senior short-form video editor selecting the final clip lineup for a video.
+export function buildRerankSystemPrompt(language?: string, genre?: string): string {
+  const genreGuidance = getGenreRerankGuidance(genre);
 
+  return `You are a senior short-form video editor selecting the final clip lineup for a video.
+${genreGuidance}
 You are given candidate clips that were found by scanning a long transcript chunk-by-chunk. Each candidate was judged in isolation, so scores are NOT comparable yet. Your job: compare all candidates against EACH OTHER and return only the ones strong enough to publish, ordered by real potential.
 
 Consider for every candidate:
 - Hook strength: does the opening line stop a scroll?
-- Complete arc: setup → tension → payoff within the clip.
+- Complete arc or action: high-intensity action, goal, or payoff within the clip.
 - Quotability and emotional punch.
-- Distinctness: drop near-duplicates that cover the same moment or make the same point.
+- Distinctness: drop near-duplicates that cover the same moment or make the same point. Keep distinct events (different goals/plays) as separate clips.
 - Honesty of the original claim: downgrade candidates whose "reason" oversells a boring stretch.
 
 Return ONLY the candidates you would publish — dropping weak ones is expected and desired. Return 3-8 of the strongest clips; dropping below 3 is acceptable only when the video genuinely lacks strong moments. Give each survivor a fresh, calibrated score on the full 0-100 scale reflecting this global comparison. You may sharpen "title", "reason" and "hook" but never invent facts that are not supported by the excerpts.${languageMetadataInstruction(language)}

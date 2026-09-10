@@ -125,18 +125,18 @@
 
     <!-- ============ TAB: TRANSFORM ============ -->
     <section id="tab-transform" class="tab-panel">
+      
+      <!-- PHASE 1: Sumber & Pengaturan Dasar -->
       <div class="card">
         <div class="card-head">
-          <h2>✨ Transformasi Konten</h2>
-          <p class="muted">Masukkan URL YouTube — sistem akan generate script orisinal, narasi TTS, dan render video 9:16.</p>
+          <h2>1️⃣ Sumber &amp; Pengaturan Dasar</h2>
+          <p class="muted">Masukkan URL YouTube dan atur parameter bahasa serta genre video.</p>
         </div>
         <div class="transform-controls">
 
           <!-- ═══ STEP 1: Sumber Video ═══ -->
           <div class="workflow-section">
-            <div class="workflow-label">
-              <span class="step-num">1</span> Sumber Video
-            </div>
+            <div class="workflow-label">Sumber Video</div>
             <div class="input-group">
               <input type="url" id="transform-url" placeholder="Tempel URL YouTube di sini…" />
             </div>
@@ -144,9 +144,7 @@
 
           <!-- ═══ STEP 2: Bahasa Output & Genre ═══ -->
           <div class="workflow-section" id="language-genre-section">
-            <div class="workflow-label">
-              <span class="step-num">2</span> Bahasa Output &amp; Genre
-            </div>
+            <div class="workflow-label">Bahasa Output &amp; Genre</div>
             <div class="form-row">
               <div class="input-group">
                 <label class="label-main">Bahasa Target (TTS &amp; Hook)</label>
@@ -179,7 +177,7 @@
             <div class="form-row" style="margin-top: 10px;">
               <div class="input-group full">
                 <label class="label-main">Instruksi / Tone Tambahan <span class="optional-label">(opsional)</span></label>
-                <input type="text" id="transform-custom-prompt" placeholder="Contoh: Fokus ke momen lucu, gaya sarkas/humoris, tekankan pelajaran inti, gaya santai Gen-Z" />
+                <textarea id="transform-custom-prompt" rows="3" style="resize: vertical; min-height: 85px; line-height: 1.5;" placeholder="Contoh: Fokus ke momen lucu, gaya sarkas/humoris, tekankan pelajaran inti, atau masukkan fakta kronologis pertandingan (misal: urutan pencetak gol, menit penting, pemain bintang)..."></textarea>
                 <p class="stt-hint muted small">
                   Kustomisasi gaya narasi atau fokus konten sesuai keinginan Anda. AI akan memprioritaskan instruksi ini dalam pembuatan hook, angle, naskah, dan caption.
                 </p>
@@ -189,9 +187,7 @@
 
           <!-- ═══ STEP 3: Mesin Transkrip (STT) & Editor ═══ -->
           <div class="workflow-section" id="stt-engine-section">
-            <div class="workflow-label">
-              <span class="step-num">3</span> Mesin Transkrip (STT) &amp; Editor
-            </div>
+            <div class="workflow-label">Mesin Transkrip (STT) &amp; Editor</div>
             <div class="form-row">
               <div class="input-group">
                 <select id="transform-stt-provider">
@@ -299,12 +295,34 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
+      <!-- PHASE 2: Seleksi Momen & Hook -->
+      <div class="card">
+        <div class="card-head">
+          <h2>2️⃣ Seleksi Momen &amp; Hook</h2>
+          <p class="muted">Gunakan AI untuk menemukan bagian terbaik atau susun manual.</p>
+        </div>
+        <div class="transform-controls">
           <!-- ═══ STEP 4: Rekomendasi Klip Viral ═══ -->
           <div class="workflow-section">
             <div class="workflow-label">
-              <span class="step-num">4</span> Rekomendasi Klip Viral
+              Rekomendasi Klip Viral
               <span class="optional-label">(opsional — untuk mode Reel)</span>
+            </div>
+            <div class="form-row" style="margin-bottom: 12px;">
+              <div class="input-group full">
+                <label class="label-main">Metode Deteksi Klip</label>
+                <select id="clip-detection-method">
+                  <option value="auto" selected>🤖 Auto (Transkrip + Fallback Gemuruh Suara)</option>
+                  <option value="transcript">📝 Analisis Transkrip Teks (LLM)</option>
+                  <option value="audio-spike">🔊 Lonjakan Suara Stadion / Gemuruh Gol (FFmpeg)</option>
+                </select>
+                <p class="stt-hint muted small">
+                  Pilih metode pencarian klip. Gunakan opsi <strong>Lonjakan Suara</strong> jika video hanya memuat sorakan/gemuruh penonton tanpa narasi.
+                </p>
+              </div>
             </div>
             <button class="btn secondary" id="btn-gen-clips">
               🔥 Generate Klip Viral
@@ -336,7 +354,7 @@
           <!-- ═══ STEP 5: Hook ═══ -->
           <div class="workflow-section">
             <div class="workflow-label">
-              <span class="step-num">5</span> Rekomendasi Hook
+              Rekomendasi Hook
               <span class="optional-label">(opsional)</span>
             </div>
             <button class="btn secondary" id="btn-gen-hooks">
@@ -358,12 +376,19 @@
               <p class="muted small">Klik salah satu hook untuk memakainya — hook akan dipakai sebagai custom hook & range footage sumber.</p>
             </div>
           </div>
+        </div>
+      </div>
 
+      <!-- PHASE 3: Audio, Naskah & Branding -->
+      <div class="card">
+        <div class="card-head">
+          <h2>3️⃣ Audio, Naskah &amp; Branding</h2>
+          <p class="muted">Tentukan bagaimana hasil akhir akan terdengar dan ditampilkan.</p>
+        </div>
+        <div class="transform-controls">
           <!-- ═══ STEP 6: Mode Output ═══ -->
           <div class="workflow-section">
-            <div class="workflow-label">
-              <span class="step-num">6</span> Mode Output
-            </div>
+            <div class="workflow-label">Mode Output</div>
             <div class="form-row">
               <div class="input-group">
                 <select id="transform-output-mode">
@@ -372,7 +397,6 @@
                 </select>
               </div>
             </div>
-            <!-- Hint khusus mode Reel: pengaturan narasi disembunyikan karena tidak dipakai. -->
             <p class="muted small hidden" id="reel-mode-hint">
               Mode Reel: klip terpilih digabung langsung dengan audio aslinya —
               engine, STT, bahasa, dan TTS tidak dipakai.
@@ -382,7 +406,7 @@
           <!-- ═══ STEP 6b: Mode Audio ═══ -->
           <div class="workflow-section" id="audio-mode-section">
             <div class="workflow-label">
-              <span class="step-num">6b</span> Mode Audio
+              Mode Audio
               <span class="optional-label">(opsional)</span>
             </div>
 
@@ -419,21 +443,15 @@
               <p class="stt-hint muted small">Volume crowd / musik / SFX asli saat di-mix dengan narasi TTS. Nilai lebih rendah = narasi lebih dominan.</p>
             </div>
 
-            <!-- Hint yang berubah sesuai mode -->
             <p class="stt-hint muted small" id="audio-mode-hint">
               Audio asli video dihapus dan diganti sepenuhnya dengan narasi TTS.
             </p>
           </div>
 
-          <!-- Narasi-only settings (Step 7-8): tidak dipakai di mode Reel
-               (tanpa LLM/TTS/template). Wrapper ini di-toggle hidden oleh
-               applyOutputModeVisibility() sehingga kedua section ikut hilang. -->
           <div id="narration-settings">
             <!-- ═══ STEP 7: Pengaturan TTS Voice ═══ -->
             <div class="workflow-section">
-              <div class="workflow-label">
-                <span class="step-num">7</span> Pengaturan Suara (TTS Voice)
-              </div>
+              <div class="workflow-label">Pengaturan Suara (TTS Voice)</div>
               <div class="form-row-3">
                 <div class="input-group">
                   <label class="label-main">TTS Provider</label>
@@ -462,11 +480,9 @@
             <!-- ═══ STEP 8: Draf Naskah & Editor Narasi TTS ═══ -->
             <div class="workflow-section" id="script-editor-section">
               <div class="workflow-label">
-                <span class="step-num">8</span> Draf Naskah &amp; Editor Narasi TTS
+                Draf Naskah &amp; Editor Narasi TTS
                 <span class="optional-label">(opsional — edit naskah sebelum render)</span>
               </div>
-
-              <!-- Action buttons to draft script -->
               <div class="script-action-bar">
                 <button type="button" class="btn secondary" id="btn-gen-script">
                   ✨ Draf Naskah AI
@@ -476,8 +492,6 @@
                   Draf Naskah AI membuat teks tanpa TTS (hemat kuota). Biarkan kosong jika ingin auto LLM saat transformasi.
                 </span>
               </div>
-
-              <!-- Panel Editor Naskah -->
               <div class="script-editor-panel hidden" id="script-editor-panel">
                 <div class="script-panel-head">
                   <div class="script-panel-title-group">
@@ -490,8 +504,6 @@
                     <button type="button" class="btn small ghost" id="btn-clear-script" title="Bersihkan dan gunakan mode auto LLM">✕ Reset Auto</button>
                   </div>
                 </div>
-
-                <!-- Meta Info Chips Bar -->
                 <div class="script-meta-chips" id="script-meta-chips">
                   <span class="meta-chip" id="chip-script-sections">📑 0 Seksi</span>
                   <span class="meta-chip" id="chip-script-words">💬 ~0 kata</span>
@@ -499,8 +511,6 @@
                   <span class="meta-chip" id="chip-script-voice">🎙️ Voice: —</span>
                   <span class="meta-chip chip-modified" id="chip-script-status">✅ Naskah Kustom Aktif</span>
                 </div>
-
-                <!-- Audio Preview Player Bar (Hidden until synthesized) -->
                 <div class="script-audio-preview hidden" id="script-audio-preview">
                   <div class="audio-preview-head">
                     <span class="audio-label">🔊 Hasil Audio TTS:</span>
@@ -508,13 +518,9 @@
                   </div>
                   <audio id="script-audio-player" controls preload="auto"></audio>
                 </div>
-
-                <!-- Section List Container -->
                 <div class="script-sections-container" id="script-sections-container">
                   <div class="script-loading muted">Belum ada seksi naskah. Klik "Draf Naskah AI" untuk memulai.</div>
                 </div>
-
-                <!-- Footer -->
                 <div class="script-panel-footer">
                   <div class="footer-tip">
                     <span class="tip-icon">💡</span>
@@ -533,7 +539,7 @@
             <!-- ═══ STEP 9: Branding ═══ -->
             <div class="workflow-section">
               <div class="workflow-label">
-                <span class="step-num">9</span> Branding
+                Branding
                 <span class="optional-label">(opsional)</span>
               </div>
               <div class="form-row">
@@ -547,13 +553,20 @@
                 </div>
               </div>
             </div>
-          </div><!-- /narration-settings -->
+          </div>
+        </div>
+      </div>
 
+      <!-- PHASE 4: Finalisasi & Ekspor -->
+      <div class="card">
+        <div class="card-head">
+          <h2>4️⃣ Finalisasi &amp; Ekspor</h2>
+          <p class="muted">Atur konfigurasi akhir dan mulai proses transformasi.</p>
+        </div>
+        <div class="transform-controls">
           <!-- ═══ STEP 10: Opsi Tambahan ═══ -->
           <div class="workflow-section">
-            <div class="workflow-label">
-              <span class="step-num">10</span> Opsi Tambahan
-            </div>
+            <div class="workflow-label">Opsi Tambahan</div>
             <div class="checkbox-row">
               <label class="checkbox-item">
                 <input type="checkbox" id="transform-dry-run" />
@@ -638,11 +651,12 @@
             </div>
           </div>
 
-          <button class="btn primary full" id="btn-transform">
+          <button class="btn primary full" id="btn-transform" style="margin-top:16px;">
             🚀 Mulai Transformasi
             <span class="stt-badge" data-stt-badge></span>
           </button>
         </div>
+        
         <div class="progress hidden" id="transform-progress">
           <div class="progress-bar"><div class="progress-fill" id="transform-progress-fill"></div></div>
           <span class="progress-label" id="transform-progress-label">Mempersiapkan…</span>

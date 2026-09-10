@@ -12,6 +12,7 @@ import type { IHighlightService } from '../services/highlight.service.js';
 import type { IPreviewRenderer } from '../services/preview-renderer.service.js';
 import type { TranscriptDocument } from '../types/transcript.js';
 import type { HighlightClip } from '../types/highlight.js';
+import { detectAudioSpikes } from '../utils/audio-peak.js';
 import type { RerankedClip } from '../schemas/highlight.schema.js';
 import type { ClipRecommendRequestInput } from '../schemas/clip-recommendation.schema.js';
 import type { ViralClipDto } from '../schemas/clip-recommendation.schema.js';
@@ -25,6 +26,7 @@ export interface ClipControllerDeps {
   previewRenderer: IPreviewRenderer;
   outputsDir: string;
   logger: Logger;
+  ffmpegBinaryPath?: string;
 }
 
 /** Persisted result for `POST /api/clips/recommend` (also the GET payload). */
@@ -78,13 +80,39 @@ export class ClipController {
     const { videoId, transcript } = await this.resolveTranscript(request);
     logger.info({ videoId }, 'Viral clip recommendation started');
 
-    // Pass 1: chunk the transcript and analyze each chunk with the LLM.
-    // Metadata language follows the output language so titles/hooks/reasons
-    // arrive localized (empty/'auto' lets the model match the transcript).
+    const method = request.detectionMethod ?? 'auto';
     const language = this.metadataLanguage(request.language);
     const chunks = this.deps.transcriptService.chunkTranscript(transcript);
-    const clipGroups = await this.analyzeChunksConcurrently(chunks, language);
-    const candidates = clipGroups.flat();
+    let clipGroups: HighlightClip[][] = [];
+
+    // Step A: Run transcript LLM analysis unless user strictly selected 'audio-spike'
+    if (method !== 'audio-spike' && chunks.length > 0) {
+      clipGroups = await this.analyzeChunksConcurrently(chunks, language, request.genre);
+    }
+    let candidates = clipGroups.flat();
+
+    // Step B: Run audio spike detection if explicitly requested, or if auto mode found no transcript candidates
+    if (method === 'audio-spike' || (method === 'auto' && candidates.length === 0)) {
+      logger.info(
+        { videoId, method, genre: request.genre },
+        'Running audio energy spike detection for viral clips',
+      );
+      const workspace = await this.workspaceFor(videoId);
+      const audio = await this.deps.transcriptService.extractAudio(this.videoPathFor(videoId), videoId, workspace);
+      const audioSpikeCandidates = await detectAudioSpikes({
+        binaryPath: this.deps.ffmpegBinaryPath,
+        audioPath: audio.audioPath,
+        totalDurationSeconds: transcript.durationSeconds,
+        genre: request.genre,
+        logger,
+      });
+
+      if (audioSpikeCandidates.length > 0) {
+        candidates = audioSpikeCandidates;
+        clipGroups = [candidates];
+      }
+    }
+
     if (candidates.length === 0) {
       throw AppError.llmInvalidResponse(
         'No viral clips could be extracted from this video. Try again or pick a different video.',
@@ -96,9 +124,10 @@ export class ClipController {
     const pool = this.deps.highlightService.mergeAndRank(clipGroups, RERANK_POOL_SIZE);
 
     // Pass 2: compare the pool against itself and drop the ones that only
-    // looked good in isolation. Failures are non-fatal — first-pass ranking
-    // remains usable.
-    const reranked = await this.rerankPool(pool, transcript, language);
+    // looked good in isolation. Only run if we actually have transcript chunks to compare against.
+    const reranked = chunks.length > 0
+      ? await this.rerankPool(pool, transcript, language, request.genre)
+      : null;
     const ranked = this.finalizeRanking(reranked ? [...pool] : pool, reranked);
 
     // Stage: render a lightweight preview per clip (parallel, failures are
@@ -208,6 +237,7 @@ export class ClipController {
     pool: HighlightClip[],
     transcript: TranscriptDocument,
     language?: string,
+    genre?: string,
   ): Promise<RerankedClip[] | null> {
     if (pool.length < RERANK_MIN_CANDIDATES) return null;
 
@@ -224,6 +254,7 @@ export class ClipController {
         candidates,
         excerptById,
         language,
+        genre,
       });
     } catch (err) {
       this.deps.logger.warn({ err }, 'Rerank pass failed — keeping first-pass ranking');
@@ -329,14 +360,20 @@ export class ClipController {
       }
 
       const workspace = await this.workspaceFor(videoId);
-      const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, workspace);
+      let videoPath = savedVideoPath;
+      if (!hasVideo) {
+        const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, workspace);
+        videoPath = download.videoPath;
+      } else {
+        this.deps.logger.info({ videoId, videoPath }, 'Using existing downloaded video from workspace');
+      }
 
       if (!transcript) {
         this.deps.logger.info({ videoId }, 'No transcript found — extracting audio and transcribing');
         const whisperService = request.sttProvider
           ? (await import('../container/index.js')).createWhisperServiceWith(request.sttProvider)
           : this.deps.whisperService;
-        const audio = await this.deps.transcriptService.extractAudio(download.videoPath, videoId, workspace);
+        const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, workspace);
         const whisperResult = await whisperService.transcribe(audio.audioPath, workspace);
         const transcriptDoc: TranscriptDocument = {
           ...whisperResult,
@@ -395,9 +432,10 @@ export class ClipController {
   private async analyzeChunksConcurrently(
     chunks: ReturnType<ITranscriptService['chunkTranscript']>,
     language?: string,
+    genre?: string,
   ): Promise<HighlightClip[][]> {
     const settled = await Promise.allSettled(
-      chunks.map((chunk) => this.deps.ollamaService.analyzeChunk(chunk, language)),
+      chunks.map((chunk) => this.deps.ollamaService.analyzeChunk(chunk, language, genre)),
     );
 
     return settled.flatMap((outcome, index) => {

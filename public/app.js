@@ -706,6 +706,8 @@
         sttProvider: $('#transform-stt-provider').value || undefined,
         // Metadata klip (judul/alasan/hook) mengikuti bahasa output yang dipilih.
         language: $('#transform-lang')?.value || undefined,
+        genre: $('#transform-genre')?.value || undefined,
+        detectionMethod: $('#clip-detection-method')?.value || 'auto',
         refresh,
       });
       renderClips(data);

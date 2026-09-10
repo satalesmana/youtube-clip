@@ -30,7 +30,7 @@ export interface OllamaServiceOptions {
 /** Analyzes transcript chunks with an LLM to find candidate viral clips. */
 export interface IOllamaService {
   /** First pass: scan one transcript chunk for candidate viral clips. */
-  analyzeChunk(chunk: TranscriptChunk, language?: string): Promise<HighlightClip[]>;
+  analyzeChunk(chunk: TranscriptChunk, language?: string, genre?: string): Promise<HighlightClip[]>;
   /**
    * Second pass: compare the pooled top candidates against each other and
    * return only the publish-worthy ones with fresh, globally calibrated scores.
@@ -40,6 +40,7 @@ export interface IOllamaService {
     candidates: RerankCandidateInput[];
     excerptById: Record<string, string>;
     language?: string;
+    genre?: string;
   }): Promise<RerankedClip[]>;
 }
 
@@ -58,12 +59,13 @@ export class OllamaService implements IOllamaService {
   ) {}
 
   /** Analyzes one transcript chunk and returns its candidate viral clips. */
-  async analyzeChunk(chunk: TranscriptChunk, language?: string): Promise<HighlightClip[]> {
+  async analyzeChunk(chunk: TranscriptChunk, language?: string, genre?: string): Promise<HighlightClip[]> {
     const systemPrompt = [
       buildViralHighlightSystemPrompt({
         minSeconds: this.options.minClipSeconds,
         maxSeconds: this.options.maxClipSeconds,
         language,
+        genre,
       }),
       JSON_ONLY_INSTRUCTION,
       '{"clips": [{"start": 0, "end": 0, "score": 95, "title": "", "reason": "", "hook": "", "peak": 0}]}',
@@ -117,11 +119,12 @@ export class OllamaService implements IOllamaService {
     candidates: RerankCandidateInput[];
     excerptById: Record<string, string>;
     language?: string;
+    genre?: string;
   }): Promise<RerankedClip[]> {
     if (params.candidates.length === 0) return [];
 
     const systemPrompt = [
-      buildRerankSystemPrompt(params.language),
+      buildRerankSystemPrompt(params.language, params.genre),
       JSON_ONLY_INSTRUCTION,
       '{"clips": [{"id": "", "score": 95, "title": "", "reason": "", "hook": ""}]}',
     ].join(' ');

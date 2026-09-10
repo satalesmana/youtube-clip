@@ -399,7 +399,13 @@ export class HookController {
       }
 
       const job = await this.workspaceFor(videoId);
-      const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
+      let videoPath = savedVideoPath;
+      if (!hasVideo) {
+        const download = await this.deps.youtubeService.downloadVideo(request.youtubeUrl, job);
+        videoPath = download.videoPath;
+      } else {
+        this.deps.logger.info({ videoId, videoPath }, 'Using existing downloaded video from workspace');
+      }
 
       if (!transcript) {
         this.deps.logger.info({ videoId }, 'No transcript found — extracting audio and transcribing');
@@ -407,7 +413,7 @@ export class HookController {
         const whisperService = request.sttProvider
           ? createWhisperServiceWith(request.sttProvider)
           : this.deps.whisperService;
-        const audio = await this.deps.transcriptService.extractAudio(download.videoPath, videoId, job);
+        const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, job);
         const whisperResult = await whisperService.transcribe(audio.audioPath, job);
         const transcriptDoc: TranscriptDocument = {
           ...whisperResult,
