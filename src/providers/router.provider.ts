@@ -31,7 +31,7 @@ export class RouterProvider implements IOllamaProvider {
       // Keep reasoning short: without this, deepseek-style reasoning models
       // burn the whole budget thinking and return an empty `content`.
       reasoning_effort: 'low',
-      max_tokens: 8192,
+      max_tokens: options.maxTokens ?? 4096,
       messages: options.system
         ? [
             { role: 'system', content: options.system },
@@ -45,10 +45,7 @@ export class RouterProvider implements IOllamaProvider {
     try {
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
+        headers: this.buildHeaders(),
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
@@ -56,6 +53,18 @@ export class RouterProvider implements IOllamaProvider {
       const bodyText = await response.text();
 
       if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfterMs = extractRetryAfterMs(response);
+          this.logger.warn(
+            { status: 429, retryAfterMs, model: options.model, body: bodyText },
+            'AI router rate limit exceeded (HTTP 429)',
+          );
+          throw AppError.rateLimit(
+            `AI router rate limit exceeded (HTTP 429)${bodyText ? `: ${bodyText}` : ''}`,
+            retryAfterMs,
+          );
+        }
+
         throw AppError.networkError(
           `AI router responded with HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
         );
@@ -125,10 +134,7 @@ export class RouterProvider implements IOllamaProvider {
     try {
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
+        headers: this.buildHeaders(),
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
@@ -136,6 +142,18 @@ export class RouterProvider implements IOllamaProvider {
       const bodyText = await response.text();
 
       if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfterMs = extractRetryAfterMs(response);
+          this.logger.warn(
+            { status: 429, retryAfterMs, body: bodyText },
+            'AI router vision rate limit exceeded (HTTP 429)',
+          );
+          throw AppError.rateLimit(
+            `AI router vision rate limit exceeded (HTTP 429)${bodyText ? `: ${bodyText}` : ''}`,
+            retryAfterMs,
+          );
+        }
+
         throw AppError.networkError(
           `AI router vision responded with HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
         );
@@ -155,6 +173,59 @@ export class RouterProvider implements IOllamaProvider {
       clearTimeout(timeoutHandle);
     }
   }
+
+  /** Builds realistic, browser-like request headers to prevent WAF / anti-bot false positives. */
+  private buildHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'Viral Highlight Generator',
+    };
+  }
+}
+
+function extractRetryAfterMs(response: Response): number | undefined {
+  const retryAfter = response.headers.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (!Number.isNaN(seconds) && seconds > 0) {
+      return Math.round(seconds * 1000);
+    }
+    const dateMs = Date.parse(retryAfter);
+    if (!Number.isNaN(dateMs) && dateMs > Date.now()) {
+      return dateMs - Date.now();
+    }
+  }
+
+  const resetHeader =
+    response.headers.get('x-ratelimit-reset') ||
+    response.headers.get('x-ratelimit-reset-requests') ||
+    response.headers.get('x-ratelimit-reset-tokens');
+
+  if (resetHeader) {
+    if (resetHeader.endsWith('ms')) {
+      const ms = Number(resetHeader.slice(0, -2));
+      if (!Number.isNaN(ms) && ms > 0) return ms;
+    }
+    if (resetHeader.endsWith('s')) {
+      const s = Number(resetHeader.slice(0, -1));
+      if (!Number.isNaN(s) && s > 0) return Math.round(s * 1000);
+    }
+    const val = Number(resetHeader);
+    if (!Number.isNaN(val) && val > 0) {
+      if (val > 1_000_000_000) {
+        return Math.max(0, val * 1000 - Date.now());
+      }
+      return Math.round(val * 1000);
+    }
+  }
+
+  return undefined;
 }
 
 function parseResponseBody(bodyText: string): RouterChatResponseBody {

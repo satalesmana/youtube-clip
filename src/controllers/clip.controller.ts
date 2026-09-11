@@ -27,6 +27,7 @@ export interface ClipControllerDeps {
   outputsDir: string;
   logger: Logger;
   ffmpegBinaryPath?: string;
+  maxConcurrency?: number;
 }
 
 /** Persisted result for `POST /api/clips/recommend` (also the GET payload). */
@@ -425,8 +426,9 @@ export class ClipController {
   }
 
   /**
-   * Analyzes every transcript chunk concurrently. A single chunk failing
-   * (e.g. after exhausting Ollama retries) is logged and skipped rather than
+   * Analyzes transcript chunks with bounded concurrency to prevent HTTP 429
+   * (rate limit / quota exceeded) on the LLM backend.
+   * A single chunk failing after exhausting retries is logged and skipped rather than
    * failing the whole request.
    */
   private async analyzeChunksConcurrently(
@@ -434,19 +436,46 @@ export class ClipController {
     language?: string,
     genre?: string,
   ): Promise<HighlightClip[][]> {
-    const settled = await Promise.allSettled(
-      chunks.map((chunk) => this.deps.ollamaService.analyzeChunk(chunk, language, genre)),
+    if (chunks.length === 0) return [];
+
+    const limit = Math.max(1, this.deps.maxConcurrency ?? 2);
+    this.deps.logger.info(
+      { totalChunks: chunks.length, concurrencyLimit: limit },
+      'Analyzing transcript chunks with concurrency limit',
     );
 
-    return settled.flatMap((outcome, index) => {
-      if (outcome.status === 'fulfilled') return [outcome.value];
+    const results: HighlightClip[][] = [];
+    let currentIndex = 0;
 
-      this.deps.logger.error(
-        { chunkIndex: chunks[index]?.index, err: outcome.reason },
-        'Chunk analysis failed, skipping chunk',
-      );
-      return [];
-    });
+    const worker = async () => {
+      while (currentIndex < chunks.length) {
+        const index = currentIndex++;
+        const chunk = chunks[index];
+        if (!chunk) break;
+
+        try {
+          const clips = await this.deps.ollamaService.analyzeChunk(chunk, language, genre);
+          results.push(clips);
+        } catch (err) {
+          this.deps.logger.error(
+            { chunkIndex: chunk.index, err },
+            'Chunk analysis failed, skipping chunk',
+          );
+        }
+
+        // Pacing delay between consecutive chunk calls (250ms - 600ms with jitter)
+        // to eliminate zero-latency mechanical bursts that trigger anti-bot / WAF heuristics
+        if (currentIndex < chunks.length) {
+          const pacingMs = 250 + Math.floor(Math.random() * 350);
+          await new Promise((resolve) => setTimeout(resolve, pacingMs));
+        }
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(limit, chunks.length) }, () => worker());
+    await Promise.all(workers);
+
+    return results;
   }
 
   /** Maps an absolute outputs path to its `/api/media/...` URL. */

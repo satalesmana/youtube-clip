@@ -615,6 +615,7 @@ export const clipController = new ClipController({
   outputsDir: paths.outputs,
   logger: createLogger('clips.controller'),
   ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+  maxConcurrency: env.CLIP_MAX_CONCURRENCY,
 });
 
 /** Entry point for `GET /api/transcript` and `POST /api/transcript/update`. */

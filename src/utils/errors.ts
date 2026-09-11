@@ -24,12 +24,14 @@ export type ErrorCode =
   | 'RESEARCH_SOURCE_FAILED'
   | 'RESEARCH_ANALYSIS_FAILED'
   | 'YOUTUBE_API_FAILED'
+  | 'RATE_LIMIT_EXCEEDED'
   | 'INTERNAL_ERROR';
 
 interface AppErrorParams {
   code: ErrorCode;
   message: string;
   statusCode?: number;
+  retryAfterMs?: number;
   cause?: unknown;
 }
 
@@ -41,12 +43,28 @@ interface AppErrorParams {
 export class AppError extends Error {
   readonly code: ErrorCode;
   readonly statusCode: number;
+  readonly retryAfterMs?: number;
 
-  constructor({ code, message, statusCode = 500, cause }: AppErrorParams) {
+  constructor({ code, message, statusCode = 500, retryAfterMs, cause }: AppErrorParams) {
     super(message, cause !== undefined ? { cause } : undefined);
     this.name = 'AppError';
     this.code = code;
     this.statusCode = statusCode;
+    this.retryAfterMs = retryAfterMs;
+  }
+
+  static rateLimit(
+    message = 'Rate limit exceeded. Please try again later.',
+    retryAfterMs?: number,
+    cause?: unknown,
+  ): AppError {
+    return new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      message,
+      statusCode: 429,
+      retryAfterMs,
+      cause,
+    });
   }
 
   static invalidUrl(message = 'The provided URL is not a valid YouTube video URL.'): AppError {
@@ -119,12 +137,15 @@ export class AppError extends Error {
     return AppError.internal(fallbackMessage, error);
   }
 
-  toJSON(): { message: string; code: ErrorCode; statusCode: number; cause?: string } {
-    const json: { message: string; code: ErrorCode; statusCode: number; cause?: string } = {
+  toJSON(): { message: string; code: ErrorCode; statusCode: number; retryAfterMs?: number; cause?: string } {
+    const json: { message: string; code: ErrorCode; statusCode: number; retryAfterMs?: number; cause?: string } = {
       message: this.message,
       code: this.code,
       statusCode: this.statusCode,
     };
+    if (this.retryAfterMs !== undefined) {
+      json.retryAfterMs = this.retryAfterMs;
+    }
     if (this.cause instanceof Error) {
       json.cause = this.cause.message;
     } else if (typeof this.cause === 'string') {

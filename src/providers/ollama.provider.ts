@@ -11,6 +11,8 @@ export interface OllamaChatOptions {
   seed?: number;
   /** Instructs the model to return a JSON object (if supported by provider) */
   responseFormat?: 'json_object';
+  /** Max completion tokens to generate. */
+  maxTokens?: number;
 }
 
 interface OllamaChatResponseBody {

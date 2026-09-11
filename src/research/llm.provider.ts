@@ -1,4 +1,5 @@
 import { AppError } from '../utils/errors.js';
+import { retry } from '../utils/retry.js';
 import type { Logger } from '../utils/logger.js';
 
 /** Chat interface expected by the research pipeline's LLM calls. */
@@ -36,22 +37,23 @@ export class OpenAiCompatibleLlm implements LlmProvider {
     const timeoutMs = options.timeoutMs ?? this.options.timeoutMs;
     const attempts = this.options.maxRetries + 1;
 
-    let lastError: unknown;
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      if (attempt > 0) {
-        const delayMs = Math.min(1_000 * 2 ** (attempt - 1), 8_000) + Math.random() * 250;
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-
-      try {
-        return await this.request(options, timeoutMs);
-      } catch (error) {
-        if (error instanceof AppError) throw error;
-        lastError = error;
-      }
+    try {
+      return await retry(
+        () => this.request(options, timeoutMs),
+        {
+          attempts,
+          onRetry: (error, attempt, waitMs) => {
+            this.options.logger.warn(
+              { attempt, waitMs, err: error },
+              'Retrying research LLM request',
+            );
+          },
+        },
+      );
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw AppError.researchAnalysisFailed('Failed to reach the research LLM.', error);
     }
-
-    throw AppError.researchAnalysisFailed('Failed to reach the research LLM.', lastError);
   }
 
   private async request(
@@ -69,6 +71,12 @@ export class OpenAiCompatibleLlm implements LlmProvider {
           headers: {
             'Content-Type': 'application/json',
             ...(this.options.apiKey ? { Authorization: `Bearer ${this.options.apiKey}` } : {}),
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+            'HTTP-Referer': 'http://localhost:3000',
+            'X-Title': 'Viral Highlight Generator',
           },
           body: JSON.stringify({
             model: options.model ?? this.options.model,
@@ -84,6 +92,12 @@ export class OpenAiCompatibleLlm implements LlmProvider {
 
       const bodyText = await response.text();
       if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after');
+          const seconds = retryAfter ? Number(retryAfter) : NaN;
+          const retryAfterMs = !Number.isNaN(seconds) && seconds > 0 ? seconds * 1000 : undefined;
+          throw AppError.rateLimit(`Research LLM rate limit exceeded (HTTP 429): ${bodyText}`, retryAfterMs);
+        }
         throw new Error(`Research LLM responded with HTTP ${response.status}: ${bodyText}`);
       }
 
