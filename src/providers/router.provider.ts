@@ -1,13 +1,13 @@
 import { AppError } from '../utils/errors.js';
 import type { Logger } from '../utils/logger.js';
-import type { IOllamaProvider, OllamaChatOptions } from './ollama.provider.js';
+import type { IAiProvider, AiChatOptions, AiVisionOptions } from './ai.provider.js';
 
 interface RouterChatResponseBody {
   choices?: { message?: { role: string; content: string } }[];
 }
 
 /** HTTP client for an OpenAI-compatible AI router (e.g. 9Router) exposing `/v1/chat/completions`. */
-export class RouterProvider implements IOllamaProvider {
+export class RouterProvider implements IAiProvider {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
@@ -15,7 +15,7 @@ export class RouterProvider implements IOllamaProvider {
   ) {}
 
   /** Sends a single-turn chat completion request and returns the assistant's raw text content. */
-  async chat(options: OllamaChatOptions): Promise<string> {
+  async chat(options: AiChatOptions): Promise<string> {
     const timeoutMs = options.timeoutMs ?? 120_000;
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
@@ -92,13 +92,7 @@ export class RouterProvider implements IOllamaProvider {
   }
 
   /** Sends a vision chat request with an image file or buffer and returns the raw response. */
-  async chatVision(options: {
-    model?: string;
-    prompt: string;
-    imagePath?: string;
-    imageBuffer?: Buffer;
-    timeoutMs?: number;
-  }): Promise<string> {
+  async chatVision(options: AiVisionOptions): Promise<string> {
     const timeoutMs = options.timeoutMs ?? 120_000;
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);

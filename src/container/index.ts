@@ -2,13 +2,12 @@ import { resolve } from 'node:path';
 import { statSync } from 'node:fs';
 import { env } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
-import { OllamaProvider } from '../providers/ollama.provider.js';
 import { RouterProvider } from '../providers/router.provider.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import { YoutubeService } from '../services/youtube.service.js';
 import { TranscriptService } from '../services/transcript.service.js';
 import { WhisperService } from '../services/whisper.service.js';
-import { OllamaService } from '../services/ollama.service.js';
+import { HighlightAnalysisService } from '../services/highlight-analysis.service.js';
 import { HighlightService } from '../services/highlight.service.js';
 import { ClipRefinementService } from '../services/clip-refinement.service.js';
 import { SubtitleService } from '../services/subtitle.service.js';
@@ -172,42 +171,32 @@ export function createWhisperServiceWith(kind: WhisperProvider): WhisperService 
 
 
 /**
- * `AI_PROVIDER` selects which AI agent backs highlight analysis: the local
- * Ollama server, or an OpenAI-compatible AI router (e.g. 9Router).
+ * AI provider: OpenAI-compatible AI router (e.g. 9Router) backing highlight
+ * analysis, angle generation, scripts, stories, and captions.
  */
 function resolveAiProvider(): {
-  provider: IOllamaProvider;
+  provider: IAiProvider;
   model: string;
   temperature: number;
   timeoutMs: number;
   maxRetries: number;
 } {
-  if (env.AI_PROVIDER === 'router') {
-    return {
-      provider: new RouterProvider(
-        env.ROUTER_BASE_URL!,
-        env.ROUTER_API_KEY!,
-        createLogger('router.provider'),
-      ),
-      model: env.ROUTER_MODEL,
-      temperature: env.ROUTER_TEMPERATURE,
-      timeoutMs: env.ROUTER_TIMEOUT_MS,
-      maxRetries: env.ROUTER_MAX_RETRIES,
-    };
-  }
-
   return {
-    provider: new OllamaProvider(env.OLLAMA_BASE_URL, createLogger('ollama.provider')),
-    model: env.OLLAMA_MODEL,
-    temperature: env.OLLAMA_TEMPERATURE,
-    timeoutMs: env.OLLAMA_TIMEOUT_MS,
-    maxRetries: env.OLLAMA_MAX_RETRIES,
+    provider: new RouterProvider(
+      env.ROUTER_BASE_URL ?? '',
+      env.ROUTER_API_KEY ?? '',
+      createLogger('router.provider'),
+    ),
+    model: env.ROUTER_MODEL,
+    temperature: env.ROUTER_TEMPERATURE,
+    timeoutMs: env.ROUTER_TIMEOUT_MS,
+    maxRetries: env.ROUTER_MAX_RETRIES,
   };
 }
 
 const aiProvider = resolveAiProvider();
 
-const ollamaService = new OllamaService(
+const highlightAnalysisService = new HighlightAnalysisService(
   aiProvider.provider,
   {
     model: aiProvider.model,
@@ -217,7 +206,7 @@ const ollamaService = new OllamaService(
     minClipSeconds: env.HIGHLIGHT_MIN_SECONDS,
     maxClipSeconds: env.HIGHLIGHT_MAX_SECONDS,
   },
-  createLogger('ollama.service'),
+  createLogger('highlight-analysis.service'),
 );
 
 const highlightService = new HighlightService(
@@ -609,7 +598,7 @@ export const clipController = new ClipController({
   youtubeService,
   transcriptService,
   whisperService,
-  ollamaService,
+  highlightAnalysisService,
   highlightService,
   previewRenderer,
   outputsDir: paths.outputs,
@@ -741,11 +730,11 @@ const youtubeSearchProvider = new YouTubeSearchProvider(
 
 /**
  * Research LLM: a dedicated OpenAI-compatible endpoint (`RESEARCH_LLM_*`) if
- * configured, otherwise the main AI backend (router, then local Ollama) —
+ * configured, otherwise the main AI backend (router) —
  * both expose the OpenAI-compatible `/v1/chat/completions` API.
  */
 const researchLlm = new OpenAiCompatibleLlm({
-  baseUrl: env.RESEARCH_LLM_BASE_URL || env.ROUTER_BASE_URL || env.OLLAMA_BASE_URL,
+  baseUrl: env.RESEARCH_LLM_BASE_URL || env.ROUTER_BASE_URL || '',
   apiKey: env.RESEARCH_LLM_API_KEY ?? env.ROUTER_API_KEY,
   model: env.RESEARCH_LLM_MODEL,
   temperature: env.RESEARCH_LLM_TEMPERATURE,
@@ -801,7 +790,7 @@ export const container = {
   transcriptService,
   whisperService,
   aiProvider: aiProvider.provider,
-  ollamaService,
+  highlightAnalysisService,
   highlightService,
   clipRefinementService,
   subtitleService,

@@ -583,6 +583,7 @@ export class WhisperService implements IWhisperService {
 
     for (let i = 0; i < words.length; i++) {
       const w = words[i];
+      if (!w) continue;
       const wordText = w.word.trim();
       if (!wordText) continue;
 
@@ -599,14 +600,18 @@ export class WhisperService implements IWhisperService {
       const isLongEnough = currentWords.length >= 12;
 
       if (isPunctuationEnd || hasPause || isLongEnough || i === words.length - 1) {
-        segments.push({
-          start: currentWords[0].start,
-          end: currentWords[currentWords.length - 1].end,
-          text: currentText.join(' ').replace(/\s+([.,?!])/g, '$1'),
-          words: [...currentWords],
-        });
-        currentWords = [];
-        currentText = [];
+        const firstWord = currentWords[0];
+        const lastWord = currentWords[currentWords.length - 1];
+        if (firstWord && lastWord) {
+          segments.push({
+            start: firstWord.start,
+            end: lastWord.end,
+            text: currentText.join(' ').replace(/\s+([.,?!])/g, '$1'),
+            words: [...currentWords],
+          });
+          currentWords = [];
+          currentText = [];
+        }
       }
     }
 

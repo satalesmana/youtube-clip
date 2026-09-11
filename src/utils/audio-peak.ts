@@ -63,8 +63,11 @@ export async function detectAudioSpikes(options: DetectAudioSpikesOptions): Prom
     let match: RegExpExecArray | null;
 
     while ((match = regex.exec(output)) !== null) {
-      const time = parseFloat(match[1]);
-      const loudness = parseFloat(match[2]);
+      const matchTime = match[1];
+      const matchLoudness = match[2];
+      if (!matchTime || !matchLoudness) continue;
+      const time = parseFloat(matchTime);
+      const loudness = parseFloat(matchLoudness);
       if (Number.isFinite(time) && Number.isFinite(loudness) && loudness > -65) {
         samples.push({ time, loudness });
       }
@@ -87,12 +90,14 @@ export async function detectAudioSpikes(options: DetectAudioSpikesOptions): Prom
 
     for (let i = 0; i < samples.length; i++) {
       const curr = samples[i];
+      if (!curr) continue;
       const windowStart = curr.time - 3.5;
       const windowEnd = curr.time + 3.5;
 
       let isLocalMax = true;
       for (let j = Math.max(0, i - 35); j < Math.min(samples.length, i + 35); j++) {
         const neighbor = samples[j];
+        if (!neighbor) continue;
         if (neighbor.time >= windowStart && neighbor.time <= windowEnd) {
           if (neighbor.loudness > curr.loudness) {
             isLocalMax = false;

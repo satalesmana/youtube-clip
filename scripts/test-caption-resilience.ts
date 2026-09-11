@@ -3,7 +3,7 @@
  * Run: npx tsx scripts/test-caption-resilience.ts
  */
 import { CaptionService } from '../src/content/caption.service.js';
-import type { IOllamaProvider, OllamaChatOptions } from '../src/providers/ollama.provider.js';
+import type { IAiProvider, AiChatOptions } from '../src/providers/ai.provider.js';
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -29,8 +29,8 @@ const malformedRawContent = `{
   "instagram": "title: "
 }`;
 
-const mockProvider: IOllamaProvider = {
-  chat: async (_opts: OllamaChatOptions): Promise<string> => {
+const mockProvider: IAiProvider = {
+  chat: async (_opts: AiChatOptions): Promise<string> => {
     return malformedRawContent;
   },
 };

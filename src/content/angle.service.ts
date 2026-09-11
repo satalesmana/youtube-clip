@@ -6,7 +6,7 @@ import {
   buildContentAngleSystemPrompt,
   buildContentAngleUserPrompt,
 } from './content.prompt.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { AngleGenerationResult, ContentAngle } from '../types/angle.js';
@@ -58,7 +58,7 @@ export interface IContentAngleService {
  */
 export class ContentAngleService implements IContentAngleService {
   constructor(
-    private readonly provider: IOllamaProvider,
+    private readonly provider: IAiProvider,
     private readonly options: ContentAngleServiceOptions,
     private readonly logger: Logger,
   ) {}

@@ -21,12 +21,12 @@ export default defineNitroConfig({
     '~': './src',
   },
   runtimeConfig: {
-    ollama: {
-      baseUrl: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
-      model: process.env.OLLAMA_MODEL || 'qwen3:14b',
-      temperature: Number(process.env.OLLAMA_TEMPERATURE ?? 0.2),
-      timeoutMs: Number(process.env.OLLAMA_TIMEOUT_MS ?? 120_000),
-      maxRetries: Number(process.env.OLLAMA_MAX_RETRIES ?? 3),
+    router: {
+      baseUrl: process.env.ROUTER_BASE_URL || '',
+      model: process.env.ROUTER_MODEL || 'auto',
+      temperature: Number(process.env.ROUTER_TEMPERATURE ?? 0.2),
+      timeoutMs: Number(process.env.ROUTER_TIMEOUT_MS ?? 120_000),
+      maxRetries: Number(process.env.ROUTER_MAX_RETRIES ?? 3),
     },
     whisper: {
       provider: process.env.WHISPER_PROVIDER || 'faster-whisper',

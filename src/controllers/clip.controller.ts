@@ -7,7 +7,7 @@ import type { IYoutubeService } from '../services/youtube.service.js';
 import type { ITranscriptService } from '../services/transcript.service.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { IWhisperService } from '../services/whisper.service.js';
-import type { IOllamaService } from '../services/ollama.service.js';
+import type { IHighlightAnalysisService } from '../services/highlight-analysis.service.js';
 import type { IHighlightService } from '../services/highlight.service.js';
 import type { IPreviewRenderer } from '../services/preview-renderer.service.js';
 import type { TranscriptDocument } from '../types/transcript.js';
@@ -21,7 +21,7 @@ export interface ClipControllerDeps {
   youtubeService: IYoutubeService;
   transcriptService: ITranscriptService;
   whisperService: IWhisperService;
-  ollamaService: IOllamaService;
+  highlightAnalysisService: IHighlightAnalysisService;
   highlightService: IHighlightService;
   previewRenderer: IPreviewRenderer;
   outputsDir: string;
@@ -250,7 +250,7 @@ export class ClipController {
     });
 
     try {
-      return await this.deps.ollamaService.rerankCandidates({
+      return await this.deps.highlightAnalysisService.rerankCandidates({
         videoTitle: transcript.videoId,
         candidates,
         excerptById,
@@ -454,7 +454,7 @@ export class ClipController {
         if (!chunk) break;
 
         try {
-          const clips = await this.deps.ollamaService.analyzeChunk(chunk, language, genre);
+          const clips = await this.deps.highlightAnalysisService.analyzeChunk(chunk, language, genre);
           results.push(clips);
         } catch (err) {
           this.deps.logger.error(

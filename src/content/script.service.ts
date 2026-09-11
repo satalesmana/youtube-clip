@@ -11,7 +11,7 @@ import {
 } from './content.prompt.js';
 import { mapBeatRoleToSectionType } from '../types/story.js';
 import { normalizeForSpeech } from '../utils/speech-normalizer.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { OriginalScript, ScriptSection } from '../types/script.js';
 
@@ -38,7 +38,7 @@ export interface IScriptService {
  */
 export class ScriptService implements IScriptService {
   constructor(
-    private readonly provider: IOllamaProvider,
+    private readonly provider: IAiProvider,
     private readonly options: ScriptServiceOptions,
     private readonly logger: Logger,
   ) {}

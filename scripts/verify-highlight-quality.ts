@@ -12,9 +12,9 @@
  *  2. HighlightService.mergeAndRank: unit-scale repair (0.0-1.0 → 0-100),
  *     per-chunk min-max normalization, peak-aware clamp vs legacy head cut.
  *  3. HighlightService.cutToTopN.
- *  4. OllamaService.analyzeChunk / rerankCandidates against a fake provider
+ *  4. HighlightAnalysisService.analyzeChunk / rerankCandidates against a fake provider
  *     (schema validation incl. optional `peak`, JSON-only instruction).
- *  5. ClipController two-pass wiring with a stubbed ollamaService +
+ *  5. ClipController two-pass wiring with a stubbed highlightAnalysisService +
  *     previewRenderer: rerank survivors/drops/failure-fallback, excerpt
  *     extraction, feedback file written on recordSelection.
  */
@@ -22,11 +22,11 @@ import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HighlightService } from '../src/services/highlight.service.js';
-import { OllamaService } from '../src/services/ollama.service.js';
+import { HighlightAnalysisService } from '../src/services/highlight-analysis.service.js';
 import { ClipController } from '../src/controllers/clip.controller.js';
 import { buildViralHighlightSystemPrompt, buildRerankSystemPrompt } from '../src/prompts/viral-highlight.prompt.js';
 import type { Logger } from '../src/utils/logger.js';
-import type { IOllamaProvider } from '../src/providers/ollama.provider.js';
+import type { IAiProvider } from '../src/providers/ai.provider.js';
 import type { TranscriptChunk, TranscriptDocument } from '../src/types/transcript.js';
 import type { HighlightClip } from '../src/types/highlight.js';
 
@@ -144,39 +144,39 @@ async function main(): Promise<void> {
   check('cuts to topN=10', topTen.length === 10);
   check('keeps highest scores', topTen.every((c) => Number(c.title.slice(1)) >= 5));
 
-  /* ── 4. OllamaService against a fake provider ───────────────────────── */
-  console.log('\n[4] OllamaService analyzeChunk + rerankCandidates');
+  /* ── 4. HighlightAnalysisService against a fake provider ───────────── */
+  console.log('\n[4] HighlightAnalysisService analyzeChunk + rerankCandidates');
   let lastSystem = '';
-  const fakeProvider: IOllamaProvider = {
-    chat: async (params: { system: string }) => {
-      lastSystem = params.system;
+  const fakeProvider: IAiProvider = {
+    chat: async (params: { system?: string }) => {
+      lastSystem = params.system ?? '';
       return '{"clips": [{"start": 10, "end": 45, "score": 88, "title": "t", "reason": "r", "hook": "h", "peak": 33}, {"start": 50, "end": 80, "score": 0.7, "title": "u", "reason": "q", "hook": "g"}]}';
     },
-  } as unknown as IOllamaProvider;
-  const ollama = new OllamaService(
+  } as unknown as IAiProvider;
+  const analysisService = new HighlightAnalysisService(
     fakeProvider,
     { model: 'm', temperature: 0.2, timeoutMs: 1000, maxRetries: 1, minClipSeconds: 20, maxClipSeconds: 60 },
     silentLogger,
   );
-  const clips = await ollama.analyzeChunk(makeChunk(0, 0));
+  const clips = await analysisService.analyzeChunk(makeChunk(0, 0));
   check('accepts optional peak field', clips.length === 2 && clips[0]?.peak === 33);
   check('accepts missing peak field', clips[1]?.peak === undefined);
   check('duration bounds appear in system prompt', lastSystem.includes('between 20 and 60 seconds'));
   check('json-only instruction present', /Return ONLY valid JSON/.test(lastSystem));
 
   let rerankUser = '';
-  const rerankProvider: IOllamaProvider = {
-    chat: async (params: { system: string; prompt: string }) => {
+  const rerankProvider: IAiProvider = {
+    chat: async (params: { system?: string; prompt: string }) => {
       rerankUser = params.prompt;
       return '{"clips": [{"id": "cand_01", "score": 92}, {"id": "cand_02", "score": 41, "title": "sharper"}]}';
     },
-  } as unknown as IOllamaProvider;
-  const rerankOllama = new OllamaService(
+  } as unknown as IAiProvider;
+  const rerankAnalysis = new HighlightAnalysisService(
     rerankProvider,
     { model: 'm', temperature: 0.2, timeoutMs: 1000, maxRetries: 1, minClipSeconds: 20, maxClipSeconds: 60 },
     silentLogger,
   );
-  const verdicts = await rerankOllama.rerankCandidates({
+  const verdicts = await rerankAnalysis.rerankCandidates({
     videoTitle: 'v',
     candidates: [
       { id: 'cand_01', start: 0, end: 30, title: 'a', reason: 'r', hook: 'h' },
@@ -225,7 +225,7 @@ async function main(): Promise<void> {
         saveTranscript: async () => '',
       } as never,
       whisperService: {} as never,
-      ollamaService: {
+      highlightAnalysisService: {
         analyzeChunk: async () => poolClips,
         rerankCandidates: async (params: { candidates: Array<{ id: string }> }) => {
           rerankCalled = true;
@@ -268,7 +268,7 @@ async function main(): Promise<void> {
         saveTranscript: async () => '',
       } as never,
       whisperService: {} as never,
-      ollamaService: {
+      highlightAnalysisService: {
         analyzeChunk: async () => poolClips,
         rerankCandidates: async () => {
           throw new Error('rerank down');

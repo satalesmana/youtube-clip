@@ -85,7 +85,7 @@ Four data sources are queried concurrently using `Promise.allSettled()`:
 - **System Prompt**: "You are a viral-trend analyst for a short-video content studio. Respond with strict JSON only"
 - **LLM Provider**: `OpenAiCompatibleLlm` (`src/research/llm.provider.ts`) — OpenAI-compatible `/v1/chat/completions`
   - Primary: Dedicated endpoint (when `RESEARCH_LLM_BASE_URL` configured)
-  - Fallback: Main AI backend (router, then local Ollama) — same OpenAI-compatible API
+  - Fallback: Main AI router — same OpenAI-compatible API
 - **Output**: Strict JSON with `trends[]` containing `slug, title, summary, score (0-100), keywords, category`
 
 ### 5. **Response Parsing**
@@ -176,8 +176,8 @@ sequenceDiagram
 RESEARCH_MAX_TRENDS=10
 RESEARCH_LANGUAGE=id
 
-# Dedicated LLM (optional); when empty, the main AI backend
-# (router → local Ollama) is used via /v1/chat/completions.
+# Dedicated LLM (optional); when empty, the main AI router
+# is used via /v1/chat/completions.
 RESEARCH_LLM_BASE_URL=http://localhost:20128
 RESEARCH_LLM_API_KEY=your-key
 RESEARCH_LLM_MODEL=gpt-4o-mini

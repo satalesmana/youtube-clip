@@ -7,7 +7,7 @@ import {
   HOOK_ACCURACY_SYSTEM_PROMPT,
   buildHookAccuracyUserPrompt,
 } from './hook.prompt.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { AccuracyResult, HookCandidate } from './hook.types.js';
@@ -44,7 +44,7 @@ export interface IHookEvaluator {
  */
 export class HookEvaluator implements IHookEvaluator {
   constructor(
-    private readonly provider: IOllamaProvider,
+    private readonly provider: IAiProvider,
     private readonly options: HookEvaluatorOptions,
     private readonly logger: Logger,
   ) {}

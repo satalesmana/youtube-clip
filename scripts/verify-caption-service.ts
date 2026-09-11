@@ -14,7 +14,7 @@ import {
 import { CaptionService } from '../src/content/caption.service.js';
 import { CaptionController } from '../src/controllers/caption.controller.js';
 import { createLogger } from '../src/utils/logger.js';
-import type { IOllamaProvider } from '../src/providers/ollama.provider.js';
+import type { IAiProvider } from '../src/providers/ai.provider.js';
 import type { ITranscriptService } from '../src/services/transcript.service.js';
 import type { CaptionGenerationContext } from '../src/types/caption.js';
 
@@ -153,11 +153,8 @@ console.log('   ✓ Schema validation passed\n');
 // ── Test 3: CaptionService with Mock Provider ─────────────────────────
 console.log('3️⃣ Testing CaptionService Execution & Disk Persistence...');
 
-const mockProvider: IOllamaProvider = {
+const mockProvider: IAiProvider = {
   chat: async () => JSON.stringify(mockLlmJson),
-  listModels: async () => ['qwen3:14b'],
-  showModel: async () => ({}),
-  isRunning: async () => true,
 };
 
 const logger = createLogger('test.caption');

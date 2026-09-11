@@ -4,7 +4,7 @@ import { parseLlmJson } from '../utils/llm-json.js';
 import { hashSeed } from '../utils/seed.js';
 import { hookScoringResponseSchema } from '../schemas/hook.schema.js';
 import { HOOK_SCORING_SYSTEM_PROMPT, buildHookScoringUserPrompt } from './hook.prompt.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { HookCandidate, HookScore } from './hook.types.js';
 
@@ -52,7 +52,7 @@ export function computeFinalScore(score: Omit<HookScore, 'final'>): number {
  */
 export class HookScorer implements IHookScorer {
   constructor(
-    private readonly provider: IOllamaProvider,
+    private readonly provider: IAiProvider,
     private readonly options: HookScorerOptions,
     private readonly logger: Logger,
   ) {}

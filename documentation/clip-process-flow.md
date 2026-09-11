@@ -53,7 +53,7 @@ flowchart TD
     BRANCH -->|"/api/clips/recommend"| C_CACHE{"clips/recommendations.json\nsudah ada?"}
     C_CACHE -->|"Ya"| C_SAVED["Return saved result\n{cached: true}"]
     C_CACHE -->|"Tidak"| CHUNK["Chunk Transcript\noverlap-aware, LLM-sized chunks"]
-    CHUNK --> PAR_AI{"⚡ PARALLEL\nAnalyze Each Chunk\nOllamaService × N chunks\n(Ollama / 9Router)"}
+    CHUNK --> PAR_AI{"⚡ PARALLEL\nAnalyze Each Chunk\nHighlightAnalysisService × N chunks\n(Router AI)"}
     PAR_AI --> MERGE["Merge & Rank\nHighlightService → dedup overlap\nclamp durasi [min,max]\ntop-N by score"]
     MERGE --> C_SAVE["Persist Result\noutputs/{videoId}/clips/recommendations.json"]
     C_SAVE --> C_PREV["⚡ PARALLEL Preview Render\nPromise.allSettled\nclip-previews/clip-{NN}.mp4"]
@@ -116,7 +116,7 @@ sequenceDiagram
     participant API as POST /api/research
     participant RS as ResearchService
     participant DP as Data Providers (RSS/Reddit/X/Trends)
-    participant AI as AI Engine (Ollama/Router)
+    participant AI as AI Engine (Router)
     participant YT as YouTube Data API
 
     Browser->>API: { max_trends, language, providers, ... }
@@ -215,7 +215,7 @@ sequenceDiagram
     participant YT as YoutubeService
     participant TS as TranscriptService
     participant WH as WhisperService
-    participant AI as Ollama/Router
+    participant AI as HighlightAnalysisService / Router
     participant HL as HighlightService
     participant PR as PreviewRenderer
 
@@ -458,7 +458,7 @@ outputs/{videoId}/
 | `HIGHLIGHT_TOP_N` | 10 | Jumlah klip top-N hasil rank |
 | `COMPOSITION_ENGINE` | `ffmpeg-template` | Engine: `remotion` or `ffmpeg-template` |
 | `TTS_PROVIDER` | `edge-tts` | TTS backend: `edge-tts` or `openai` (bisa di-override per request via `ttsProvider`/`ttsVoice`) |
-| `AI_PROVIDER` | `ollama` | AI backend: `ollama` or `router` |
+| `AI_PROVIDER` | `router` | AI backend: OpenAI-compatible router (e.g. 9Router) |
 
 > Konfigurasi hook engine (jumlah kandidat, top-N, batas durasi window) di-hardcode di `src/container/index.ts` / controller — tidak punya env vars sendiri. Hasil hook & klip kini dipersist ke disk (`hooks/`, `clips/recommendations.json`) dan dapat diumpankan ke `/api/transform` via `candidateId` + `selectedClips`.
 >

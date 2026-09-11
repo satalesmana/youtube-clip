@@ -524,14 +524,14 @@
       "y": 835,
       "width": 290,
       "height": 50,
-      "text": "Analyze Each Chunk\n(Ollama / Router AI \u00d7 N chunks)",
+      "text": "Analyze Each Chunk\n(Router AI \u00d7 N chunks)",
       "fontSize": 18,
       "fontFamily": 1,
       "strokeColor": "#1e1e1e",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "rect_24",
-      "originalText": "Analyze Each Chunk\n(Ollama / Router AI \u00d7 N chunks)",
+      "originalText": "Analyze Each Chunk\n(Router AI \u00d7 N chunks)",
       "autoResize": true
     },
     {

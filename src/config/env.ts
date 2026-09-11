@@ -11,14 +11,8 @@ config();
  */
 const envSchema = z
   .object({
-    // Selects which AI agent provider handles highlight analysis.
-    AI_PROVIDER: z.enum(['ollama', 'router']).default('ollama'),
-
-    OLLAMA_BASE_URL: z.url().default('http://127.0.0.1:11434'),
-    OLLAMA_MODEL: z.string().min(1).default('qwen3:14b'),
-    OLLAMA_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
-    OLLAMA_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
-    OLLAMA_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
+    // Selects AI agent provider (OpenAI-compatible AI router, e.g. 9Router).
+    AI_PROVIDER: z.string().default('router'),
 
     // AI router (e.g. 9Router), an OpenAI-compatible `/v1/chat/completions` gateway.
     ROUTER_BASE_URL: z.url().optional(),
@@ -171,8 +165,8 @@ const envSchema = z
     // Language for LLM-generated topic titles/summaries (`auto`, `en`, `id`, ...).
     RESEARCH_LANGUAGE: z.string().min(1).default('auto'),
     // Research LLM config. A dedicated OpenAI-compatible endpoint for the
-    // research LLM; when BASE_URL is empty, the main AI backend (router, then
-    // local Ollama) is used instead. API key falls back to ROUTER_API_KEY.
+    // research LLM; when BASE_URL is empty, the main AI backend (router)
+    // is used instead. API key falls back to ROUTER_API_KEY.
     RESEARCH_LLM_BASE_URL: z.string().optional(),
     RESEARCH_LLM_API_KEY: z.string().optional(),
     // Research LLM model/temperature/timeout (used for the fallback backend too).
@@ -205,21 +199,19 @@ const envSchema = z
     HOST: z.string().min(1).default('0.0.0.0'),
   })
   .superRefine((data, ctx) => {
-    if (data.AI_PROVIDER === 'router') {
-      if (!data.ROUTER_BASE_URL) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['ROUTER_BASE_URL'],
-          message: 'ROUTER_BASE_URL is required when AI_PROVIDER=router',
-        });
-      }
-      if (!data.ROUTER_API_KEY) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['ROUTER_API_KEY'],
-          message: 'ROUTER_API_KEY is required when AI_PROVIDER=router',
-        });
-      }
+    if (!data.ROUTER_BASE_URL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ROUTER_BASE_URL'],
+        message: 'ROUTER_BASE_URL is required for AI router',
+      });
+    }
+    if (!data.ROUTER_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ROUTER_API_KEY'],
+        message: 'ROUTER_API_KEY is required for AI router',
+      });
     }
   });
 

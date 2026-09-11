@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import { retry } from '../utils/retry.js';
 import { parseLlmJson } from '../utils/llm-json.js';
@@ -45,7 +45,7 @@ export interface ICaptionService {
 
 export class CaptionService implements ICaptionService {
   constructor(
-    private readonly provider: IOllamaProvider,
+    private readonly provider: IAiProvider,
     private readonly options: CaptionServiceOptions,
     private readonly logger: Logger,
   ) {}

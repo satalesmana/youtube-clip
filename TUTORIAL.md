@@ -15,9 +15,9 @@ Google Trends / X, lalu mencocokkannya dengan video YouTube.
 > (`npm run dev`), UI di `/`, API `/api/templates`, `/api/history` merespons OK.
 > Sudah terpasang: `node_modules`, `.env` lengkap, FFmpeg-full (libass),
 > whisperx + edge-tts di `.venv/`, dan `compositions/studio` (engine Remotion).
-> Belum terpasang: Ollama (pakai router, tidak butuh Ollama).
-> **Catatan:** `.env.example` hanya berisi opsi TTS; konfigurasi lengkap
-> didokumentasikan di §3 dan skema-nya di `src/config/env.ts`.
+> AI Provider menggunakan Router (OpenAI-compatible).
+> **Catatan:** `.env.example` berisi panduan opsi konfigurasi
+> yang didokumentasikan di §3 dan skema-nya di `src/config/env.ts`.
 
 ---
 
@@ -29,7 +29,6 @@ Google Trends / X, lalu mencocokkannya dengan video YouTube.
 | Python **3.10+**      | WhisperX & edge-tts (via venv)  | `python3 -V`                                    | `brew install python`                     |
 | **yt-dlp**            | Download video                  | `yt-dlp --version` ✅ (sudah ada)               | `brew install yt-dlp`                     |
 | **FFmpeg + libass**   | Render klip & burn subtitle     | `ffmpeg -version` ⚠️ default tanpa libass       | `brew install ffmpeg-full` (lihat §3.3)   |
-| **Ollama** (opsional) | LLM lokal untuk analisis        | `ollama list` ❌ belum ada                      | `brew install ollama`, `ollama pull qwen3:14b` |
 
 Cek libass pada FFmpeg kamu:
 
@@ -85,7 +84,7 @@ ASS_HIGHLIGHT_COLOR="#FFE135"
 
 ### 3.1 AI provider (analisis momen viral)
 
-**Mode A — Router OpenAI-compatible (disarankan, tidak butuh Ollama):**
+**Router OpenAI-compatible (mis. 9Router, OpenRouter, vLLM):**
 
 ```env
 AI_PROVIDER=router
@@ -98,14 +97,6 @@ ROUTER_TIMEOUT_MS=180000
 RESEARCH_LLM_BASE_URL=http://127.0.0.1:20128
 RESEARCH_LLM_API_KEY=isi_key_nya
 RESEARCH_LLM_MODEL=group-deepseek
-```
-
-**Mode B — Ollama (lokal, gratis, model ~9 GB):**
-
-```env
-AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen3:14b
 ```
 
 ### 3.2 Whisper (transkripsi)
@@ -251,7 +242,7 @@ npm run typecheck   # cek tipe TypeScript
 npm run lint        # lint ESLint
 ```
 
-Ada juga stub server LLM untuk tes tanpa router/Ollama:
+Ada juga stub server LLM untuk tes tanpa router:
 
 ```bash
 node scripts/stub-llm-server.mjs
@@ -265,9 +256,8 @@ node scripts/stub-llm-server.mjs
 2. ✅ `npm install`
 3. ✅ `.venv` + `pip install whisperx edge-tts`
 4. ✅ `compositions/studio` → `npm install`
-5. ✅ `cp .env.example .env` + isi `AI_PROVIDER`, `ROUTER_*`/`OLLAMA_*`, `FFMPEG_BINARY_PATH`, `TTS_*`
-6. ✅ (opsional) `ollama pull qwen3:14b` kalau pakai mode ollama
-7. ✅ `npm run dev` → buka http://localhost:3000/ → tab Transform
+5. ✅ `cp .env.example .env` + isi `AI_PROVIDER`, `ROUTER_*`, `FFMPEG_BINARY_PATH`, `TTS_*`
+6. ✅ `npm run dev` → buka http://localhost:3000/ → tab Transform
 
 ---
 
@@ -281,7 +271,7 @@ node scripts/stub-llm-server.mjs
 | Narasi kosong / TTS error                              | `edge-tts` belum terpasang di `.venv`; cek `TTS_VOICE` (`edge-tts --list-voices`), `TTS_BINARY_PATH`                                            |
 | yt-dlp: "Sign in to confirm you're not a bot"          | Set `YT_DLP_EXTRA_ARGS=--cookies-from-browser chrome`                                                                                           |
 | Nilai warna kosong di subtitle                         | Hex di `.env` tanpa kutip → `ASS_HIGHLIGHT_COLOR="#FFE135"`                                                                                     |
-| `LLM_TIMEOUT` / `LLM_INVALID_RESPONSE`                 | Router/Ollama belum jalan atau model salah; perbesar `ROUTER_TIMEOUT_MS` / `OLLAMA_TIMEOUT_MS`                                                   |
+| `LLM_TIMEOUT` / `LLM_INVALID_RESPONSE`                 | Router belum jalan atau model salah; perbesar `ROUTER_TIMEOUT_MS`                                                                                 |
 | `Missing model` (HTTP 400) dari router                 | `RESEARCH_LLM_BASE_URL`/model tidak ada di router → pastikan `RESEARCH_LLM_MODEL` (mis. `group-deepseek`) tersedia                              |
 | Router balas `content: ""` + `finish_reason: "length"` | Model reasoning menghabiskan `max_tokens` → pastikan `reasoning_effort: "low"` dikirim (lihat `src/providers/router.provider.ts`)               |
 | Render remotion gagal                                  | `compositions/studio` belum `npm install`, atau `COMPOSITION_ENGINE`/`COMPOSITION_STYLE` tidak cocok; cek log `LOG_LEVEL=trace`                 |

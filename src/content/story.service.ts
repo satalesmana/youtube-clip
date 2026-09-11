@@ -3,7 +3,7 @@ import { parseLlmJson } from '../utils/llm-json.js';
 import { retry } from '../utils/retry.js';
 import { hashSeed } from '../utils/seed.js';
 import { sourceStorySchema } from '../schemas/story.schema.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { TranscriptSegment } from '../types/transcript.js';
 import type { SourceStory } from '../types/story.js';
@@ -114,7 +114,7 @@ Separately identify the single strongest opening cut in "hookMoment": the exact 
 {"concept":"turning-point","protagonist":"name or subject from transcript","premise":"one-sentence story summary","hookMoment":{"start":12,"end":14,"suggestedLine":"line that makes viewers stop scrolling"},"beats":[{"id":"beat_1","role":"setup","purpose":"introduce the situation","start":0,"end":5,"evidence":["verbatim quote from transcript"],"kondisiAwal":"initial state","engagementScore":5,"quotableLine":"","openLoop":"why does this matter?","retentionRisk":"low"},{"id":"beat_2","role":"tension","purpose":"set up the problem","start":5,"end":12,"evidence":["verbatim quote"],"konflik":"the obstacle or tension","engagementScore":7,"quotableLine":"","openLoop":"what happens next?","retentionRisk":"medium"},{"id":"beat_3","role":"turningPoint","purpose":"present the key evidence","start":12,"end":20,"evidence":["verbatim quote"],"titikBalik":"the turning point","engagementScore":9,"quotableLine":"the caption-worthy line","openLoop":"will it work out?","retentionRisk":"high"},{"id":"beat_4","role":"resolution","purpose":"show the outcome","start":20,"end":28,"evidence":["verbatim quote"],"hasil":"the outcome or result","engagementScore":8,"quotableLine":"","openLoop":"","retentionRisk":"high"},{"id":"beat_5","role":"conclusion","purpose":"land the takeaway","start":28,"end":35,"evidence":["verbatim quote"],"engagementScore":6,"quotableLine":"","openLoop":"","retentionRisk":"medium"}]}`;
 
 export class StoryService implements IStoryService {
-  constructor(private readonly provider: IOllamaProvider, private readonly options: StoryServiceOptions, private readonly logger: Logger) {}
+  constructor(private readonly provider: IAiProvider, private readonly options: StoryServiceOptions, private readonly logger: Logger) {}
 
   async buildStory(segments: TranscriptSegment[], genre?: ContentGenre, customPrompt?: string): Promise<SourceStory> {
     if (segments.length === 0) throw AppError.validation('Cannot build a story from an empty transcript selection.');

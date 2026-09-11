@@ -8,7 +8,7 @@ import {
   buildHookGenerationUserPrompt,
   type HookGenerationContext,
 } from './hook.prompt.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { HookCandidate } from './hook.types.js';
 
@@ -42,7 +42,7 @@ function estimateSpokenDuration(text: string, wordsPerMinute = 150): number {
  */
 export class HookGenerator implements IHookGenerator {
   constructor(
-    private readonly provider: IOllamaProvider,
+    private readonly provider: IAiProvider,
     private readonly options: HookGeneratorOptions,
     private readonly logger: Logger,
   ) {}

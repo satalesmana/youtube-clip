@@ -12,12 +12,12 @@ import {
   buildRerankUserPrompt,
   type RerankCandidateInput,
 } from '../prompts/viral-highlight.prompt.js';
-import type { IOllamaProvider } from '../providers/ollama.provider.js';
+import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { TranscriptChunk } from '../types/transcript.js';
 import type { HighlightClip } from '../types/highlight.js';
 
-export interface OllamaServiceOptions {
+export interface HighlightAnalysisOptions {
   model: string;
   temperature: number;
   timeoutMs: number;
@@ -28,7 +28,7 @@ export interface OllamaServiceOptions {
 }
 
 /** Analyzes transcript chunks with an LLM to find candidate viral clips. */
-export interface IOllamaService {
+export interface IHighlightAnalysisService {
   /** First pass: scan one transcript chunk for candidate viral clips. */
   analyzeChunk(chunk: TranscriptChunk, language?: string, genre?: string): Promise<HighlightClip[]>;
   /**
@@ -48,13 +48,13 @@ const JSON_ONLY_INSTRUCTION =
   'Return ONLY valid JSON matching this schema, with no other text. Never return Markdown. Never explain. Return JSON only.';
 
 /**
- * Sends transcript chunks to Ollama using the viral-highlight prompt,
+ * Sends transcript chunks to the AI provider using the viral-highlight prompt,
  * validating and retrying on malformed responses.
  */
-export class OllamaService implements IOllamaService {
+export class HighlightAnalysisService implements IHighlightAnalysisService {
   constructor(
-    private readonly provider: IOllamaProvider,
-    private readonly options: OllamaServiceOptions,
+    private readonly provider: IAiProvider,
+    private readonly options: HighlightAnalysisOptions,
     private readonly logger: Logger,
   ) {}
 
@@ -75,7 +75,7 @@ export class OllamaService implements IOllamaService {
 
     return retry(
       async () => {
-        this.logger.info({ chunkIndex: chunk.index }, 'Calling Ollama');
+        this.logger.info({ chunkIndex: chunk.index }, 'Calling AI provider for highlight analysis');
 
         const raw = await this.provider.chat({
           model: this.options.model,
@@ -91,7 +91,7 @@ export class OllamaService implements IOllamaService {
 
         if (!result.success) {
           throw AppError.llmInvalidResponse(
-            `Ollama returned an invalid highlight response for chunk ${chunk.index}: ${result.error.message}`,
+            `AI provider returned an invalid highlight response for chunk ${chunk.index}: ${result.error.message}`,
           );
         }
 
@@ -102,7 +102,7 @@ export class OllamaService implements IOllamaService {
         onRetry: (error, attempt) => {
           this.logger.warn(
             { chunkIndex: chunk.index, attempt, err: error },
-            'Retrying Ollama analysis',
+            'Retrying highlight analysis',
           );
         },
       },
@@ -145,14 +145,14 @@ export class OllamaService implements IOllamaService {
         const parsed = parseJsonLoosely(raw);
         const result = rerankResponseSchema.safeParse(parsed);
         if (!result.success) {
-          throw AppError.llmInvalidResponse(`Ollama returned an invalid rerank response: ${result.error.message}`);
+          throw AppError.llmInvalidResponse(`AI provider returned an invalid rerank response: ${result.error.message}`);
         }
         return result.data.clips;
       },
       {
         attempts: this.options.maxRetries,
         onRetry: (error, attempt) => {
-          this.logger.warn({ attempt, err: error }, 'Retrying Ollama rerank');
+          this.logger.warn({ attempt, err: error }, 'Retrying clip rerank');
         },
       },
     );
@@ -174,6 +174,6 @@ function parseJsonLoosely(text: string): unknown {
         // Fall through to the error below.
       }
     }
-    throw AppError.llmInvalidResponse('Ollama response was not valid JSON.');
+    throw AppError.llmInvalidResponse('AI provider response was not valid JSON.');
   }
 }
