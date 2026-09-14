@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+export const viralityScoreBreakdownSchema = z.object({
+  overall: z.number().min(0).max(100),
+  hookStrength: z.number().min(0).max(100),
+  engagementFlow: z.number().min(0).max(100),
+  trendRelevance: z.number().min(0).max(100),
+  standaloneValue: z.number().min(0).max(100),
+  reasons: z.array(z.string()).default([]),
+});
+
+export type ViralityScoreBreakdownInput = z.infer<typeof viralityScoreBreakdownSchema>;
+
 /**
  * Shape of a single clip as returned by the LLM. Mirrors the prompt's required
  * schema. `peak` is optional: the model is asked for the timestamp of the most
@@ -14,6 +25,7 @@ export const highlightClipSchema = z.object({
   reason: z.string().min(1),
   hook: z.string().min(1),
   peak: z.number().min(0).optional(),
+  virality: viralityScoreBreakdownSchema.optional(),
 });
 
 /** Shape of the full `{ "clips": [...] }` payload the LLM must return for one chunk. */
@@ -36,6 +48,7 @@ export const rerankedClipSchema = z.object({
   title: z.string().optional(),
   reason: z.string().optional(),
   hook: z.string().optional(),
+  virality: viralityScoreBreakdownSchema.optional(),
 });
 
 /** Shape of the full `{ "clips": [...] }` payload the rerank pass must return. */

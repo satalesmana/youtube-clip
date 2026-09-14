@@ -68,7 +68,7 @@ export class HighlightAnalysisService implements IHighlightAnalysisService {
         genre,
       }),
       JSON_ONLY_INSTRUCTION,
-      '{"clips": [{"start": 0, "end": 0, "score": 95, "title": "", "reason": "", "hook": "", "peak": 0}]}',
+      '{"clips": [{"start": 0, "end": 0, "score": 95, "title": "", "reason": "", "hook": "", "peak": 0, "virality": {"overall": 95, "hookStrength": 95, "engagementFlow": 90, "trendRelevance": 85, "standaloneValue": 90, "reasons": [""]}}]}',
     ].join(' ');
 
     const userPrompt = buildViralHighlightUserPrompt(chunk);
@@ -126,7 +126,7 @@ export class HighlightAnalysisService implements IHighlightAnalysisService {
     const systemPrompt = [
       buildRerankSystemPrompt(params.language, params.genre),
       JSON_ONLY_INSTRUCTION,
-      '{"clips": [{"id": "", "score": 95, "title": "", "reason": "", "hook": ""}]}',
+      '{"clips": [{"id": "", "score": 95, "title": "", "reason": "", "hook": "", "virality": {"overall": 95, "hookStrength": 95, "engagementFlow": 90, "trendRelevance": 85, "standaloneValue": 90, "reasons": [""]}}]}',
     ].join(' ');
     const userPrompt = buildRerankUserPrompt(params);
 

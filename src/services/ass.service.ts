@@ -73,6 +73,17 @@ export class AssService implements IAssService {
 
     // NOTE: ASS "PrimaryColour" is the karaoke fill-in (already-spoken) color;
     // "SecondaryColour" is the base (not-yet-spoken) color underneath it.
+    //
+    // BorderStyle 1 = outline + drop shadow (default)
+    // BorderStyle 3 = opaque box background (Hormozi style)
+    //   - Outline field = box padding in pixels
+    //   - Shadow field = unused (set to 0)
+    //   - BackColour = the opaque box fill color
+    const useBox = style.useOpaqueBox === true;
+    const borderStyle = useBox ? 3 : 1;
+    const outlineOrPadding = useBox ? (style.boxPaddingPx ?? 8) : style.outlineWidth;
+    const shadowOrZero = useBox ? 0 : style.shadowDepth;
+
     const styleLine = [
       'Default',
       style.fontName,
@@ -80,7 +91,7 @@ export class AssService implements IAssService {
       hexToAssColor(style.highlightColorHex),
       hexToAssColor(style.baseColorHex),
       hexToAssColor(style.outlineColorHex),
-      hexToAssColor(style.shadowColorHex),
+      hexToAssColor(style.shadowColorHex), // BackColour: box fill when BorderStyle 3
       -1, // Bold
       0, // Italic
       0, // Underline
@@ -89,9 +100,9 @@ export class AssService implements IAssService {
       100, // ScaleY
       0, // Spacing
       0, // Angle
-      1, // BorderStyle (outline + drop shadow)
-      style.outlineWidth,
-      style.shadowDepth,
+      borderStyle, // 1 = outline+shadow, 3 = opaque box
+      outlineOrPadding, // Outline width OR box padding
+      shadowOrZero, // Shadow depth (0 when using box)
       2, // Alignment: bottom-center
       marginLR,
       marginLR,

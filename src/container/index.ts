@@ -13,7 +13,10 @@ import { ClipRefinementService } from '../services/clip-refinement.service.js';
 import { SubtitleService } from '../services/subtitle.service.js';
 import { AssService } from '../services/ass.service.js';
 import { NoOpFaceDetectionService } from '../services/face-detection.service.js';
+import { FocalSmoothingService } from '../services/focal-smoothing.service.js';
 import { ReframeService } from '../services/reframe.service.js';
+import { PexelsBrollProvider, NoOpBrollProvider } from '../providers/broll/index.js';
+import { BrollService } from '../services/b-roll.service.js';
 import { ThumbnailService } from '../services/thumbnail.service.js';
 import { ContentAngleService } from '../content/angle.service.js';
 import { ScriptService } from '../content/script.service.js';
@@ -236,10 +239,25 @@ const assService = new AssService({
 });
 
 const faceDetectionService = new NoOpFaceDetectionService();
+const focalSmoothingService = new FocalSmoothingService();
 
 const reframeService = new ReframeService(
   { ffmpegBinaryPath: env.FFMPEG_BINARY_PATH, tempDir: resolve(rootDir, 'outputs', 'temp') },
   faceDetectionService,
+  focalSmoothingService,
+);
+
+const brollProvider = process.env.PEXELS_API_KEY
+  ? new PexelsBrollProvider({ apiKey: process.env.PEXELS_API_KEY, logger: createLogger('broll') })
+  : new NoOpBrollProvider();
+
+const brollService = new BrollService(
+  aiProvider.provider,
+  brollProvider,
+  {
+    model: aiProvider.model,
+  },
+  createLogger('broll-service'),
 );
 
 /**
@@ -590,7 +608,6 @@ export const hookController = new HookController({
   logger: createLogger('hooks.controller'),
   contentCache,
   previewRenderer,
-  styledPreviewRenderer: env.HOOK_PREVIEW_STYLED ? styledHookPreviewService : undefined,
 });
 
 /** Entry point for `POST /api/clips/recommend` (viral clip recommendations). */
@@ -796,7 +813,10 @@ export const container = {
   subtitleService,
   assService,
   faceDetectionService,
+  focalSmoothingService,
   reframeService,
+  brollProvider,
+  brollService,
   thumbnailService,
   manifestService,
   templateLoaderService,
@@ -828,4 +848,5 @@ export const container = {
   watermarkFilterService,
   previewRenderer,
   reelComposer,
+  styledHookPreviewService,
 };

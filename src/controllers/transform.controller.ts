@@ -32,11 +32,13 @@ import type { ContentCache } from '../services/content-cache.service.js';
 import type { ReelComposerService, ReelSegment, ReelSegmentSubtitle } from '../services/reel-composer.service.js';
 import type { IWatermarkFilterService } from '../services/watermark-filter.service.js';
 import type { ICaptionService } from '../content/caption.service.js';
+import type { IStyledHookPreview } from '../hook-preview/styled-hook-preview.service.js';
 import type { VideoCaptionResult, SocialPlatform } from '../types/caption.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
 import { normalizeForSpeech } from '../utils/speech-normalizer.js';
 import { resolveAudioMode } from '../types/audio-mode.js';
+import { resolveSubtitleStyle } from '../types/subtitle-style.presets.js';
 
 export type TransformStage = 'download' | 'transcript' | 'angle' | 'story' | 'script' | 'tts' | 'plan' | 'render';
 
@@ -73,6 +75,10 @@ export interface TransformControllerDeps {
    * Optional caption service for generating platform-tailored viral social captions.
    */
   captionService?: ICaptionService;
+  /**
+   * Optional styled hook renderer for rendering kinetic typography hook intro during Step 3.
+   */
+  styledHookPreviewService?: IStyledHookPreview;
   /** Optional real-time progress callback — called before each pipeline stage starts. */
   onStage?: (stage: TransformStage, opts?: { skipped?: boolean }) => void;
 }
@@ -821,6 +827,7 @@ export class TransformController {
     const outputVideo = await this.renderVideo(
       videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine, request.blur_watermark,
       { audioMode, sourceAudioVolume: request.sourceAudioVolume },
+      request.subtitleStyle,
     );
 
     return {
@@ -893,6 +900,32 @@ export class TransformController {
         .then(() => request.hookPreviewPath)
         .catch(() => undefined);
     }
+
+    // When no pre-rendered hook file is available on disk, but the user has
+    // configured a hook intro (via request.hookTitle / request.customHook) and an
+    // intro range exists, render the styled Remotion intro on-demand here in Step 3.
+    if (!hookIntroFile && intro && (request.hookTitle || request.customHook) && this.deps.styledHookPreviewService) {
+      try {
+        const headlineText = (request.hookTitle || request.customHook || '').trim();
+        const styled = await this.deps.styledHookPreviewService.render({
+          videoPath,
+          start: intro.start,
+          end: intro.end,
+          durationSeconds: Math.max(0.5, Number((intro.end - intro.start).toFixed(2))),
+          headlineText,
+          tag: request.hookTag,
+          highlightWords: request.hookHighlightWords,
+          themeSeed: `${videoId}:${request.subtitleStyle || request.template || 'default'}`,
+          outputDir,
+          fileName: `styled-hook-intro-${jobId}`,
+        });
+        hookIntroFile = styled.path;
+        logger.info({ hookIntroFile, headlineText }, 'Rendered styled hook intro on-demand in Step 3 transform');
+      } catch (err) {
+        logger.warn({ err }, 'Styled hook intro rendering failed in Step 3 — falling back to raw intro');
+      }
+    }
+
     const hookPreviewMissing = Boolean(
       request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4') && !hookIntroFile,
     );
@@ -954,7 +987,8 @@ export class TransformController {
         if (segment.filePath) return undefined;
         const events = this.deps.subtitleService.buildEvents(transcript, segment.start, segment.end);
         const assPath = join(outputDir, `reel-sub-${String(index).padStart(3, '0')}.ass`);
-        await writeFile(assPath, this.deps.assService.render(events, this.deps.assStyle), 'utf-8');
+        const reelAssStyle = resolveSubtitleStyle(request.subtitleStyle);
+        await writeFile(assPath, this.deps.assService.render(events, reelAssStyle), 'utf-8');
         return { assPath };
       }));
     }
@@ -1101,7 +1135,10 @@ export class TransformController {
     blurWatermark?: TransformRequestInput['blur_watermark'],
     /** Audio output settings derived from the request's audioMode / genre. */
     audioOptions?: { audioMode: import('../types/audio-mode.js').AudioMode; sourceAudioVolume?: number },
+    /** User-chosen subtitle caption style preset (beast / hormozi / clean). */
+    subtitleStyle?: string,
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
+    const resolvedAssStyle = resolveSubtitleStyle(subtitleStyle);
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(outputDir);

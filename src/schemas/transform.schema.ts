@@ -41,6 +41,13 @@ export const transformRequestSchema = z.object({
   style: z.enum(['commentary', 'sports', 'interview']).optional(),
   /** Template id (defaults to `commentary`). */
   template: z.string().optional(),
+  /**
+   * Subtitle caption style preset.
+   * - `beast`   — Bold pop karaoke, yellow+cyan highlights (default).
+   * - `hormozi` — White text on opaque black box, high contrast.
+   * - `clean`   — Minimal elegant fade, soft colors.
+   */
+  subtitleStyle: z.enum(['beast', 'hormozi', 'clean']).optional(),
   /** Channel branding (name + optional logo path). */
   channel: z
     .object({

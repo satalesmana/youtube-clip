@@ -82,3 +82,13 @@ export type HookIntroProps = {
   sourceStart: number;
   sourceEnd: number;
 };
+
+/** Props for the standalone styled outro CTA card (`OutroCardShort`). */
+export type OutroCardShortProps = {
+  channelName?: string;
+  ctaText?: string;
+  handle?: string;
+  creatorLogoUrl?: string;
+  durationSeconds?: number;
+  themeSeed?: string;
+};

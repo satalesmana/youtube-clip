@@ -104,6 +104,11 @@ export interface HookCandidate {
   previewUrl?: string;
 
   /**
+   * Thumbnail image extracted from the source video at this hook's timeframe.
+   */
+  thumbnailUrl?: string;
+
+  /**
    * Duration in seconds of the styled final preview (`previewUrl`) when it
    * was rendered clipper-style (HookIntroShort). Absent for raw-cut previews
    * and for cached results saved before styled previews existed.

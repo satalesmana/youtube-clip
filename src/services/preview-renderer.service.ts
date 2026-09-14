@@ -36,10 +36,13 @@ export interface PreviewRenderInput {
    * wired in, the preview will have the watermark area blurred.
    */
   blurWatermark?: WatermarkBlurOptions;
+  /** Force re-render even if a preview file already exists. */
+  overwrite?: boolean;
 }
 
 export interface PreviewRenderOutput {
   path: string;
+  thumbnailPath?: string;
   durationSeconds: number;
   sizeBytes: number;
 }
@@ -67,14 +70,55 @@ export class PreviewRendererService implements IPreviewRenderer {
     const width = this.options.previewWidth ?? DEFAULT_WIDTH;
     const duration = Math.max(0.1, input.end - input.start);
     const outputPath = join(input.outputDir, `${input.fileName}.mp4`);
+    const thumbnailPath = join(input.outputDir, `${input.fileName}.jpg`);
+    const metaPath = join(input.outputDir, `${input.fileName}.meta.json`);
 
     await ensureDir(input.outputDir);
 
-    // Skip re-encoding when a previous identical preview already exists.
-    if (await this.fileExists(outputPath)) {
-      this.logger.info({ outputPath }, 'Preview already exists — skipping render');
+    const ensureThumbnail = async () => {
+      if (!input.overwrite && (await this.fileExists(thumbnailPath))) return thumbnailPath;
+      const sampleTime = input.start + Math.min(1.0, duration * 0.2);
+      try {
+        await runCommand(ffmpeg, [
+          '-y',
+          '-ss', sampleTime.toFixed(3),
+          '-i', input.videoPath,
+          '-frames:v', '1',
+          '-update', '1',
+          '-q:v', '2',
+          thumbnailPath,
+        ]);
+        return thumbnailPath;
+      } catch (err) {
+        this.logger.warn({ err, thumbnailPath }, 'Failed to extract preview thumbnail frame');
+        return undefined;
+      }
+    };
+
+    // Skip re-encoding only when previous preview exists AND its start/end matches (unless overwrite is requested).
+    let matchesExisting = false;
+    if (!input.overwrite && (await this.fileExists(outputPath))) {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const raw = await readFile(metaPath, 'utf-8');
+        const meta = JSON.parse(raw);
+        if (
+          Math.abs(meta.start - input.start) < 0.1 &&
+          Math.abs(meta.end - input.end) < 0.1
+        ) {
+          matchesExisting = true;
+        }
+      } catch {
+        // No metadata file or parse error: re-render to ensure preview matches the new clip boundaries
+      }
+    }
+
+    if (matchesExisting) {
+      this.logger.info({ outputPath, start: input.start, end: input.end }, 'Preview already exists with matching range — skipping render');
+      const thumb = await ensureThumbnail();
       return {
         path: outputPath,
+        thumbnailPath: thumb,
         durationSeconds: duration,
         sizeBytes: (await stat(outputPath)).size,
       };
@@ -126,8 +170,18 @@ export class PreviewRendererService implements IPreviewRenderer {
     const stats = await stat(outputPath);
     this.logger.info({ outputPath, sizeBytes: stats.size }, 'Preview rendered');
 
+    try {
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(metaPath, JSON.stringify({ start: input.start, end: input.end }), 'utf-8');
+    } catch (err) {
+      this.logger.warn({ err, metaPath }, 'Failed to write preview metadata file');
+    }
+
+    const thumb = await ensureThumbnail();
+
     return {
       path: outputPath,
+      thumbnailPath: thumb,
       durationSeconds: duration,
       sizeBytes: stats.size,
     };

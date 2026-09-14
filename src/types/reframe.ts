@@ -11,3 +11,16 @@ export interface CropRegion {
   width: number;
   height: number;
 }
+
+/** A timestamped focal point sampled from a video segment. */
+export interface TrackedFocalPoint {
+  timestampSeconds: number;
+  focalPoint: FocalPoint;
+  confidence?: number;
+}
+
+/** Temporal sequence of focal points representing subject movement across a clip. */
+export interface SubjectTrajectory {
+  points: TrackedFocalPoint[];
+  smoothed: boolean;
+}

@@ -33,4 +33,12 @@ export interface AssStyleConfig {
   shadowDepth: number;
   verticalPositionFraction: number;
   animationStyle: CaptionAnimationStyle;
+  /**
+   * When true, renders with ASS BorderStyle 3 (opaque box) instead of the
+   * default outline+shadow mode. Used for the "Hormozi" box-background preset.
+   */
+  useOpaqueBox?: boolean;
+  /** Padding in pixels around the text when `useOpaqueBox` is true. Default: 8. */
+  boxPaddingPx?: number;
 }
+

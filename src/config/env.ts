@@ -61,7 +61,7 @@ const envSchema = z
       .optional()
       .transform((v) => v === undefined || (v !== '0' && v !== 'false')),
 
-    CHUNK_MAX_TOKENS: z.coerce.number().int().positive().default(2500),
+    CHUNK_MAX_TOKENS: z.coerce.number().int().positive().default(1000),
     CHUNK_OVERLAP_SECONDS: z.coerce.number().int().min(0).default(18),
 
     HIGHLIGHT_MIN_SECONDS: z.coerce.number().positive().default(20),

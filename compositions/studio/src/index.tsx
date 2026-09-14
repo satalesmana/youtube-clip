@@ -1,12 +1,13 @@
 import { Composition, registerRoot } from 'remotion';
 import { AIShort, DEFAULT_SKIN } from './AIShort';
 import { HookIntroShort } from './HookIntroShort';
+import { OutroCardShort } from './OutroCardShort';
 import { GOLD_THEME, SPORTS_THEME } from './design';
 import { InterviewOverlay } from './InterviewOverlay';
 import { SportsOverlay } from './SportsOverlay';
 import type { Skin } from './AIShort';
 import * as React from 'react';
-import type { CompositionProps, HookIntroProps } from './types';
+import type { CompositionProps, HookIntroProps, OutroCardShortProps } from './types';
 
 const FPS = 30;
 
@@ -55,6 +56,13 @@ const defaultHookIntroProps: HookIntroProps = {
   sourceEnd: 1,
 };
 
+const defaultOutroCardShortProps: OutroCardShortProps = {
+  channelName: 'kreator',
+  ctaText: 'Suka konten ini? Ikuti untuk update harian & momen viral berikutnya!',
+  durationSeconds: 3,
+  themeSeed: 'default:outro',
+};
+
 const OUTRO_SECONDS = 3;
 
 /**
@@ -96,6 +104,18 @@ registerRoot(() => (
         durationInFrames: Math.max(1, Math.round((props.hook?.duration ?? 4) * FPS)),
       })}
       defaultProps={defaultHookIntroProps}
+    />
+    <Composition
+      id="OutroCardShort"
+      component={OutroCardShort}
+      fps={FPS}
+      width={1080}
+      height={1920}
+      durationInFrames={3 * FPS}
+      calculateMetadata={({ props }) => ({
+        durationInFrames: Math.max(1, Math.round((props.durationSeconds ?? 3) * FPS)),
+      })}
+      defaultProps={defaultOutroCardShortProps}
     />
   </>
 ));

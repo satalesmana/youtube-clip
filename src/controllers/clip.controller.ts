@@ -45,10 +45,18 @@ export interface ClipRecommendResult {
  * Larger than HIGHLIGHT_TOP_N so the second pass has real room to demote
  * weak moments; the final output is cut back to top-N afterwards.
  */
-const RERANK_POOL_SIZE = 20;
+const RERANK_POOL_SIZE = 25;
 
 /** Candidates below this count gain nothing from a global comparison pass. */
 const RERANK_MIN_CANDIDATES = 2;
+
+/**
+ * Minimum clips to guarantee in the final output. When the rerank pass
+ * drops too many candidates, the soft-fallback logic backfills from the
+ * pool using the best dropped clips (with a small score discount) rather
+ * than returning an under-populated result.
+ */
+const RERANK_MIN_OUTPUT = 5;
 
 /**
  * Orchestrates the viral-clip recommendation stage (flow redesign step 2):
@@ -135,6 +143,16 @@ export class ClipController {
     // non-fatal — the clip stays in the list without a playable preview).
     const workspace = await this.workspaceFor(videoId);
     const previewsDir = join(workspace.root, 'clip-previews');
+
+    if (request.refresh) {
+      try {
+        const { rm } = await import('node:fs/promises');
+        await rm(previewsDir, { recursive: true, force: true });
+      } catch (err) {
+        logger.warn({ err }, 'Failed to clear old clip previews on refresh');
+      }
+    }
+
     const settledPreviews = await Promise.allSettled(
       ranked.map((clip, index) =>
         this.deps.previewRenderer.renderPreview({
@@ -143,6 +161,7 @@ export class ClipController {
           end: clip.end,
           outputDir: previewsDir,
           fileName: `clip-${String(index + 1).padStart(2, '0')}`,
+          overwrite: Boolean(request.refresh),
         }),
       ),
     );
@@ -150,17 +169,38 @@ export class ClipController {
     const clips: ViralClipDto[] = ranked.map((clip, index) => {
       const outcome = settledPreviews[index];
       const previewPath = outcome?.status === 'fulfilled' ? outcome.value.path : null;
+      const thumbnailPath = outcome?.status === 'fulfilled' ? outcome.value.thumbnailPath : null;
+      const roundedScore = Math.round(clip.score);
+      const virality = clip.virality ?? {
+        overall: roundedScore,
+        hookStrength: Math.min(100, Math.max(10, Math.round(clip.score * 0.96 + 4))),
+        engagementFlow: Math.min(100, Math.max(10, Math.round(clip.score * 0.92 + 3))),
+        trendRelevance: Math.min(100, Math.max(10, Math.round(clip.score * 0.88 + 8))),
+        standaloneValue: Math.min(100, Math.max(10, Math.round(clip.score * 0.94 + 5))),
+        reasons: [clip.reason],
+      };
+
+      const cacheBust = `?t=${Date.now()}`;
+      const mediaPreviewUrl = previewPath ? `${this.toMediaUrl(previewPath)}${cacheBust}` : '';
+      const mediaThumbnailUrl = thumbnailPath
+        ? `${this.toMediaUrl(thumbnailPath)}${cacheBust}`
+        : mediaPreviewUrl
+        ? mediaPreviewUrl.replace(/\.mp4(\?.*)?$/, '.jpg$1')
+        : '';
+
       return {
         id: `clip_${String(index + 1).padStart(2, '0')}`,
         rank: index + 1,
         start: clip.start,
         end: clip.end,
         durationSeconds: Number((clip.end - clip.start).toFixed(2)),
-        score: Math.round(clip.score),
+        score: roundedScore,
         title: clip.title,
         reason: clip.reason,
         hook: clip.hook,
-        previewUrl: previewPath ? this.toMediaUrl(previewPath) : '',
+        previewUrl: mediaPreviewUrl,
+        thumbnailUrl: mediaThumbnailUrl,
+        virality,
       };
     });
 
@@ -207,6 +247,63 @@ export class ClipController {
       this.deps.logger.warn({ err, videoId }, 'Failed to record clip selection feedback');
     }
   }
+
+  /**
+   * Fast preview re-rendering endpoint for existing saved clips.
+   * Re-cuts 9:16 preview clips and thumbnails with FFmpeg without re-calling LLM.
+   */
+  async rerenderPreviews(request: { youtubeUrl?: string; videoId?: string }): Promise<ClipRecommendResult> {
+    const videoId = this.resolveVideoId(request);
+    if (!videoId) throw AppError.validation('Provide youtubeUrl or videoId.');
+
+    const saved = await this.loadSaved(videoId);
+    if (!saved || !saved.clips?.length) {
+      throw AppError.validation(`No saved clips found for "${videoId}". Generate clips first.`);
+    }
+
+    const workspace = await this.workspaceFor(videoId);
+    const previewsDir = join(workspace.root, 'clip-previews');
+    const videoPath = this.videoPathFor(videoId);
+
+    // Clean old preview files to ensure fresh render
+    try {
+      const { rm } = await import('node:fs/promises');
+      await rm(previewsDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+
+    const settledPreviews = await Promise.allSettled(
+      saved.clips.map((clip, index) =>
+        this.deps.previewRenderer.renderPreview({
+          videoPath,
+          start: clip.start,
+          end: clip.end,
+          outputDir: previewsDir,
+          fileName: `clip-${String(index + 1).padStart(2, '0')}`,
+          overwrite: true,
+        }),
+      ),
+    );
+
+    const cacheBust = `?t=${Date.now()}`;
+    saved.clips.forEach((clip, index) => {
+      const outcome = settledPreviews[index];
+      const previewPath = outcome?.status === 'fulfilled' ? outcome.value.path : null;
+      const thumbnailPath = outcome?.status === 'fulfilled' ? outcome.value.thumbnailPath : null;
+      if (previewPath) {
+        clip.previewUrl = `${this.toMediaUrl(previewPath)}${cacheBust}`;
+        clip.thumbnailUrl = thumbnailPath
+          ? `${this.toMediaUrl(thumbnailPath)}${cacheBust}`
+          : clip.previewUrl.replace(/\.mp4(\?.*)?$/, '.jpg$1');
+      }
+    });
+
+    saved.generatedAt = new Date().toISOString();
+    await this.saveResult(videoId, saved);
+    return { ...saved, cached: false };
+  }
+
 
   /**
    * Returns a previously saved clip result for `GET /api/clips` without
@@ -265,8 +362,10 @@ export class ClipController {
 
   /**
    * Applies rerank verdicts to the pool: survivors get fresh globally
-   * calibrated scores and optional sharpened metadata; dropped candidates are
-   * removed entirely, then the list is cut back to the configured top-N.
+   * calibrated scores and optional sharpened metadata; dropped candidates
+   * that pushed the output below RERANK_MIN_OUTPUT are soft-backfilled from
+   * the pool with a small score discount rather than being discarded outright.
+   * The final list is then cut to the configured top-N.
    */
   private finalizeRanking(pool: HighlightClip[], reranked: RerankedClip[] | null): HighlightClip[] {
     if (!reranked || reranked.length === 0) {
@@ -275,17 +374,41 @@ export class ClipController {
 
     const byId = new Map(reranked.map((clip) => [clip.id, clip]));
     const survivors: HighlightClip[] = [];
+    const dropped: HighlightClip[] = [];
+
     pool.forEach((clip, index) => {
       const verdict = byId.get(`cand_${String(index + 1).padStart(2, '0')}`);
-      if (!verdict) return; // Dropped by the rerank pass.
+      if (!verdict) {
+        // Soft-drop: retain in the dropped list for potential backfill.
+        dropped.push(clip);
+        return;
+      }
       survivors.push({
         ...clip,
         score: verdict.score,
         title: verdict.title?.trim() || clip.title,
         reason: verdict.reason?.trim() || clip.reason,
         hook: verdict.hook?.trim() || clip.hook,
+        virality: verdict.virality ?? clip.virality,
       });
     });
+
+    // Soft fallback: if the rerank pass discarded too many candidates and we
+    // would return fewer than RERANK_MIN_OUTPUT clips, backfill from the
+    // highest-scoring dropped candidates with a 15-point score discount so
+    // they consistently rank below genuine rerank survivors.
+    if (survivors.length < RERANK_MIN_OUTPUT && dropped.length > 0) {
+      const needed = RERANK_MIN_OUTPUT - survivors.length;
+      const backfill = [...dropped]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, needed)
+        .map((clip) => ({ ...clip, score: Math.max(0, clip.score - 15) }));
+      survivors.push(...backfill);
+      this.deps.logger.info(
+        { survivorCount: survivors.length - backfill.length, backfillCount: backfill.length },
+        'Soft-backfilled dropped candidates to meet minimum output',
+      );
+    }
 
     return this.deps.highlightService.cutToTopN(survivors);
   }
@@ -302,7 +425,7 @@ export class ClipController {
   }
 
   /** Resolves the videoId from the request WITHOUT downloading anything. */
-  private resolveVideoId(request: ClipRecommendRequestInput): string | null {
+  private resolveVideoId(request: { youtubeUrl?: string; videoId?: string }): string | null {
     if (request.videoId) return request.videoId;
     if (request.youtubeUrl) return extractVideoIdFromUrl(request.youtubeUrl);
     return null;
@@ -319,6 +442,11 @@ export class ClipController {
       const raw = await readFile(this.savedPath(videoId), 'utf-8');
       const parsed = JSON.parse(raw) as ClipRecommendResult;
       if (!Array.isArray(parsed.clips)) return null;
+      // Ensure all clips have thumbnailUrl populated
+      parsed.clips = parsed.clips.map((c) => ({
+        ...c,
+        thumbnailUrl: c.thumbnailUrl || (c.previewUrl ? c.previewUrl.replace(/\.mp4$/, '.jpg') : ''),
+      }));
       return parsed;
     } catch {
       return null;
@@ -463,11 +591,15 @@ export class ClipController {
           );
         }
 
-        // Pacing delay between consecutive chunk calls (250ms - 600ms with jitter)
-        // to eliminate zero-latency mechanical bursts that trigger anti-bot / WAF heuristics
+        // Human-like pacing delay between consecutive chunk calls.
+        // Uses a two-tier jitter: a base pause (500-1200ms) occasionally
+        // lengthened by a secondary pause (0-1500ms) to mimic natural reading
+        // pauses. This pattern is harder to fingerprint than a uniform window
+        // and avoids triggering anti-bot / WAF heuristics on LLM backends.
         if (currentIndex < chunks.length) {
-          const pacingMs = 250 + Math.floor(Math.random() * 350);
-          await new Promise((resolve) => setTimeout(resolve, pacingMs));
+          const baseMs = 500 + Math.floor(Math.random() * 700);
+          const extraMs = Math.random() < 0.3 ? Math.floor(Math.random() * 1500) : 0;
+          await new Promise((resolve) => setTimeout(resolve, baseMs + extraMs));
         }
       }
     };

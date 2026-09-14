@@ -9,7 +9,6 @@ import type { IWhisperService } from '../services/whisper.service.js';
 import type { IContentAngleService, ContentAngleContext } from '../content/angle.service.js';
 import type { IStoryService } from '../content/story.service.js';
 import type { IHookService } from '../hooks/hook.service.js';
-import type { IStyledHookPreview } from '../hook-preview/styled-hook-preview.service.js';
 import type { ContentCache } from '../services/content-cache.service.js';
 import type { IPreviewRenderer } from '../services/preview-renderer.service.js';
 import type { TranscriptDocument } from '../types/transcript.js';
@@ -31,14 +30,8 @@ export interface HookControllerDeps {
   logger: Logger;
   /** Optional disk cache — same video + options returns cached stage outputs. */
   contentCache?: ContentCache;
-  /** Optional preview renderer — attaches a playable MP4 to each ranked hook. */
+  /** Optional preview renderer — attaches a thumbnail image and lightweight MP4 to each ranked hook. */
   previewRenderer?: IPreviewRenderer;
-  /**
-   * Optional styled renderer — renders the final clipper-style hook intro
-   * (HookIntroShort). Takes precedence over `previewRenderer`; the raw-cut
-   * renderer stays as the fallback when the styled render fails.
-   */
-  styledPreviewRenderer?: IStyledHookPreview;
 }
 
 /** Request for `POST /api/hooks/generate` (Plan §7). */
@@ -104,8 +97,8 @@ export class HookController {
       const videoId = this.resolveVideoId(request);
       if (videoId) {
         const saved = await this.loadSaved(videoId, candidateId);
-        if (saved) {
-          logger.info({ videoId, candidateId }, 'Returning saved hook result (no regeneration)');
+        if (saved && Array.isArray(saved.hooks) && saved.hooks.length > 0) {
+          logger.info({ videoId, candidateId, hookCount: saved.hooks.length }, 'Returning saved hook result (no regeneration)');
           return { ...saved, cached: true, platform: request.platform ?? saved.platform };
         }
       }
@@ -183,52 +176,40 @@ export class HookController {
       platform: request.platform,
     };
 
-    // Render a preview video per hook (parallel, failures are non-fatal — the
-    // hook stays in the list without a playable preview). The styled renderer
-    // produces the final clipper-style intro (HookIntroShort); when absent or
-    // failing, fall back to the raw-cut preview of the source range.
-    if (this.deps.styledPreviewRenderer || this.deps.previewRenderer) {
+    // Render a lightweight preview and thumbnail per hook using previewRenderer
+    // (fast FFmpeg extraction without burning hook text or running Remotion).
+    if (this.deps.previewRenderer) {
       try {
         const previewsDir = join(job.root, 'hook-previews');
         const videoPath = join(job.root, 'downloads', `${videoId}.mp4`);
         const settled = await Promise.allSettled(
           response.hooks.map((hook, index) => {
-            const fileName = `final-hook-${String(index + 1).padStart(2, '0')}`;
-            const styled = this.deps.styledPreviewRenderer;
-            const sourceDuration = Math.max(0.5, Number((hook.source.end - hook.source.start).toFixed(2)));
-            if (styled) {
-              return styled.render({
-                videoPath,
-                start: hook.source.start,
-                end: hook.source.end,
-                durationSeconds: sourceDuration,
-                headlineText: hook.headline?.text || '',
-                tag: hook.headline?.tag,
-                highlightWords: hook.headline?.highlightWords,
-                themeSeed: `${videoId}:${hook.style ?? 'default'}`,
-                outputDir: previewsDir,
-                fileName,
-              }).catch(async (styledErr) => {
-                this.deps.logger.warn(
-                  { err: styledErr, rank: hook.rank },
-                  'Styled hook preview failed — falling back to raw cut',
-                );
-                return this.renderRawPreview(hook, videoPath, previewsDir);
-              });
-            }
-            return this.renderRawPreview(hook, videoPath, previewsDir);
+            const fileName = `hook-${String(index + 1).padStart(2, '0')}`;
+            return this.deps.previewRenderer!.renderPreview({
+              videoPath,
+              start: hook.source.start,
+              end: hook.source.end,
+              outputDir: previewsDir,
+              fileName,
+              overwrite: Boolean(request.refresh),
+            });
           }),
         );
+        const cacheBust = `?t=${Date.now()}`;
         response.hooks.forEach((hook, index) => {
           const outcome = settled[index];
           if (outcome?.status === 'fulfilled' && outcome.value) {
-            const { path, durationSeconds } = outcome.value;
-            hook.previewUrl = toMediaUrl(this.deps.outputsDir, path);
-            // Only the styled render is the final clipper-style intro.
-            if (path.includes('final-hook-')) {
-              hook.finalDurationSeconds = durationSeconds;
-              hook.previewPath = path;
-            }
+            const { path, thumbnailPath, durationSeconds } = outcome.value;
+            const mediaPreviewUrl = path ? `${toMediaUrl(this.deps.outputsDir, path)}${cacheBust}` : undefined;
+            const mediaThumbnailUrl = thumbnailPath
+              ? `${toMediaUrl(this.deps.outputsDir, thumbnailPath)}${cacheBust}`
+              : mediaPreviewUrl
+              ? mediaPreviewUrl.replace(/\.mp4(\?.*)?$/, '.jpg$1')
+              : undefined;
+
+            hook.previewUrl = mediaPreviewUrl;
+            hook.thumbnailUrl = mediaThumbnailUrl;
+            hook.finalDurationSeconds = durationSeconds;
           }
         });
       } catch (err) {
@@ -313,45 +294,36 @@ export class HookController {
     const previewsDir = join(job.root, 'hook-previews');
     const videoPath = join(job.root, 'downloads', `${videoId}.mp4`);
 
-    if (this.deps.styledPreviewRenderer || this.deps.previewRenderer) {
+    if (this.deps.previewRenderer) {
       const settled = await Promise.allSettled(
         saved.hooks.map((hook, index) => {
-          const fileName = `final-hook-${String(index + 1).padStart(2, '0')}`;
-          const styled = this.deps.styledPreviewRenderer;
-          const sourceDuration = Math.max(0.5, Number((hook.source.end - hook.source.start).toFixed(2)));
-          if (styled) {
-            return styled.render({
-              videoPath,
-              start: hook.source.start,
-              end: hook.source.end,
-              durationSeconds: sourceDuration,
-              headlineText: hook.headline?.text || '',
-              tag: hook.headline?.tag,
-              highlightWords: hook.headline?.highlightWords,
-              themeSeed: `${videoId}:${hook.style ?? 'default'}`,
-              outputDir: previewsDir,
-              fileName,
-            }).catch(async (styledErr) => {
-              this.deps.logger.warn(
-                { err: styledErr, rank: hook.rank },
-                'Styled hook preview failed during re-render — falling back to raw cut',
-              );
-              return this.renderRawPreview(hook, videoPath, previewsDir);
-            });
-          }
-          return this.renderRawPreview(hook, videoPath, previewsDir);
+          const fileName = `hook-${String(index + 1).padStart(2, '0')}`;
+          return this.deps.previewRenderer!.renderPreview({
+            videoPath,
+            start: hook.source.start,
+            end: hook.source.end,
+            outputDir: previewsDir,
+            fileName,
+            overwrite: true,
+          });
         }),
       );
 
+      const cacheBust = `?t=${Date.now()}`;
       saved.hooks.forEach((hook, index) => {
         const outcome = settled[index];
         if (outcome?.status === 'fulfilled' && outcome.value) {
-          const { path, durationSeconds } = outcome.value;
-          hook.previewUrl = toMediaUrl(this.deps.outputsDir, path);
-          if (path.includes('final-hook-')) {
-            hook.finalDurationSeconds = durationSeconds;
-            hook.previewPath = path;
-          }
+          const { path, thumbnailPath, durationSeconds } = outcome.value;
+          const mediaPreviewUrl = path ? `${toMediaUrl(this.deps.outputsDir, path)}${cacheBust}` : undefined;
+          const mediaThumbnailUrl = thumbnailPath
+            ? `${toMediaUrl(this.deps.outputsDir, thumbnailPath)}${cacheBust}`
+            : mediaPreviewUrl
+            ? mediaPreviewUrl.replace(/\.mp4(\?.*)?$/, '.jpg$1')
+            : undefined;
+
+          hook.previewUrl = mediaPreviewUrl;
+          hook.thumbnailUrl = mediaThumbnailUrl;
+          hook.finalDurationSeconds = durationSeconds;
         }
       });
     }
@@ -361,21 +333,6 @@ export class HookController {
     return { ...saved, cached: false };
   }
 
-  /** Legacy raw-cut preview (PreviewRendererService), shaped like the styled one. */
-  private async renderRawPreview(
-    hook: HookGenerateResponse['hooks'][number],
-    videoPath: string,
-    previewsDir: string,
-  ): Promise<{ path: string; durationSeconds: number; sizeBytes: number } | null> {
-    if (!this.deps.previewRenderer) return null;
-    return this.deps.previewRenderer.renderPreview({
-      videoPath,
-      start: hook.source.start,
-      end: hook.source.end,
-      outputDir: previewsDir,
-      fileName: `hook-${String(hook.rank).padStart(2, '0')}`,
-    });
-  }
 
   /** Resolves the videoId + transcript, downloading/transcribing when needed. */
   private async resolveTranscript(

@@ -69,8 +69,10 @@ async function main(): Promise<void> {
   console.log('\n[1] Generic prompt with config-driven bounds');
   const prompt = buildViralHighlightSystemPrompt({ minSeconds: 20, maxSeconds: 60 });
   check('contains injected min bound', prompt.includes('between 20 and 60 seconds'));
-  check('no football-specific wording', !/\bgoal\b|football/i.test(prompt));
-  check('no motogp-specific wording', !/motogp|moto3|rider/i.test(prompt));
+  // 'goal' in the scoring rubric means generic 'payoff/target', not sports-specific.
+  // Only reject explicitly sport-domain words like 'football' from the default prompt.
+  check('no football-specific wording in default prompt', !/\bfootball\b/i.test(prompt));
+  check('no motogp-specific wording in default prompt', !/motogp|moto3|rider/i.test(prompt));
   check('transcript-only honesty stated', /TRANSCRIPT ONLY/i.test(prompt));
   check('asks for peak timestamp', /"peak"/.test(prompt));
   const promptId = buildViralHighlightSystemPrompt({ minSeconds: 15, maxSeconds: 45, language: 'id' });
@@ -78,6 +80,9 @@ async function main(): Promise<void> {
   const promptAuto = buildViralHighlightSystemPrompt({ minSeconds: 20, maxSeconds: 60, language: 'auto' });
   check('auto language adds no instruction', !promptAuto.includes('in this language'));
   check('rerank prompt is generic too', !/motogp|football/i.test(buildRerankSystemPrompt()));
+  // Genre-specific prompts may contain sport keywords — only the DEFAULT (no genre) prompt must be generic.
+  const sportPrompt = buildViralHighlightSystemPrompt({ minSeconds: 20, maxSeconds: 60, genre: 'sports' });
+  check('sport genre prompt contains goal keyword', /\bgoal\b/i.test(sportPrompt));
 
   /* ── 2. HighlightService merge/rank/clamp ───────────────────────────── */
   console.log('\n[2] HighlightService normalization + peak-aware clamp');
@@ -246,9 +251,12 @@ async function main(): Promise<void> {
 
     const result = await controller.recommend({ youtubeUrl: `https://youtu.be/${VIDEO_ID}`, refresh: true });
     check('rerank pass was invoked', rerankCalled);
-    check('dropped candidate removed from output', result.clips.length === 2, `len=${result.clips.length}`);
+    // With soft-backfill: beta (cand_02) was dropped by the rerank but is
+    // backfilled because survivors (2) < RERANK_MIN_OUTPUT (5). Expect 3 total.
+    check('soft backfill fills to minimum output', result.clips.length === 3, `len=${result.clips.length}`);
     check('survivor metadata kept', result.clips.some((c) => c.title === 'alpha'));
-    check('ranks reassigned after drop', result.clips.map((c) => c.rank).join(',') === '1,2');
+    check('backfilled clip present in output', result.clips.some((c) => c.title === 'beta'));
+    check('ranks reassigned after drop', result.clips.map((c) => c.rank).join(',') === '1,2,3');
 
     // Feedback loop: recordSelection writes an append log.
     await controller.recordSelection(VIDEO_ID, [{ start: 0, end: 30, title: 'clip_01' }]);

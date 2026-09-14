@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { viralityScoreBreakdownSchema } from './highlight.schema.js';
 
 /**
  * Request schema for `POST /api/clips/recommend`.
@@ -59,6 +60,8 @@ export const viralClipSchema = z.object({
   reason: z.string(),
   hook: z.string(),
   previewUrl: z.string(),
+  thumbnailUrl: z.string().optional(),
+  virality: viralityScoreBreakdownSchema.optional(),
 });
 
 export type ViralClipDto = z.infer<typeof viralClipSchema>;

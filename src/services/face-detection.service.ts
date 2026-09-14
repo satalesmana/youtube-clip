@@ -1,25 +1,28 @@
 import type { FocalPoint } from '../types/reframe.js';
 
 /**
- * Pluggable face/subject detector: given a still frame, returns the
- * normalized focal point of the primary subject, or `null` if none is found.
+ * Pluggable face/subject detector (Clean Architecture - Layer 3: Vision Port).
  *
- * This is the seam future work (MediaPipe, YOLO, OpenCV, a cloud Vision API)
- * plugs into — {@link ReframeService} only depends on this interface, so
- * swapping in a real detector never requires touching rendering logic.
+ * Adheres to:
+ * - ISP (Interface Segregation): Focused on face detection contract only.
+ * - LSP (Liskov Substitution): Any detector (NoOp, OpenCV, MediaPipe) can substitute without side effects.
  */
 export interface IFaceDetectionService {
+  /** Detects normalized focal point (x, y in [0, 1]) of the primary face in a single still frame. */
   detectPrimaryFace(framePath: string): Promise<FocalPoint | null>;
+  /** Batch detection across multiple frames to optimize process calls or model inference. */
+  detectFacesBatch?(framePaths: string[]): Promise<Array<FocalPoint | null>>;
 }
 
 /**
- * No-op implementation: no face/speaker/motion detection is wired up yet, so
- * this always reports "nothing found," which makes {@link ReframeService}
- * fall through to a center-crop. Replace this with a real detector to
- * activate face-tracking reframing without changing any other service.
+ * Default no-op detector: safely falls through to center crop.
  */
 export class NoOpFaceDetectionService implements IFaceDetectionService {
   async detectPrimaryFace(_framePath: string): Promise<FocalPoint | null> {
     return null;
+  }
+
+  async detectFacesBatch(framePaths: string[]): Promise<Array<FocalPoint | null>> {
+    return framePaths.map(() => null);
   }
 }

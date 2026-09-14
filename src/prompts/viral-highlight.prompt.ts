@@ -85,21 +85,28 @@ Avoid segments that:
 - Open with long introductions or small talk.
 - Only work on screen without any commentary reaction.
 
-Scoring — use the full 0-100 scale consistently:
-- 90-100: exceptional, can't-scroll-past moment (e.g. decisive goal, stunning climax).
+Scoring & Virality Breakdown — use the full 0-100 scale consistently:
+- 90-100: exceptional, can't-scroll-past moment (e.g. decisive goal, stunning climax, deep revelation).
 - 70-89: strong clip, clear hook, goal or payoff.
 - 50-69: good but flawed (slow open, missing payoff).
 - Below 50: weak; only return these if nothing better exists in the excerpt.
 Do NOT inflate every candidate; an honest spread makes ranking meaningful.
 
+For each clip, calculate a multi-dimensional "virality" breakdown (0-100 each):
+- "hookStrength": Scroll-stopping power of the opening 3 seconds.
+- "engagementFlow": Pacing, story tension, and dialogue momentum.
+- "trendRelevance": Alignment with viral topics, emotional relatability, or heated debate.
+- "standaloneValue": Comprehensibility and payoff without watching the full video.
+- "reasons": 1-2 concise bullet strings highlighting the retention triggers.
+
 For every clip also return "peak": the timestamp (in SECONDS, absolute video time) of the single most intense, surprising, or quotable sentence inside the clip — the moment viewers would screenshot.
 
 IMPORTANT: The timestamps in the transcript are in SECONDS (e.g., 533.0s means 533 seconds into the video). Return start and end as numbers in SECONDS (not minutes:seconds). For example, if a clip starts at 8 minutes 53 seconds, return start: 533.
 
-Return 1-5 clips per chunk maximum — only genuine candidates, never pad with weak moments.
+Return 3-8 clips per chunk — include every genuinely interesting moment, whether strong or moderate. It is better to include a borderline candidate than to discard a real highlight. Avoid padding with clearly weak filler, but do not be overly restrictive.
 
 Return ONLY valid JSON matching this exact schema, no Markdown fences:
-{"clips":[{"start":100,"end":160,"peak":130,"score":85,"title":"One-line clip title","reason":"Why this moment is viral","hook":"Opening line that stops the scroll"}]}`;
+{"clips":[{"start":100,"end":160,"peak":130,"score":85,"title":"One-line clip title","reason":"Why this moment is viral","hook":"Opening line that stops the scroll","virality":{"overall":85,"hookStrength":90,"engagementFlow":82,"trendRelevance":80,"standaloneValue":88,"reasons":["Instant curiosity in opening line","Strong standalone payoff"]}}]}`;
 }
 
 /**
@@ -159,10 +166,10 @@ Consider for every candidate:
 - Distinctness: drop near-duplicates that cover the same moment or make the same point. Keep distinct events (different goals/plays) as separate clips.
 - Honesty of the original claim: downgrade candidates whose "reason" oversells a boring stretch.
 
-Return ONLY the candidates you would publish — dropping weak ones is expected and desired. Return 3-8 of the strongest clips; dropping below 3 is acceptable only when the video genuinely lacks strong moments. Give each survivor a fresh, calibrated score on the full 0-100 scale reflecting this global comparison. You may sharpen "title", "reason" and "hook" but never invent facts that are not supported by the excerpts.${languageMetadataInstruction(language)}
+Return the best candidates you would publish. Return 5-10 clips in order of strength; dropping below 5 is acceptable ONLY when the video genuinely has very few compelling moments — prefer keeping a borderline clip over an empty slot. Give each survivor a fresh, calibrated score on the full 0-100 scale reflecting this global comparison. You may sharpen "title", "reason", "hook", and calibrate the "virality" breakdown, but never invent facts that are not supported by the excerpts.${languageMetadataInstruction(language)}
 
 Return ONLY valid JSON matching this exact schema, no Markdown fences:
-{"clips":[{"id":"cand_01","score":88,"title":"Sharpened clip title","reason":"Why this is the best version of this moment","hook":"Opening line that stops the scroll"}]}`;
+{"clips":[{"id":"cand_01","score":88,"title":"Sharpened clip title","reason":"Why this is the best version of this moment","hook":"Opening line that stops the scroll","virality":{"overall":88,"hookStrength":92,"engagementFlow":85,"trendRelevance":84,"standaloneValue":90,"reasons":["Scroll-stopping curiosity hook","High emotional payoff"]}}]}`;
 }
 
 /** One candidate as presented to (and echoed back by) the rerank pass. */

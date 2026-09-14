@@ -4,6 +4,8 @@ import { runCommand } from '../utils/exec.js';
 import { ensureDir } from '../utils/fs.js';
 import { probeDurationSeconds } from '../utils/ffmpeg.js';
 import type { Logger } from '../utils/logger.js';
+import type { CropRegion } from '../types/reframe.js';
+import type { BrollPlacement } from '../types/b-roll.js';
 
 export interface ReelComposerOptions {
   /** FFmpeg binary path (default `ffmpeg`). */
@@ -19,7 +21,7 @@ export interface ReelSegment {
   start: number;
   end: number;
   /**
-   * Pre-made segment file (e.g. the styled hook intro `final-hook-NN.mp4`)
+   * Pre-made segment file (e.g. the styled hook intro `final-hook-NN.mp4` or outro card)
    * used verbatim instead of cutting the source video. When set, `start`/
    * `end` are ignored: the file is scaled to the canvas and joined as-is.
    * Its audio track is replaced with silence (styled intros are muted).
@@ -37,6 +39,12 @@ export interface ReelComposeInput {
   videoPath: string;
   /** Ordered segments — each becomes one part of the final video. */
   segments: ReelSegment[];
+  /** Optional branded intro segment (prepended to the final video). */
+  introSegment?: ReelSegment;
+  /** Optional branded outro CTA segment (appended to the final video). */
+  outroSegment?: ReelSegment;
+  /** Optional per-segment crop regions for 9:16 focal tracking. */
+  cropRegions?: Array<CropRegion | undefined>;
   /**
    * Per-segment subtitles. When present, each segment is re-encoded with its
    * own ASS file before concatenation; otherwise all segments are cut with
@@ -44,6 +52,8 @@ export interface ReelComposeInput {
    * for that segment — e.g. pre-made file segments carrying their own text).
    */
   subtitles?: Array<ReelSegmentSubtitle | undefined>;
+  /** Optional per-segment B-roll cutaway placements to overlay over footage. */
+  brolls?: Array<BrollPlacement[] | undefined>;
   /** Directory the output is written to. */
   outputDir: string;
   /** Output file name (without extension). */
@@ -77,7 +87,7 @@ export class ReelComposerService {
     const width = this.options.canvasWidth ?? 1080;
     const height = this.options.canvasHeight ?? 1920;
 
-    if (input.segments.length === 0) {
+    if (input.segments.length === 0 && !input.introSegment && !input.outroSegment) {
       throw new Error('ReelComposerService needs at least one segment.');
     }
 
@@ -86,23 +96,51 @@ export class ReelComposerService {
     const tempDir = join(input.outputDir, `reel-parts-${Date.now()}`);
     await ensureDir(tempDir);
 
+    // Assemble all segments in sequence
+    const effectiveSegments: ReelSegment[] = [];
+    const effectiveSubtitles: Array<ReelSegmentSubtitle | undefined> = [];
+    const effectiveCrops: Array<CropRegion | undefined> = [];
+    const effectiveBrolls: Array<BrollPlacement[] | undefined> = [];
+
+    if (input.introSegment) {
+      effectiveSegments.push(input.introSegment);
+      effectiveSubtitles.push(undefined);
+      effectiveCrops.push(undefined);
+      effectiveBrolls.push(undefined);
+    }
+
+    input.segments.forEach((seg, i) => {
+      effectiveSegments.push(seg);
+      effectiveSubtitles.push(input.subtitles?.[i]);
+      effectiveCrops.push(input.cropRegions?.[i]);
+      effectiveBrolls.push(input.brolls?.[i]);
+    });
+
+    if (input.outroSegment) {
+      effectiveSegments.push(input.outroSegment);
+      effectiveSubtitles.push(undefined);
+      effectiveCrops.push(undefined);
+      effectiveBrolls.push(undefined);
+    }
+
     try {
       const partPaths: string[] = [];
-      for (let index = 0; index < input.segments.length; index += 1) {
-        const segment = input.segments[index]!;
+      for (let index = 0; index < effectiveSegments.length; index += 1) {
+        const segment = effectiveSegments[index]!;
         const partPath = join(tempDir, `part-${String(index).padStart(3, '0')}.mp4`);
-        const subtitle = input.subtitles?.[index];
+        const subtitle = effectiveSubtitles[index];
+        const crop = effectiveCrops[index];
+        const brollList = effectiveBrolls[index];
 
         if (segment.filePath) {
-          // Pre-made segment (styled hook intro): scale to the canvas, keep
-          // its burned-in styling, and replace audio with silence so the
-          // concat stays uniform with the surrounding segments.
+          // Pre-made segment (styled hook intro or outro card): scale to the canvas,
+          // keep its styling, and replace audio with silence so the concat stays uniform.
           const vf = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`;
           await runCommand(ffmpeg, [
             '-y',
             '-i', segment.filePath,
             '-f', 'lavfi',
-            '-i', `anullsrc=r=48000:cl=stereo`,
+            '-i', 'anullsrc=r=48000:cl=stereo',
             '-vf', vf,
             '-map', '0:v:0',
             '-map', '1:a:0',
@@ -112,31 +150,94 @@ export class ReelComposerService {
             '-video_track_timescale', '90000',
             partPath,
           ]);
-        } else if (subtitle) {
-          // Burn-in pass: re-encode with the segment's ASS overlay.
-          const vf = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,ass='${this.escapeFilterPath(subtitle.assPath)}'`;
-          await runCommand(ffmpeg, [
-            '-y',
-            '-ss', segment.start.toFixed(3),
-            '-to', segment.end.toFixed(3),
-            '-i', input.videoPath,
-            '-vf', vf,
-            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
-            '-c:a', 'aac', '-b:a', '160k',
-            partPath,
-          ]);
         } else {
-          // Lossless cut + normalize to a shared timebase so concat is safe.
-          await runCommand(ffmpeg, [
-            '-y',
-            '-ss', segment.start.toFixed(3),
-            '-to', segment.end.toFixed(3),
-            '-i', input.videoPath,
-            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
-            '-c:a', 'aac', '-b:a', '160k',
-            '-video_track_timescale', '90000',
-            partPath,
-          ]);
+          // Prepare video filter components
+          const filterParts: string[] = [];
+          if (crop) {
+            filterParts.push(`crop=${crop.width}:${crop.height}:${crop.x}:${crop.y}`);
+            filterParts.push(`scale=${width}:${height}`);
+          } else {
+            filterParts.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease`);
+            filterParts.push(`pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`);
+          }
+
+          if (subtitle) {
+            filterParts.push(`ass='${this.escapeFilterPath(subtitle.assPath)}'`);
+          }
+
+          const validBrolls = (brollList ?? []).filter((b) => Boolean(b.asset.localFilePath));
+
+          if (validBrolls.length > 0) {
+            // Complex filter overlay: place B-roll over the dialogue while preserving [0:a]
+            const ffmpegArgs: string[] = [
+              '-y',
+              '-ss', segment.start.toFixed(3),
+              '-to', segment.end.toFixed(3),
+              '-i', input.videoPath,
+            ];
+
+            validBrolls.forEach((b) => {
+              ffmpegArgs.push('-i', b.asset.localFilePath!);
+            });
+
+            let currV = '[0:v]';
+            let filterComplex = `${currV}${filterParts.join(',')}[base];`;
+            currV = '[base]';
+
+            validBrolls.forEach((b, bIdx) => {
+              const inputIdx = bIdx + 1;
+              const relStart = Math.max(0, b.cue.start - segment.start).toFixed(2);
+              const relEnd = Math.min(segment.end - segment.start, b.cue.end - segment.start).toFixed(2);
+              const scaledTag = `[broll_${bIdx}]`;
+              const nextV = `[v_out_${bIdx}]`;
+
+              filterComplex += `[${inputIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}${scaledTag};`;
+              filterComplex += `${currV}${scaledTag}overlay=0:0:enable='between(t,${relStart},${relEnd})'${nextV};`;
+              currV = nextV;
+            });
+
+            if (filterComplex.endsWith(';')) {
+              filterComplex = filterComplex.slice(0, -1);
+            }
+
+            ffmpegArgs.push(
+              '-filter_complex', filterComplex,
+              '-map', currV,
+              '-map', '0:a',
+              '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+              '-c:a', 'aac', '-b:a', '160k',
+              '-video_track_timescale', '90000',
+              partPath,
+            );
+
+            await runCommand(ffmpeg, ffmpegArgs);
+          } else if (subtitle || crop) {
+            // Standard re-encode with -vf
+            const vf = filterParts.join(',');
+            await runCommand(ffmpeg, [
+              '-y',
+              '-ss', segment.start.toFixed(3),
+              '-to', segment.end.toFixed(3),
+              '-i', input.videoPath,
+              '-vf', vf,
+              '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+              '-c:a', 'aac', '-b:a', '160k',
+              '-video_track_timescale', '90000',
+              partPath,
+            ]);
+          } else {
+            // Lossless cut + normalize to a shared timebase so concat is safe
+            await runCommand(ffmpeg, [
+              '-y',
+              '-ss', segment.start.toFixed(3),
+              '-to', segment.end.toFixed(3),
+              '-i', input.videoPath,
+              '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+              '-c:a', 'aac', '-b:a', '160k',
+              '-video_track_timescale', '90000',
+              partPath,
+            ]);
+          }
         }
         partPaths.push(partPath);
       }

@@ -142,7 +142,7 @@ function buildScriptGenreGuidance(genre: ContentGenre, targetSeconds = 60, audio
       `- DO NOT describe actions already visible in the footage (e.g. avoid "the player runs toward the goal").`,
       `- Tone: ${toneDescription}`,
       `- Beat count: ${beatCountRange.min}–${beatCountRange.max}. Each beat = one critical match moment.`,
-      `- The \"hook\" section must name the exact moment or outcome (e.g. "90'+3 — the goal that changed everything").`,
+      `- The "hook" section must name the exact moment or outcome (e.g. "90'+3 — the goal that changed everything").`,
       `Override these rules only when the transcript clearly supplies context the camera cannot convey.`,
     ].join('\n');
   }

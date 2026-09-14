@@ -15,13 +15,17 @@ import { extractVideoIdFromUrl } from '../../../src/utils/youtube-id.js';
  */
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
-  const url = typeof query.url === 'string' ? query.url.trim() : '';
-  if (!url) {
-    throw createError(toHttpError(AppError.validation('Query param "url" is required.')));
+  const raw = typeof query.url === 'string' && query.url.trim()
+    ? query.url.trim()
+    : typeof query.videoId === 'string' && query.videoId.trim()
+    ? query.videoId.trim()
+    : '';
+  if (!raw) {
+    throw createError(toHttpError(AppError.validation('Query param "url" or "videoId" is required.')));
   }
 
   // Accept either a full YouTube URL or a bare videoId.
-  const videoId = extractVideoIdFromUrl(url) ?? url;
+  const videoId = extractVideoIdFromUrl(raw) ?? raw;
 
   try {
     return await clipController.getSaved(videoId);
