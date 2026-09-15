@@ -11,26 +11,23 @@
  * - Remotion decides HOW TO SHOW (layout, animation, rendering)
  */
 
-/** Hook presentation style. The MVP set is the first four. */
-export type HookStyle =
-  | 'curiosity'
-  | 'controversial'
-  | 'question'
-  | 'shock'
-  | 'contrarian'
-  | 'prediction'
-  | 'story'
-  | 'statistic'
-  | 'fear'
-  | 'opportunity';
+import type { HookType, HookAngle, VisualPresetId, LegacyHookStyle } from '../types/visual-preset.js';
+export type { HookType, HookAngle, VisualPresetId };
 
-/** Styles requested by default (Plan §5 MVP). */
+/**
+ * Hook presentation style — the original flat enum used by the LLM pipeline.
+ * @deprecated Use HookType + HookAngle instead (see visual-preset.ts).
+ */
+export type HookStyle = LegacyHookStyle;
+
+
 export const MVP_HOOK_STYLES: HookStyle[] = [
   'curiosity',
   'controversial',
   'question',
   'shock',
 ];
+
 
 /**
  * Objective quality metrics for one candidate (Plan §5).
@@ -75,8 +72,30 @@ export interface HookCandidate {
     description: string;
   };
 
-  /** Presentation style of this hook variant. */
+  /**
+   * Presentation style of this hook variant (legacy LLM output field).
+   * @deprecated Use hookType + hookAngle for new features.
+   */
   style: HookStyle;
+
+  /**
+   * Structural / rhetorical form of this hook (Phase 5 — populated by AI after resolver wiring).
+   * Optional so existing hooks without this field remain valid.
+   */
+  hookType?: HookType;
+
+  /**
+   * Emotional / rhetorical angle of this hook (Phase 5 — populated by AI).
+   * Distinct from `angle.type` (which is an editorial angle for the story);
+   * this is the scroll-stopping emotional intent of the hook itself.
+   */
+  hookAngle?: HookAngle;
+
+  /**
+   * Resolved visual preset ID (set by server after resolveVisualPreset()).
+   * Remotion uses this to select the correct headline renderer.
+   */
+  visualPresetId?: VisualPresetId;
 
   /** Best source footage for this hook (absolute seconds in the source video). */
   source: {

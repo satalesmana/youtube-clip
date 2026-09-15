@@ -33,6 +33,12 @@ export const hookCandidateLlmSchema = z.object({
   emotion: z.string().optional(),
   topic: z.string().optional(),
   reason: z.string().optional(),
+  /** Structural/rhetorical form of the hook (e.g. "question", "direct-address", "data-statistics"). */
+  hookType: z.string().optional(),
+  /** Emotional/rhetorical angle of the hook (e.g. "curiosity", "fear", "urgency"). */
+  hookAngle: z.string().optional(),
+  /** Angle alias if LLM outputs "angle" instead of "hookAngle". */
+  angle: z.string().optional(),
 });
 
 /** Full LLM response for hook candidate generation. */

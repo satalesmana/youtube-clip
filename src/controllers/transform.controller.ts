@@ -918,7 +918,10 @@ export class TransformController {
           themeSeed: `${videoId}:${request.subtitleStyle || request.template || 'default'}`,
           outputDir,
           fileName: `styled-hook-intro-${jobId}`,
+          // Visual preset: user selection or auto-resolved (Phase 3/5)
+          visualPreset: request.visualPreset,
         });
+
         hookIntroFile = styled.path;
         logger.info({ hookIntroFile, headlineText }, 'Rendered styled hook intro on-demand in Step 3 transform');
       } catch (err) {

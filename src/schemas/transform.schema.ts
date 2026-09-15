@@ -102,8 +102,23 @@ export const transformRequestSchema = z.object({
    * re-cutting `sourceRange` from the source video.
    */
   hookPreviewPath: z.string().optional(),
+  /**
+   * Explicit user-selected visual preset for the hook intro headline.
+   * When omitted (auto mode), the server uses resolveVisualPreset() with
+   * hookType + angle from the AI pipeline (Phase 5).
+   */
+  visualPreset: z.enum([
+    'kinetic-punch',
+    'curiosity-stack',
+    'story-slide',
+    'minimal-question',
+    'bold-impact',
+    'data-punch',
+    'opportunity-glow',
+  ] as const).optional(),
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),
+
   /**
    * User-edited custom narration script to use for TTS and video plan,
    * bypassing automatic LLM script generation.

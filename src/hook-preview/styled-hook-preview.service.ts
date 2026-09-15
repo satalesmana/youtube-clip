@@ -4,6 +4,13 @@ import { randomUUID } from 'node:crypto';
 import { runCommand } from '../utils/exec.js';
 import { ensureDir } from '../utils/fs.js';
 import type { Logger } from '../utils/logger.js';
+import {
+  resolveVisualPreset,
+  adaptLegacyHookStyle,
+  type VisualPresetId,
+  type HookType,
+  type HookAngle,
+} from '../types/visual-preset.js';
 
 export interface StyledHookPreviewOptions {
   /** Path to the compositions directory (contains `src/index.tsx` + `public/`). */
@@ -41,6 +48,29 @@ export interface StyledHookPreviewInput {
   outputDir: string;
   /** File name (without extension) for the preview. */
   fileName: string;
+
+  // ── Visual style fields (Phase 3) ──────────────────────────────────────
+  /**
+   * Explicit user-selected visual preset ID.
+   * When provided, overrides auto-resolution.
+   */
+  visualPreset?: VisualPresetId;
+  /**
+   * Structural form of the hook (from AI classification, Phase 5).
+   * Used by the resolver when no manual preset is given.
+   */
+  hookType?: HookType;
+  /**
+   * Emotional/rhetorical angle (from AI classification, Phase 5).
+   * Used by the resolver when no manual preset is given.
+   */
+  angle?: HookAngle;
+  /**
+   * Legacy flat hook style string from the LLM pipeline.
+   * Used only as a last-resort fallback via adaptLegacyHookStyle().
+   * @deprecated Pass visualPreset, hookType + angle instead.
+   */
+  legacyHookStyle?: string;
 }
 
 export interface StyledHookPreviewOutput {
@@ -86,6 +116,17 @@ export class StyledHookPreviewService {
       ? Math.min(input.durationSeconds, sourceDuration)
       : sourceDuration;
 
+    // Resolve visual preset:
+    //   1. Explicit user selection wins.
+    //   2. Resolver uses hookType + angle (Phase 5 — both currently undefined).
+    //   3. Legacy hookStyle adapter as last-resort backward compat.
+    //   4. Falls back to kinetic-punch (visual default).
+    const resolvedPreset = resolveVisualPreset({
+      manualPreset: input.visualPreset ?? adaptLegacyHookStyle(input.legacyHookStyle),
+      hookType: input.hookType,
+      angle: input.angle,
+    });
+
     const props = {
       hook: {
         duration: targetDuration,
@@ -95,6 +136,8 @@ export class StyledHookPreviewService {
         ...(input.badge ? { badge: input.badge } : {}),
         ...(input.channelName ? { channelName: input.channelName } : {}),
         themeSeed: input.themeSeed,
+        // New: visual preset ID consumed by HookIntroShort → HookHeadline.
+        visualPresetId: resolvedPreset.id,
       },
       sourceVideoPath: stagedVideoPath,
       sourceStart: input.start,

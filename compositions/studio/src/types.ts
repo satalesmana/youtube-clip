@@ -75,6 +75,12 @@ export type HookIntroProps = {
     channelName?: string;
     /** Seed for the deterministic palette (e.g. `${videoId}:${style}`). */
     themeSeed: string;
+    /**
+     * Visual preset ID resolved by the server (Phase 3+).
+     * When present, drives which headline renderer Remotion uses.
+     * When absent, falls back to KineticRenderer (backward compat).
+     */
+    visualPresetId?: string;
   };
   /** Staged source video (public-relative path, absolute for Studio testing). */
   sourceVideoPath: string;
@@ -82,6 +88,7 @@ export type HookIntroProps = {
   sourceStart: number;
   sourceEnd: number;
 };
+
 
 /** Props for the standalone styled outro CTA card (`OutroCardShort`). */
 export type OutroCardShortProps = {

@@ -14,7 +14,7 @@
     "build": "npm --prefix client run build && nitro build",
     "preview": "node .output/server/index.mjs",
     "typecheck": "tsc --noEmit && npm --prefix client run build",
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "tsx --test \"tests/**/*.test.ts\" \"tests/*.test.ts\"",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"**/*.{ts,json,md}\"",

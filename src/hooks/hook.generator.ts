@@ -11,6 +11,11 @@ import {
 import type { IAiProvider } from '../providers/ai.provider.js';
 import type { Logger } from '../utils/logger.js';
 import type { HookCandidate } from './hook.types.js';
+import {
+  resolveVisualPreset,
+  type HookType,
+  type HookAngle,
+} from '../types/visual-preset.js';
 
 export interface HookGeneratorOptions {
   model: string;
@@ -33,6 +38,76 @@ function estimateSpokenDuration(text: string, wordsPerMinute = 150): number {
   const words = text.split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.round((words / wordsPerMinute) * 60 * 10) / 10);
 }
+
+const VALID_HOOK_TYPES = new Set<HookType>([
+  'direct-address',
+  'you-focused',
+  'question',
+  'intriguing-statement',
+  'shock-surprise',
+  'story-anecdote',
+  'problem-solution',
+  'data-statistics',
+  'authority',
+  'visual',
+]);
+
+const VALID_HOOK_ANGLES = new Set<HookAngle>([
+  'curiosity',
+  'fear',
+  'urgency',
+  'contrarian',
+  'controversial',
+  'opportunity',
+  'prediction',
+  'authority',
+  'social-proof',
+  'surprise',
+]);
+
+function inferHookType(item: { hookType?: string; style?: string }): HookType {
+  if (item.hookType && VALID_HOOK_TYPES.has(item.hookType as HookType)) {
+    return item.hookType as HookType;
+  }
+  switch (item.style) {
+    case 'question': return 'question';
+    case 'statistic': return 'data-statistics';
+    case 'story': return 'story-anecdote';
+    case 'shock': return 'shock-surprise';
+    case 'contrarian':
+    case 'controversial':
+    case 'prediction':
+    case 'curiosity':
+      return 'intriguing-statement';
+    case 'opportunity':
+    case 'fear':
+      return 'problem-solution';
+    default:
+      return 'intriguing-statement';
+  }
+}
+
+function inferHookAngle(item: { hookAngle?: string; angle?: string; style?: string }): HookAngle {
+  const rawAngle = item.hookAngle ?? item.angle;
+  if (rawAngle && VALID_HOOK_ANGLES.has(rawAngle as HookAngle)) {
+    return rawAngle as HookAngle;
+  }
+  switch (item.style) {
+    case 'fear': return 'fear';
+    case 'opportunity': return 'opportunity';
+    case 'controversial': return 'controversial';
+    case 'contrarian': return 'contrarian';
+    case 'prediction': return 'prediction';
+    case 'shock': return 'surprise';
+    case 'question':
+    case 'story':
+    case 'statistic':
+    case 'curiosity':
+    default:
+      return 'curiosity';
+  }
+}
+
 
 /**
  * LLM-driven hook candidate generator (Plan Phase 2). One transcript +
@@ -99,6 +174,10 @@ export class HookGenerator implements IHookGenerator {
           const angle = context.angles.find((a) => a.id === item.angleId)!;
           seenIds.add(item.id);
 
+          const hookType = inferHookType(item);
+          const hookAngle = inferHookAngle(item);
+          const resolvedPreset = resolveVisualPreset({ hookType, angle: hookAngle });
+
           candidates.push({
             id: item.id,
             angle: {
@@ -108,6 +187,9 @@ export class HookGenerator implements IHookGenerator {
               description: angle.reason,
             },
             style: item.style,
+            hookType,
+            hookAngle,
+            visualPresetId: resolvedPreset.id,
             source: {
               start: item.sourceStart,
               end: item.sourceEnd,

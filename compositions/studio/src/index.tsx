@@ -50,6 +50,7 @@ const defaultHookIntroProps: HookIntroProps = {
     duration: 4,
     headlineText: 'HOOK HEADLINE',
     themeSeed: 'default:hook-intro',
+    visualPresetId: 'curiosity-stack',
   },
   sourceVideoPath: '',
   sourceStart: 0,
@@ -113,7 +114,7 @@ registerRoot(() => (
       height={1920}
       durationInFrames={3 * FPS}
       calculateMetadata={({ props }) => ({
-        durationInFrames: Math.max(1, Math.round((props.durationSeconds ?? 3) * FPS)),
+        durationInFrames: Math.max(1, Math.round(Number(props.durationSeconds ?? 3) * FPS)),
       })}
       defaultProps={defaultOutroCardShortProps}
     />

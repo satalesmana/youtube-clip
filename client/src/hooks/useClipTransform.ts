@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { api } from '../services/api';
-import type { DownloadedVideo, ScriptSection, TransformResult, ViralClip, ViralHook } from '../types';
+import type { DownloadedVideo, ScriptSection, TransformResult, ViralClip, ViralHook, VisualPresetSelection } from '../types';
 
 export function useClipTransform() {
   const [step, setStep] = useState<number>(1);
@@ -56,6 +56,12 @@ export function useClipTransform() {
   const [customHookTag, setCustomHookTag] = useState<string>('🔥 MOMEN VIRAL');
   const [enableHookIntro, setEnableHookIntro] = useState<boolean>(true);
   const [generatingHooks, setGeneratingHooks] = useState(false);
+  /**
+   * Visual preset selected by the user in Step 3.
+   * 'auto' = let the server resolver decide (AI hookType + angle).
+   * Any VisualPresetId = explicit user choice, always overrides auto.
+   */
+  const [selectedVisualPreset, setSelectedVisualPreset] = useState<VisualPresetSelection>('auto');
 
   // Full Transform
   const [runningTransform, setRunningTransform] = useState(false);
@@ -443,6 +449,10 @@ export function useClipTransform() {
         hookPreviewPath: selectedHook?.previewPath,
         sourceRange: selectedHook?.source ? { start: selectedHook.source.start, end: selectedHook.source.end } : undefined,
         selectedClips: selectedClipsToSend,
+        // Visual preset: send only when user explicitly selected one; omit for 'auto'
+        visualPreset: enableHookIntro && selectedVisualPreset !== 'auto'
+          ? selectedVisualPreset
+          : undefined,
       });
 
       setProgressPct(100);
@@ -552,6 +562,9 @@ export function useClipTransform() {
     enableHookIntro,
     setEnableHookIntro,
     generatingHooks,
+    // Visual preset selection
+    selectedVisualPreset,
+    setSelectedVisualPreset,
     startGenerateClips,
     refreshClips,
     rerenderClipPreviews,

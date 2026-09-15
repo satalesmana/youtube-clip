@@ -7,6 +7,26 @@ export interface ViralityScoreBreakdown {
   reasons: string[];
 }
 
+/**
+ * Typed union of all valid visual preset IDs.
+ * Keep in sync with src/types/visual-preset.ts on the server.
+ */
+export type VisualPresetId =
+  | 'kinetic-punch'
+  | 'curiosity-stack'
+  | 'story-slide'
+  | 'minimal-question'
+  | 'bold-impact'
+  | 'data-punch'
+  | 'opportunity-glow';
+
+/**
+ * A user can either pick an explicit preset or let the AI auto-resolve.
+ * 'auto' is a UI-only sentinel — it is NOT sent to the server.
+ * When 'auto' is selected, `visualPreset` is omitted from the API payload.
+ */
+export type VisualPresetSelection = VisualPresetId | 'auto';
+
 export interface ViralClip {
   id?: string;
   start: number;
@@ -117,6 +137,11 @@ export interface TransformRequest {
   hookHighlightWords?: string[];
   hookPreviewPath?: string;
   sourceRange?: { start: number; end: number };
+  /**
+   * Explicit user-selected visual preset for the hook intro.
+   * When omitted ("auto" mode), the server auto-resolves using hookType + angle.
+   */
+  visualPreset?: VisualPresetId;
 }
 
 export interface TransformProgress {

@@ -51,3 +51,46 @@ export const sceneOpacity = (
   _opts?: { fadeIn?: boolean; fadeOut?: boolean; fadeFrames?: number; min?: number },
 ): number => 1;
 
+// ─── Visual preset renderer animation helpers ────────────────────────────────
+
+/**
+ * Per-word staggered spring entrance for WordCascadeRenderer.
+ * Each word starts 4 frames later than the previous.
+ * Returns a 0→1 progress value for the word at `wordIndex`.
+ */
+export const wordCascadeProgress = (
+  frame: number,
+  fps: number,
+  wordIndex: number,
+): number => {
+  const staggerFrames = 4;
+  const delayedFrame = Math.max(0, frame - wordIndex * staggerFrames);
+  return spring({
+    frame: delayedFrame,
+    fps,
+    config: { damping: 14, stiffness: 130, mass: 0.85 },
+  });
+};
+
+/**
+ * Single block slide-up spring for SlideUpRenderer.
+ * Use the returned value to drive `translateY(${interpolate(v,[0,1],[80,0])}px)`.
+ */
+export const slideUpProgress = (frame: number, fps: number): number =>
+  spring({
+    frame,
+    fps,
+    config: { damping: 16, stiffness: 120, mass: 0.9 },
+  });
+
+/**
+ * Heavy overshoot scale-burst spring for BoldCapsRenderer.
+ * Maps to scale: `interpolate(v, [0,1], [1.28, 1.0])`.
+ * High stiffness + low damping creates a punchy overshoot feel.
+ */
+export const scaleBurstProgress = (frame: number, fps: number): number =>
+  spring({
+    frame,
+    fps,
+    config: { damping: 11, stiffness: 260, mass: 0.75 },
+  });

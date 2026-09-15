@@ -10,6 +10,7 @@ import { selectTheme } from './design';
 import type { Theme } from './design';
 import { toFrame } from './timing';
 import type { HookIntroProps } from './types';
+import { resolveVisualPreset, adaptLegacyHookStyle } from './visual-preset/index';
 
 const BADGE_SECONDS = 2;
 
@@ -32,6 +33,13 @@ export const HookIntroShort: React.FC<HookIntroProps> = ({
   const durationFrames = Math.max(1, toFrame(hook.duration, fps));
   const badgeFrames = Math.max(1, Math.round(BADGE_SECONDS * fps));
 
+  // Resolve the visual preset:
+  //   1. visualPresetId from server (Phase 3) wins
+  //   2. Falls back to kinetic-punch (visual default, no semantic assertion)
+  const visualPreset = resolveVisualPreset({
+    manualPreset: (hook.visualPresetId as any) ?? adaptLegacyHookStyle((hook as any).hookStyle),
+  });
+
   const trimBefore = Math.max(0, toFrame(sourceStart, fps));
   const trimAfter = Math.max(trimBefore + 1, toFrame(sourceEnd, fps));
   const clipLen = trimAfter - trimBefore;
@@ -44,42 +52,48 @@ export const HookIntroShort: React.FC<HookIntroProps> = ({
   });
   const zoomScale = interpolate(punchSpring, [0, 1], [1.12, 1]);
 
+  const hasVideo = Boolean(sourceVideoPath && sourceVideoPath.trim());
+
   /** Ambient background video (fills the 9:16 vertical canvas with heavy blur). */
-  const renderAmbientBg = (localFrame: number) => (
-    <Video
-      src={toAssetUrl(sourceVideoPath)}
-      objectFit="cover"
-      muted
-      volume={0}
-      trimBefore={trimBefore}
-      trimAfter={trimAfter}
-      style={{
-        width: '100%',
-        height: '100%',
-        transform: 'scale(1.25)',
-        filter: 'blur(32px) brightness(0.6)',
-        WebkitFilter: 'blur(32px) brightness(0.6)',
-      }}
-    />
-  );
+  const renderAmbientBg = (_localFrame: number) =>
+    hasVideo ? (
+      <Video
+        src={toAssetUrl(sourceVideoPath)}
+        objectFit="cover"
+        muted
+        volume={0}
+        trimBefore={trimBefore}
+        trimAfter={trimAfter}
+        style={{
+          width: '100%',
+          height: '100%',
+          transform: 'scale(1.25)',
+          filter: 'blur(32px) brightness(0.6)',
+          WebkitFilter: 'blur(32px) brightness(0.6)',
+        }}
+      />
+    ) : (
+      <AbsoluteFill style={{ backgroundColor: '#0f172a' }} />
+    );
 
   /** Foreground main video (sharp, centered, beautifully framed without cutting tables/actions). */
-  const renderMainVideo = (localFrame: number) => (
-    <Video
-      src={toAssetUrl(sourceVideoPath)}
-      objectFit="contain"
-      muted
-      volume={0}
-      trimBefore={trimBefore}
-      trimAfter={trimAfter}
-      style={{
-        width: '100%',
-        height: '100%',
-        transform: `scale(${kenBurnsScale(localFrame, durationFrames) * zoomScale})`,
-        filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.85))',
-      }}
-    />
-  );
+  const renderMainVideo = (localFrame: number) =>
+    hasVideo ? (
+      <Video
+        src={toAssetUrl(sourceVideoPath)}
+        objectFit="contain"
+        muted
+        volume={0}
+        trimBefore={trimBefore}
+        trimAfter={trimAfter}
+        style={{
+          width: '100%',
+          height: '100%',
+          transform: `scale(${kenBurnsScale(localFrame, durationFrames) * zoomScale})`,
+          filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.85))',
+        }}
+      />
+    ) : null;
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#050508', fontFamily: 'sans-serif', overflow: 'hidden' }}>
@@ -109,12 +123,13 @@ export const HookIntroShort: React.FC<HookIntroProps> = ({
         </Sequence>
       </AbsoluteFill>
 
-      {/* Layer 4: Modern Hook Title Card (Upper-Middle Video Clipper Style) */}
+      {/* Layer 4: Modern Hook Title Card */}
       <HookHeadline
         text={hook.headlineText}
         tag={hook.tag}
         theme={theme}
         highlightWords={hook.highlightWords}
+        visualPreset={visualPreset}
         absoluteStartFrame={0}
         durationFrames={durationFrames}
       />

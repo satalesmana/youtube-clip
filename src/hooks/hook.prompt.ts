@@ -56,6 +56,12 @@ Each candidate uses exactly ONE style tailored to the context of the video:
 7. **LANGUAGE**:
    - Write hooks in the requested output language.
 
+## Hook Classification (hookType & hookAngle)
+
+In addition to style, classify each candidate's structural form and emotional angle:
+- hookType (HOW it opens): "direct-address", "you-focused", "question", "intriguing-statement", "shock-surprise", "story-anecdote", "problem-solution", "data-statistics", "authority", "visual"
+- hookAngle (WHY it hooks): "curiosity", "fear", "urgency", "contrarian", "controversial", "opportunity", "prediction", "authority", "social-proof", "surprise"
+
 Return ONLY valid JSON matching this exact schema, no Markdown fences:
 {
   "candidates": [
@@ -63,6 +69,8 @@ Return ONLY valid JSON matching this exact schema, no Markdown fences:
       "id": "hook_01",
       "angleId": "angle_01",
       "style": "curiosity",
+      "hookType": "shock-surprise",
+      "hookAngle": "surprise",
       "headline": "DETIK-DETIK KEJADIAN TAK TERDUGA!",
       "tag": "⚡ DETIK KRUSIAL",
       "highlightWords": ["TAK TERDUGA"],

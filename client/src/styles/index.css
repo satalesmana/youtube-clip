@@ -523,8 +523,15 @@ textarea:focus {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border: none;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  color: #F1F5F9;
   text-decoration: none;
+}
+
+.btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 .btn.primary {
@@ -540,7 +547,22 @@ textarea:focus {
   box-shadow: 0 6px 22px rgba(50, 130, 184, 0.55);
 }
 
+.btn.secondary {
+  background: rgba(50, 130, 184, 0.2);
+  border: 1px solid rgba(50, 130, 184, 0.45);
+  color: #BBE1FA;
+}
+
+.btn.secondary:hover:not(:disabled) {
+  background: rgba(50, 130, 184, 0.35);
+  border-color: #3282B8;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(50, 130, 184, 0.35);
+}
+
 .btn.primary:disabled,
+.btn.secondary:disabled,
 .btn.ghost:disabled,
 .btn:disabled {
   opacity: 0.45;
@@ -2387,9 +2409,311 @@ textarea:focus {
 }
 
 /* ==========================================================================
+   Hook Text Style Presets (HTS)
+   ========================================================================== */
+
+.hts-section {
+  margin-bottom: 24px;
+}
+
+.hts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.hts-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hts-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ice);
+}
+
+.hts-subtitle {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* Auto card */
+.hts-auto-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(187, 225, 250, 0.06);
+  border: 1.5px solid rgba(187, 225, 250, 0.22);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+  text-align: left;
+  margin-bottom: 14px;
+}
+
+.hts-auto-card:hover:not(:disabled) {
+  background: rgba(187, 225, 250, 0.1);
+  border-color: rgba(187, 225, 250, 0.4);
+}
+
+.hts-auto-card.active {
+  background: rgba(187, 225, 250, 0.12);
+  border-color: var(--ice);
+  box-shadow: 0 0 0 1px var(--ice) inset, 0 0 16px rgba(187, 225, 250, 0.12);
+}
+
+.hts-auto-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hts-auto-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hts-auto-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.hts-auto-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hts-recommended-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent-gradient);
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 8px;
+  letter-spacing: 0.3px;
+}
+
+.hts-auto-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.hts-auto-hint {
+  color: var(--ice);
+}
+
+.hts-check-icon {
+  flex-shrink: 0;
+  color: var(--ice);
+}
+
+/* Preset grid */
+.hts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .hts-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Individual preset card */
+.hts-preset-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.12s;
+  text-align: left;
+}
+
+.hts-preset-card:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.hts-preset-card.active {
+  background: var(--bg-card-selected);
+  border-color: var(--ice);
+  box-shadow: 0 0 0 1px var(--ice) inset, 0 0 20px rgba(187, 225, 250, 0.1);
+}
+
+.hts-preset-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Selected checkmark badge */
+.hts-preset-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ice);
+  color: #0A0E14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Static visual preview area */
+.hts-preview {
+  width: 100%;
+  height: 56px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Kinetic preview */
+.hts-prev-kinetic {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+}
+
+.hts-prev-word {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #fff;
+  -webkit-text-stroke: 0.8px #000;
+}
+
+.hts-prev-glow {
+  color: var(--ice);
+  text-shadow: 0 0 8px rgba(187, 225, 250, 0.8);
+}
+
+/* Cascade preview */
+.hts-prev-cascade {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.hts-prev-cascade-word {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #fff;
+  letter-spacing: 0.4px;
+}
+
+/* Story slide preview */
+.hts-prev-story {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.hts-prev-story-word {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.hts-prev-underline {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 1.5px;
+}
+
+.hts-prev-question-mark {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--ice);
+  line-height: 1;
+}
+
+/* Bold caps preview */
+.hts-prev-bold {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hts-prev-bold-word {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #fff;
+  letter-spacing: 0.6px;
+}
+
+.hts-prev-chip {
+  background: var(--accent);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+/* Preset label */
+.hts-preset-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Meta badges row */
+.hts-meta-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.hts-meta-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-sub);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 1px 6px;
+  letter-spacing: 0.2px;
+}
+
+/* ==========================================================================
    Hook CTA Banner & Animated Interactive Elements
    ========================================================================== */
 .hook-cta-banner {
+
   margin-top: 24px;
   background: linear-gradient(135deg, rgba(163, 230, 53, 0.12) 0%, rgba(14, 165, 233, 0.08) 50%, rgba(168, 85, 247, 0.08) 100%);
   border: 1.5px solid rgba(163, 230, 53, 0.45);
