@@ -236,14 +236,17 @@ export const transformRequestSchema = z.object({
    * - `voice_over`     — Mix TTS narration over the source audio.
    *                       Source audio is attenuated to `sourceAudioVolume`.
    */
-  audioMode: z.enum(['strip_original', 'keep_original', 'voice_over']).optional(),
+  audioMode: z.preprocess(
+    (val) => (val === 'keep' ? 'keep_original' : val === 'speech' ? 'voice_over' : val === 'music' ? 'strip_original' : val),
+    z.enum(['strip_original', 'keep_original', 'voice_over']),
+  ).optional(),
   /**
    * Linear volume level for the source audio when `audioMode` is `voice_over`.
    * Range: 0.0 (silent) to 1.0 (full). Defaults to 0.3 (≈ −10 dB).
    */
   sourceAudioVolume: z.number().min(0).max(1).optional(),
-}).refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
-  message: 'Provide exactly one of: youtubeUrl OR videoId.',
+}).refine((data) => Boolean(data.youtubeUrl) || Boolean(data.videoId), {
+  message: 'Provide at least one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],
 }).refine((data) => !data.sourceRange || data.sourceRange.end > data.sourceRange.start, {
   message: 'sourceRange.end must be greater than sourceRange.start.',

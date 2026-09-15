@@ -94,6 +94,7 @@ export class RemotionCompositionEngine implements ICompositionEngine {
           channelName: assets.channelName,
           hookBadge: assets.hookBadge,
           creatorLogoUrl,
+          subtitleStyle: assets.subtitleStyle,
         }, null, 2),
       );
 

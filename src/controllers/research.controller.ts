@@ -22,9 +22,11 @@ export class ResearchController {
     logger.info('Research started');
     const result = await researchService.research({
       enabledProviders: request?.providers,
-      maxTrends: request?.max_trends,
+      maxTrends: request?.max_trends ?? request?.maxTrends,
       keyword: request?.keyword,
       language: request?.language,
+      subreddits: request?.subreddits,
+      rssFeeds: request?.rss_feeds ?? request?.rssFeeds,
     });
     logger.info(
       { trendCount: result.trends.length, signalCount: result.signalCount },

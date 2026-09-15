@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
 import type { DownloadedVideo, ScriptSection, TransformResult, ViralClip, ViralHook, VisualPresetSelection } from '../types';
+import { resolvePresetIdFromHook } from '../lib/visual-presets';
 
 export function useClipTransform() {
   const [step, setStep] = useState<number>(1);
@@ -16,7 +17,6 @@ export function useClipTransform() {
   const [detectingLanguage, setDetectingLanguage] = useState(false);
   const [outputLanguage, setOutputLanguage] = useState<'id' | 'en'>('id');
   const [genre, setGenre] = useState('auto');
-  const audioMode = 'keep' as const;
   const [outputMode, setOutputMode] = useState<'reel' | 'narration'>('reel');
   // targetDuration removed: clip boundaries are determined automatically by
   // ClipRefinementService which snaps to the nearest complete sentence/segment.
@@ -29,12 +29,34 @@ export function useClipTransform() {
 
   // AI Script Drafting & TTS Narration
   const [scriptDraft, setScriptDraft] = useState<{ language?: string; sections: ScriptSection[] } | null>(null);
+  const [isScriptCached, setIsScriptCached] = useState<boolean>(false);
   const [draftingScript, setDraftingScript] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [ttsVoice, setTtsVoice] = useState('id-ID-ArdiNeural');
   const [sourceVolume, setSourceVolume] = useState(25);
   const [synthesizingTts, setSynthesizingTts] = useState(false);
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const audioMode: 'keep_original' | 'strip_original' | 'voice_over' =
+    outputMode === 'reel' ? 'keep_original' : sourceVolume > 0 ? 'voice_over' : 'strip_original';
+
+  // Auto-load saved script draft from disk cache when video is selected
+  useEffect(() => {
+    const vid = downloadedVideo?.videoId;
+    if (!vid || scriptDraft !== null) return;
+
+    api.getSavedScript(vid).then((res) => {
+      if (res.cached && res.script && res.script.sections?.length) {
+        const normalizedSections = res.script.sections.map((s) => ({
+          ...s,
+          spokenText: s.spokenText?.trim() ? s.spokenText : s.text,
+        }));
+        setScriptDraft({ ...res.script, sections: normalizedSections });
+        setIsScriptCached(true);
+      }
+    }).catch(() => {
+      // Non-fatal if no cache exists
+    });
+  }, [downloadedVideo?.videoId, scriptDraft]);
 
   // Clips Analysis
   const [clips, setClips] = useState<ViralClip[]>([]);
@@ -272,7 +294,7 @@ export function useClipTransform() {
     }
   }, [hooks]);
 
-  const startDraftScript = useCallback(async () => {
+  const startDraftScript = useCallback(async (options?: { refresh?: boolean }) => {
     const targetUrl = url.trim();
     if (!targetUrl) throw new Error('Masukkan URL YouTube terlebih dahulu');
 
@@ -295,9 +317,15 @@ export function useClipTransform() {
         // No targetDuration: backend derives it from the actual clip length
         // so the script fits the natural narration boundary exactly.
         selectedClips,
+        refresh: options?.refresh,
       });
       if (res.script) {
-        setScriptDraft(res.script);
+        const normalizedSections = res.script.sections?.map((s) => ({
+          ...s,
+          spokenText: s.spokenText?.trim() ? s.spokenText : s.text,
+        })) ?? [];
+        setScriptDraft({ ...res.script, sections: normalizedSections });
+        setIsScriptCached(Boolean(res.cached));
       }
       return res.script;
     } catch (err) {
@@ -321,8 +349,9 @@ export function useClipTransform() {
         ttsVoice,
         customScript: scriptDraft,
       });
-      if (res.audioUrl) {
-        setTtsAudioUrl(res.audioUrl);
+      const resolvedAudioUrl = res.audioUrl || res.narration?.url;
+      if (resolvedAudioUrl) {
+        setTtsAudioUrl(resolvedAudioUrl);
       }
       return res;
     } catch (err) {
@@ -332,11 +361,12 @@ export function useClipTransform() {
     }
   }, [url, downloadedVideo, ttsVoice, scriptDraft]);
 
-  const updateScriptSection = useCallback((idx: number, text: string) => {
+  const updateScriptSection = useCallback((idx: number, updates: Partial<ScriptSection> | string) => {
     setScriptDraft((prev) => {
       if (!prev) return prev;
       const newSections = [...prev.sections];
-      newSections[idx] = { ...newSections[idx], text };
+      const patch = typeof updates === 'string' ? { text: updates } : updates;
+      newSections[idx] = { ...newSections[idx], ...patch };
       return { ...prev, sections: newSections };
     });
   }, []);
@@ -346,6 +376,7 @@ export function useClipTransform() {
       const newSection: ScriptSection = {
         type: 'commentary',
         text: 'Tambahkan narasi penjelas baru di sini...',
+        spokenText: 'Tambahkan narasi penjelas baru di sini...',
       };
       if (!prev) {
         return { language: 'id', sections: [newSection] };
@@ -449,9 +480,13 @@ export function useClipTransform() {
         hookPreviewPath: selectedHook?.previewPath,
         sourceRange: selectedHook?.source ? { start: selectedHook.source.start, end: selectedHook.source.end } : undefined,
         selectedClips: selectedClipsToSend,
-        // Visual preset: send only when user explicitly selected one; omit for 'auto'
-        visualPreset: enableHookIntro && selectedVisualPreset !== 'auto'
-          ? selectedVisualPreset
+        // Visual preset: pass selected visual preset, or resolve from hook if 'auto'
+        visualPreset: enableHookIntro
+          ? selectedVisualPreset !== 'auto'
+            ? selectedVisualPreset
+            : selectedHook
+            ? resolvePresetIdFromHook(selectedHook.hookType, (selectedHook as any)?.angle ?? (selectedHook as any)?.hookAngle)
+            : 'kinetic-punch'
           : undefined,
       });
 
@@ -491,6 +526,7 @@ export function useClipTransform() {
     customHookText,
     customHookTag,
     enableHookIntro,
+    selectedVisualPreset,
   ]);
 
   return {
@@ -528,6 +564,7 @@ export function useClipTransform() {
     setCustomPrompt,
     // Script & TTS
     scriptDraft,
+    isScriptCached,
     draftingScript,
     scriptError,
     ttsVoice,

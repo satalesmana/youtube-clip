@@ -50,7 +50,6 @@ export const HookIntroStylingPanel: React.FC<HookIntroStylingPanelProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <label className="label-main" style={{ margin: 0 }}>🎨 Desain &amp; Edit Teks Hook Pembuka (0–3 Detik)</label>
-          <span className="output-mode-badge" style={{ fontSize: '10.5px' }}>Tahap 3: Styling Video</span>
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12.5px', color: 'var(--text-muted)' }}>
           <input

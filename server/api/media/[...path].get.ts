@@ -8,7 +8,7 @@ import { env } from '../../../src/config/env.js';
  * Streams completed transform assets and previews. Keeping this allowlist avoids
  * exposing downloaded source videos or arbitrary files under `outputs/`.
  */
-const allowedOutputPath = /^(?:[A-Za-z0-9_-]+\/(?:render\/[A-Za-z0-9-]+\/rendered\.mp4|transform\/[A-Za-z0-9-]+\/(?:clips\/(?:transformed\.mp4|reel\.mp4)|voice\/voice\/narration\.mp3)|clips\/clip-\d{3}\.(?:mp4|jpg|jpeg|png|webp)|clip-previews\/(?:clip|hook)-\d{2}\.(?:mp4|jpg|jpeg|png|webp)|hook-previews\/(?:(?:clip|hook)-\d{2}|final-hook-\d{2})\.(?:mp4|jpg|jpeg|png|webp)|thumbnails\/[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png|webp)))$/;
+const allowedOutputPath = /^(?:[A-Za-z0-9_-]+\/(?:render\/[A-Za-z0-9-]+\/rendered\.mp4|transform\/[A-Za-z0-9-]+\/(?:clips\/(?:transformed\.mp4|reel\.mp4)|(?:voice\/)+narration\.mp3)|clips\/clip-\d{3}\.(?:mp4|jpg|jpeg|png|webp)|clip-previews\/(?:clip|hook)-\d{2}\.(?:mp4|jpg|jpeg|png|webp)|hook-previews\/(?:(?:clip|hook)-\d{2}|final-hook-\d{2})\.(?:mp4|jpg|jpeg|png|webp)|thumbnails\/[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png|webp)))$/;
 
 function getMimeType(path: string): string {
   const lower = path.toLowerCase();

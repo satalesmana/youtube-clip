@@ -10,7 +10,7 @@ export interface RedditProviderOptions {
 
 export interface IRedditProvider {
   /** Collects hot posts from the configured subreddits (falls back to r/popular). */
-  fetchHotPosts(): Promise<ResearchSourceItem[]>;
+  fetchHotPosts(overrideSubreddits?: string[]): Promise<ResearchSourceItem[]>;
 }
 
 interface RedditListingResponse {
@@ -45,8 +45,9 @@ export class RedditProvider implements IRedditProvider {
     private readonly logger: Logger,
   ) {}
 
-  async fetchHotPosts(): Promise<ResearchSourceItem[]> {
-    const { subreddits, maxPostsPerSubreddit, timeoutMs } = this.options;
+  async fetchHotPosts(overrideSubreddits?: string[]): Promise<ResearchSourceItem[]> {
+    const { subreddits: configSubs, maxPostsPerSubreddit, timeoutMs } = this.options;
+    const subreddits = overrideSubreddits && overrideSubreddits.length > 0 ? overrideSubreddits : configSubs;
     const targets = subreddits.length > 0 ? subreddits : ['popular'];
 
     const settled = await Promise.allSettled(

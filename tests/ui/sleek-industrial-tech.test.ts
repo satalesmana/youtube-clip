@@ -40,8 +40,23 @@ test('Modern Creator Suite UI Architecture Verification', async (t) => {
     assert.match(historyView, /Daftar Proyek &amp; Arsip Video/, 'HistoryView must have welcoming title');
   });
 
+  const getStudioSource = () => {
+    const studioDir = resolve(root, 'client/src/components/studio');
+    const files = [
+      'StudioView.tsx',
+      'StudioStepper.tsx',
+      'step1/Step1SourceConfig.tsx',
+      'step2/Step2ClipsSelection.tsx',
+      'step2/ClipCard.tsx',
+      'step3/Step3Styling.tsx',
+      'step3/ScriptEditorPanel.tsx',
+      'step4/Step4Output.tsx',
+    ];
+    return files.map((f) => readFileSync(resolve(studioDir, f), 'utf-8')).join('\n');
+  };
+
   await t.test('Task 4: Ergonomic Stepper & Studio Workflow', () => {
-    const studioView = readFileSync(resolve(root, 'client/src/components/studio/StudioView.tsx'), 'utf-8');
+    const studioView = getStudioSource();
     assert.match(studioView, /wizard-stepper/, 'Wizard stepper must exist');
     assert.match(studioView, /1\. Masukkan Video/i, 'Step 1 friendly title');
     assert.match(studioView, /Unduh &amp; Siapkan Video/, 'Download button must exist in Step 1');
@@ -82,7 +97,7 @@ test('Modern Creator Suite UI Architecture Verification', async (t) => {
   });
 
   await t.test('Task 7: OpusClip Style Viral Clip Card Architecture', async () => {
-    const studioView = readFileSync(resolve(root, 'client/src/components/studio/StudioView.tsx'), 'utf-8');
+    const studioView = getStudioSource();
     assert.match(studioView, /opus-clips-grid/, 'StudioView must render opus-clips-grid');
     assert.match(studioView, /opus-clip-card/, 'StudioView must render opus-clip-card');
     assert.match(studioView, /opus-clip-sticker/, 'StudioView must render central subtitle sticker');
@@ -96,7 +111,7 @@ test('Modern Creator Suite UI Architecture Verification', async (t) => {
   });
 
   await t.test('Task 8: Restored Content Genre & AI Narration Mode Architecture', async () => {
-    const studioView = readFileSync(resolve(root, 'client/src/components/studio/StudioView.tsx'), 'utf-8');
+    const studioView = getStudioSource();
     assert.match(studioView, /Genre Konten \(Panduan AI\)/, 'StudioView must contain Genre Konten in Step 1B');
     assert.match(studioView, /output-mode-grid/, 'StudioView must contain output-mode-grid in Step 3');
     assert.match(studioView, /script-editor-container/, 'StudioView must contain script-editor-container when narration mode is active');

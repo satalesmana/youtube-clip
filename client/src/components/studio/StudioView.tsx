@@ -51,6 +51,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
     setCustomPrompt,
     // Script & TTS
     scriptDraft,
+    isScriptCached,
     draftingScript,
     scriptError,
     ttsVoice,
@@ -268,6 +269,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
         outputMode={outputMode}
         setOutputMode={setOutputMode}
         scriptDraft={scriptDraft}
+        isScriptCached={isScriptCached}
         draftingScript={draftingScript}
         scriptError={scriptError}
         outputLanguage={outputLanguage}
@@ -278,7 +280,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setSourceVolume={setSourceVolume}
         synthesizingTts={synthesizingTts}
         ttsAudioUrl={ttsAudioUrl}
-        startDraftScript={() => startDraftScript()}
+        startDraftScript={startDraftScript}
         startSynthesizeTts={() => startSynthesizeTts()}
         updateScriptSection={updateScriptSection}
         addScriptSection={addScriptSection}

@@ -12,8 +12,8 @@ export const CaptionModal: React.FC<CaptionModalProps> = ({
   videoTitle,
   onClose,
 }) => {
-  const [platform, setPlatform] = useState<'tiktok' | 'reels' | 'shorts'>('tiktok');
-  const [captions, setCaptions] = useState<Record<string, string>>({});
+  const [platform, setPlatform] = useState<'tiktok' | 'reels' | 'shorts' | 'facebook' | 'x' | 'threads'>('tiktok');
+  const [captions, setCaptions] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +42,53 @@ export const CaptionModal: React.FC<CaptionModalProps> = ({
 
   if (!videoId) return null;
 
-  const currentCaption = captions[platform] || captions.caption || '';
+  const extractCaptionText = (cap: unknown): string => {
+    if (!cap) return '';
+    if (typeof cap === 'string') return cap;
+    if (typeof cap === 'object') {
+      const obj = cap as Record<string, any>;
+      if (typeof obj.formattedCaption === 'string' && obj.formattedCaption.trim()) {
+        return obj.formattedCaption.trim();
+      }
+      const parts: string[] = [];
+      if (obj.title) parts.push(obj.title);
+      if (obj.hook) parts.push(obj.hook);
+      if (obj.body) parts.push(obj.body);
+      if (obj.callToAction) parts.push(obj.callToAction);
+      if (Array.isArray(obj.hashtags) && obj.hashtags.length > 0) {
+        parts.push(obj.hashtags.join(' '));
+      }
+      if (parts.length > 0) return parts.join('\n\n');
+    }
+    return '';
+  };
+
+  const getActiveCaption = (): string => {
+    if (!captions) return '';
+    let raw: unknown = undefined;
+    if (platform === 'tiktok') {
+      raw = captions.tiktok;
+    } else if (platform === 'reels') {
+      raw = captions.instagram || captions.reels;
+    } else if (platform === 'shorts') {
+      raw = captions.youtube_shorts || captions.shorts;
+    } else if (platform === 'facebook') {
+      raw = captions.facebook || captions.facebook_reels;
+    } else if (platform === 'x') {
+      raw = captions.x || captions.twitter;
+    } else if (platform === 'threads') {
+      raw = captions.threads;
+    }
+    if (!raw && captions[platform]) {
+      raw = captions[platform];
+    }
+    if (!raw && captions.caption) {
+      raw = captions.caption;
+    }
+    return extractCaptionText(raw);
+  };
+
+  const currentCaption = getActiveCaption();
 
   const handleCopy = () => {
     if (currentCaption) {
@@ -53,7 +99,7 @@ export const CaptionModal: React.FC<CaptionModalProps> = ({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-window" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '580px', padding: '24px' }}>
+      <div className="modal-window" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px', padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
           <div>
             <h3 style={{ fontSize: '17px', fontWeight: 700, color: '#ffffff', margin: '0 0 4px' }}>
@@ -75,27 +121,48 @@ export const CaptionModal: React.FC<CaptionModalProps> = ({
         </div>
 
         {/* Platform Tabs */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <button
             type="button"
             className={`btn small ${platform === 'tiktok' ? 'primary' : 'ghost'}`}
             onClick={() => setPlatform('tiktok')}
           >
-            TikTok
+            🎵 TikTok
           </button>
           <button
             type="button"
             className={`btn small ${platform === 'reels' ? 'primary' : 'ghost'}`}
             onClick={() => setPlatform('reels')}
           >
-            Instagram Reels
+            📸 Instagram Reels
           </button>
           <button
             type="button"
             className={`btn small ${platform === 'shorts' ? 'primary' : 'ghost'}`}
             onClick={() => setPlatform('shorts')}
           >
-            YouTube Shorts
+            🔴 YouTube Shorts
+          </button>
+          <button
+            type="button"
+            className={`btn small ${platform === 'facebook' ? 'primary' : 'ghost'}`}
+            onClick={() => setPlatform('facebook')}
+          >
+            🔵 Facebook
+          </button>
+          <button
+            type="button"
+            className={`btn small ${platform === 'x' ? 'primary' : 'ghost'}`}
+            onClick={() => setPlatform('x')}
+          >
+            𝕏 X / Twitter
+          </button>
+          <button
+            type="button"
+            className={`btn small ${platform === 'threads' ? 'primary' : 'ghost'}`}
+            onClick={() => setPlatform('threads')}
+          >
+            🧵 Threads
           </button>
         </div>
 

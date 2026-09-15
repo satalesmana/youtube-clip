@@ -34,27 +34,33 @@ export const Step4Output: React.FC<Step4OutputProps> = ({
         </div>
       )}
 
-      {transformResult ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
-          <div style={{ maxWidth: '340px', width: '100%', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)', background: '#000', boxShadow: 'var(--shadow-lg)' }}>
-            <video
-              src={transformResult.videoUrl || transformResult.outputVideo}
-              controls
-              autoPlay
-              playsInline
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-            />
-          </div>
+      {transformResult ? (() => {
+        const rawVideo = transformResult.videoUrl || transformResult.outputVideo;
+        const videoSrc = typeof rawVideo === 'string'
+          ? rawVideo
+          : (rawVideo as { url?: string } | undefined)?.url || '';
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
-            <a
-              href={transformResult.videoUrl || transformResult.outputVideo}
-              download
-              className="btn primary"
-              style={{ textDecoration: 'none' }}
-            >
-              ⬇ Unduh Master Video (MP4)
-            </a>
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
+            <div style={{ maxWidth: '340px', width: '100%', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)', background: '#000', boxShadow: 'var(--shadow-lg)' }}>
+              <video
+                src={videoSrc}
+                controls
+                autoPlay
+                playsInline
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
+              <a
+                href={videoSrc}
+                download
+                className="btn primary"
+                style={{ textDecoration: 'none' }}
+              >
+                ⬇ Unduh Master Video (MP4)
+              </a>
 
             {transformResult.videoId && (
               <button
@@ -75,7 +81,7 @@ export const Step4Output: React.FC<Step4OutputProps> = ({
             </button>
           </div>
         </div>
-      ) : (
+      ); })() : (
         <div className="empty-recent-placeholder">
           Belum ada hasil render. Selesaikan Langkah 3 dan klik tombol render untuk memulai pembuatan video.
         </div>

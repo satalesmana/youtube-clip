@@ -21,6 +21,8 @@ export type PlanScene = {
   hookTag?: string;
   /** Words in the hook headline rendered in accent color. */
   highlightWords?: string[];
+  /** Visual preset id for the hook intro headline. */
+  visualPreset?: string;
 };
 
 export type PlanCaption = {
@@ -56,6 +58,8 @@ export type CompositionProps = {
   hookBadge?: string;
   /** Optional custom creator logo asset path. Defaults to 'creator-logo.png'. */
   creatorLogoUrl?: string;
+  /** Subtitle style preset: 'beast', 'hormozi', 'clean'. */
+  subtitleStyle?: string;
 };
 
 /** Props for the standalone styled hook intro (`HookIntroShort`). */

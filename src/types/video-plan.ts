@@ -37,6 +37,8 @@ export interface PlanScene {
   hookTag?: string;
   /** Words in the hook headline rendered in accent color. */
   highlightWords?: string[];
+  /** Visual preset id for the hook headline. */
+  visualPreset?: string;
 }
 
 /** A caption event with word-level timing for the composition engines. */

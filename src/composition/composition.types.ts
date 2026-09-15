@@ -18,6 +18,8 @@ export interface CompositionAssets {
   engine?: CompositionEngineKind | 'ffmpeg' | 'remotion';
   /** Requested FFmpeg template id when that engine is active. */
   templateId?: string;
+  /** Subtitle style preset for karaoke captions (e.g. beast, hormozi, clean). */
+  subtitleStyle?: string;
   /** YouTube video id — render outputs land under `outputs/{videoId}/` when provided. */
   videoId?: string;
   /** Optional custom creator logo image path */

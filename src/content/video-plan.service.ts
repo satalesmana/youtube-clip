@@ -54,6 +54,8 @@ export interface VideoPlanBuildInput {
   hookTag?: string;
   /** Words in the hook headline rendered in accent color. */
   hookHighlightWords?: string[];
+  /** Visual preset id for the hook intro. */
+  visualPreset?: string;
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -105,6 +107,7 @@ export class VideoPlanService implements IVideoPlanService {
       hookTitle,
       hookTag,
       hookHighlightWords,
+      visualPreset,
     } = input;
     const configuredTarget = this.options.targetDuration ?? 60;
     // Never make a video longer than its narration: that produces a frozen
@@ -248,25 +251,31 @@ export class VideoPlanService implements IVideoPlanService {
     const selectedHook = customHook?.trim();
     const hookMoment = (selectedTitle || selectedHook) ? undefined : story?.hookMoment;
     const firstScene = scenes[0];
-    if (firstScene && firstScene.type === 'hook') {
-      if (selectedTitle) {
-        firstScene.quotableLine = selectedTitle;
-        firstScene.hookTitle = selectedTitle;
-      } else if (selectedHook) {
-        firstScene.quotableLine = selectedHook;
-        firstScene.hookTitle = selectedHook;
-      }
-      if (hookTag?.trim()) {
-        firstScene.hookTag = hookTag.trim();
-      }
-      if (hookHighlightWords && hookHighlightWords.length > 0) {
-        firstScene.highlightWords = hookHighlightWords;
-      }
-      if (!firstScene.source && clipEnd > clipStart) {
-        firstScene.source = {
-          start: clipStart,
-          end: Math.min(clipEnd, clipStart + (firstScene.end - firstScene.start)),
-        };
+    if (firstScene) {
+      if (firstScene.type === 'hook' || selectedTitle || selectedHook || visualPreset) {
+        firstScene.type = 'hook';
+        if (selectedTitle) {
+          firstScene.quotableLine = selectedTitle;
+          firstScene.hookTitle = selectedTitle;
+        } else if (selectedHook) {
+          firstScene.quotableLine = selectedHook;
+          firstScene.hookTitle = selectedHook;
+        }
+        if (hookTag?.trim()) {
+          firstScene.hookTag = hookTag.trim();
+        }
+        if (hookHighlightWords && hookHighlightWords.length > 0) {
+          firstScene.highlightWords = hookHighlightWords;
+        }
+        if (visualPreset) {
+          firstScene.visualPreset = visualPreset;
+        }
+        if (!firstScene.source && clipEnd > clipStart) {
+          firstScene.source = {
+            start: clipStart,
+            end: Math.min(clipEnd, clipStart + (firstScene.end - firstScene.start)),
+          };
+        }
       }
     }
     if (hookMoment && firstScene && hookMoment.end > hookMoment.start) {

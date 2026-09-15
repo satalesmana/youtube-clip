@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { HookTextStylePresets } from '../HookTextStylePresets';
 import { resolvePresetLabelFromHook } from '../../../lib/visual-presets';
 import type { DownloadedVideo, ScriptSection, ViralClip, ViralHook, VisualPresetSelection } from '../../../types';
 import { ScriptEditorPanel } from './ScriptEditorPanel';
 import { HookIntroStylingPanel } from './HookIntroStylingPanel';
 import { SubtitleTemplatePicker } from './SubtitleTemplatePicker';
+
+export type Step3SubTab = 'mode' | 'hook' | 'subtitles';
 
 interface Step3StylingProps {
   step: number;
@@ -13,6 +15,7 @@ interface Step3StylingProps {
   setOutputMode: (mode: 'reel' | 'narration') => void;
   // Narration Script & TTS
   scriptDraft: { language?: string; sections: ScriptSection[] } | null;
+  isScriptCached?: boolean;
   draftingScript: boolean;
   scriptError: string | null;
   outputLanguage: 'id' | 'en';
@@ -23,9 +26,9 @@ interface Step3StylingProps {
   setSourceVolume: (vol: number) => void;
   synthesizingTts: boolean;
   ttsAudioUrl: string | null;
-  startDraftScript: () => void;
+  startDraftScript: (options?: { refresh?: boolean }) => void;
   startSynthesizeTts: () => void;
-  updateScriptSection: (idx: number, text: string) => void;
+  updateScriptSection: (idx: number, updates: Partial<ScriptSection> | string) => void;
   addScriptSection: () => void;
   removeScriptSection: (idx: number) => void;
   // Hook Visual Preset & Styling
@@ -59,6 +62,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   outputMode,
   setOutputMode,
   scriptDraft,
+  isScriptCached,
   draftingScript,
   scriptError,
   outputLanguage,
@@ -96,6 +100,8 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   setEnableIntroOutro,
   startTransform,
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<Step3SubTab>('mode');
+
   return (
     <div className={`card ${step !== 3 ? 'hidden' : ''}`}>
       <div className="card-head">
@@ -104,153 +110,349 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           <span className="head-badge">Gaya &amp; Narasi</span>
         </div>
         <p className="muted">
-          Pilih apakah ingin menggunakan klip asli pembicara atau narasi baru bercerita oleh AI, serta pilih animasi subtitle karaoke.
+          Konfigurasikan gaya video dalam 3 langkah terarah: pilih tipe narasi, desain hook pembuka 3 detik, dan tentukan gaya subtitle karaoke.
         </p>
       </div>
 
-      {/* Output Mode Selection: Reel vs Narration */}
-      <div className="input-group" style={{ marginBottom: '24px' }}>
-        <label className="label-main">Pilih Tipe Konten Akhir</label>
-        <div className="output-mode-grid">
-          <div
-            className={`output-mode-card ${outputMode === 'reel' ? 'active' : ''}`}
-            onClick={() => setOutputMode('reel')}
-          >
-            <div className="output-mode-title">
-              <span>🎬 Mode Klip Asli (Reel)</span>
-            </div>
-            <p className="output-mode-desc">
-              Pertahankan audio asli pembicara dan tambahkan animasi subtitle karaoke dinamis (Gaya OpusClip).
-            </p>
-          </div>
-
-          <div
-            className={`output-mode-card ${outputMode === 'narration' ? 'active' : ''}`}
-            onClick={() => setOutputMode('narration')}
-          >
-            <span className="output-mode-badge">✨ Nilai Pembeda</span>
-            <div className="output-mode-title">
-              <span>🎙️ Mode Narasi Baru AI (Storyteller)</span>
-            </div>
-            <p className="output-mode-desc">
-              AI menulis ulang naskah cerita dramatis, narator TTS membacakannya, dan video klip menjadi latar visual.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* When Narration Mode is active: AI Script Draft & TTS Studio */}
-      {outputMode === 'narration' && (
-        <ScriptEditorPanel
-          scriptDraft={scriptDraft}
-          draftingScript={draftingScript}
-          scriptError={scriptError}
-          outputLanguage={outputLanguage}
-          setOutputLanguage={setOutputLanguage}
-          ttsVoice={ttsVoice}
-          setTtsVoice={setTtsVoice}
-          sourceVolume={sourceVolume}
-          setSourceVolume={setSourceVolume}
-          synthesizingTts={synthesizingTts}
-          ttsAudioUrl={ttsAudioUrl}
-          startDraftScript={startDraftScript}
-          startSynthesizeTts={startSynthesizeTts}
-          updateScriptSection={updateScriptSection}
-          addScriptSection={addScriptSection}
-          removeScriptSection={removeScriptSection}
-        />
-      )}
-
-      {/* Hook Visual Style Preset Picker */}
-      {enableHookIntro && (
-        <HookTextStylePresets
-          value={selectedVisualPreset}
-          onChange={setSelectedVisualPreset}
-          disabled={runningTransform}
-          aiRecommendationLabel={
-            selectedHookIndex !== null && hooks[selectedHookIndex]
-              ? resolvePresetLabelFromHook(
-                  hooks[selectedHookIndex]?.hookType,
-                  (hooks[selectedHookIndex] as any)?.angle ?? (hooks[selectedHookIndex] as any)?.hookAngle
-                )
-              : undefined
-          }
-        />
-      )}
-
-      {/* Hook Intro & Headline Styling Panel */}
-      <HookIntroStylingPanel
-        enableHookIntro={enableHookIntro}
-        setEnableHookIntro={setEnableHookIntro}
-        selectedHookIndex={selectedHookIndex}
-        hooks={hooks}
-        selectedClipIndices={selectedClipIndices}
-        clips={clips}
-        downloadedVideo={downloadedVideo}
-        customHookText={customHookText}
-        setCustomHookText={setCustomHookText}
-        customHookTag={customHookTag}
-        setCustomHookTag={setCustomHookTag}
-      />
-
-      {/* Subtitle Template Picker */}
-      <SubtitleTemplatePicker
-        templateId={templateId}
-        setTemplateId={setTemplateId}
-      />
-
-      {/* B-roll & Outro CTA toggles */}
-      <div className="form-row" style={{ marginTop: '22px' }}>
-        <div className="input-group">
-          <label className="label-main">Sisipan Footage B-Roll Otomatis</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-            <input
-              type="checkbox"
-              id="check-broll"
-              checked={enableBroll}
-              onChange={(e) => setEnableBroll(e.target.checked)}
-              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-            />
-            <label htmlFor="check-broll" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
-              Aktifkan sisipan video B-roll otomatis sesuai topik obrolan
-            </label>
-          </div>
-        </div>
-
-        <div className="input-group">
-          <label className="label-main">Kartu Penutup (Outro Call to Action)</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-            <input
-              type="checkbox"
-              id="check-outro"
-              checked={enableIntroOutro}
-              onChange={(e) => setEnableIntroOutro(e.target.checked)}
-              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-            />
-            <label htmlFor="check-outro" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
-              Pasang kartu promosi 3 detik di akhir video
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: '28px', display: 'flex', justifyContent: 'space-between' }}>
-        <button type="button" className="btn ghost" onClick={() => setStep(2)}>
-          ← Kembali ke Pilihan Klip
-        </button>
+      {/* Focused Sub-Stepper Navigation for Step 3 */}
+      <div className="step3-substepper" role="tablist" aria-label="Tahapan Desain Video">
         <button
           type="button"
-          className="btn primary"
-          disabled={runningTransform || selectedClipIndices.length === 0}
-          onClick={startTransform}
+          role="tab"
+          aria-selected={activeSubTab === 'mode'}
+          className={`step3-substep-btn ${activeSubTab === 'mode' ? 'active' : 'completed'}`}
+          onClick={() => setActiveSubTab('mode')}
         >
-          {runningTransform
-            ? '⏳ Sedang Merender Video...'
-            : selectedClipIndices.length > 1
-            ? `🚀 Render ${selectedClipIndices.length} Klip → ${outputMode === 'narration' ? 'Video Narasi AI' : 'Video Reel'}`
-            : '🚀 Render Video Master'}
+          <div className="step3-substep-num">1</div>
+          <div className="step3-substep-content">
+            <span className="step3-substep-title">1. Tipe &amp; Narasi</span>
+            <span className="step3-substep-subtitle">
+              {outputMode === 'narration' ? '🎙️ Narasi AI' : '🎬 Klip Asli (Reel)'}
+            </span>
+          </div>
+        </button>
+
+        <div className="step3-substep-divider" />
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSubTab === 'hook'}
+          className={`step3-substep-btn ${activeSubTab === 'hook' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('hook')}
+        >
+          <div className="step3-substep-num">2</div>
+          <div className="step3-substep-content">
+            <span className="step3-substep-title">2. Hook Intro (0–3s)</span>
+            <span className="step3-substep-subtitle">
+              {enableHookIntro ? `⚡ ${selectedVisualPreset.toUpperCase()}` : 'Nonaktif'}
+            </span>
+          </div>
+        </button>
+
+        <div className="step3-substep-divider" />
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSubTab === 'subtitles'}
+          className={`step3-substep-btn ${activeSubTab === 'subtitles' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('subtitles')}
+        >
+          <div className="step3-substep-num">3</div>
+          <div className="step3-substep-content">
+            <span className="step3-substep-title">3. Subtitle &amp; Render</span>
+            <span className="step3-substep-subtitle">
+              {templateId === 'beast' || templateId === 'mrbeast' ? '🎨 MrBeast' : templateId === 'hormozi' ? '🎨 Hormozi' : '🎨 Clean'}
+            </span>
+          </div>
         </button>
       </div>
+
+      {/* Sub-Tab 1: Mode Konten & Naskah Narasi */}
+      {activeSubTab === 'mode' && (
+        <div>
+          <div className="input-group" style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label className="label-main" style={{ margin: 0 }}>Pilih Tipe Konten Akhir</label>
+              <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Langkah 1 dari 3</span>
+            </div>
+            <div className="output-mode-grid">
+              <div
+                className={`output-mode-card ${outputMode === 'reel' ? 'active' : ''}`}
+                onClick={() => setOutputMode('reel')}
+              >
+                <div className="output-mode-title">
+                  <span>🎬 Mode Klip Asli (Reel)</span>
+                </div>
+                <p className="output-mode-desc">
+                  Pertahankan audio asli pembicara dan tambahkan animasi subtitle karaoke dinamis (Gaya OpusClip).
+                </p>
+              </div>
+
+              <div
+                className={`output-mode-card ${outputMode === 'narration' ? 'active' : ''}`}
+                onClick={() => setOutputMode('narration')}
+              >
+                <div className="output-mode-title">
+                  <span>🎙️ Mode Narasi Baru AI (Storyteller)</span>
+                </div>
+                <p className="output-mode-desc">
+                  AI menulis ulang naskah cerita dramatis, narator TTS membacakannya, dan video klip menjadi latar visual.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {outputMode === 'reel' ? (
+            <div
+              style={{
+                background: 'rgba(50, 130, 184, 0.08)',
+                border: '1px solid rgba(50, 130, 184, 0.3)',
+                borderRadius: 'var(--radius-md)',
+                padding: '18px 20px',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '14px',
+              }}
+            >
+              <span style={{ fontSize: '24px', lineHeight: 1 }}>🎬</span>
+              <div>
+                <h4 style={{ margin: '0 0 4px', fontSize: '13.5px', color: 'var(--ice)' }}>
+                  Audio Asli Pembicara Dipertahankan
+                </h4>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Dalam mode ini, seluruh suara asli dan ekspresi pembicara akan digunakan tanpa dubbing suara buatan. Anda tidak perlu menyusun naskah suara baru. Klik tombol di bawah untuk melanjutkan ke pengaturan teks pembuka (Hook Intro).
+                </p>
+              </div>
+            </div>
+          ) : (
+            <ScriptEditorPanel
+              scriptDraft={scriptDraft}
+              isScriptCached={isScriptCached}
+              draftingScript={draftingScript}
+              scriptError={scriptError}
+              outputLanguage={outputLanguage}
+              setOutputLanguage={setOutputLanguage}
+              ttsVoice={ttsVoice}
+              setTtsVoice={setTtsVoice}
+              sourceVolume={sourceVolume}
+              setSourceVolume={setSourceVolume}
+              synthesizingTts={synthesizingTts}
+              ttsAudioUrl={ttsAudioUrl}
+              startDraftScript={startDraftScript}
+              startSynthesizeTts={startSynthesizeTts}
+              updateScriptSection={updateScriptSection}
+              addScriptSection={addScriptSection}
+              removeScriptSection={removeScriptSection}
+            />
+          )}
+
+          {/* Navigation for Sub-Tab 1 */}
+          <div style={{ marginTop: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button type="button" className="btn ghost" onClick={() => setStep(2)}>
+              ← Kembali ke Pilihan Klip
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => setActiveSubTab('hook')}
+            >
+              Lanjut ke Desain Hook Intro (3.2) →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Tab 2: Hook Intro Kinetik (0-3 Detik) */}
+      {activeSubTab === 'hook' && (
+        <div>
+          <div style={{ marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '14px', color: '#fff' }}>
+                ⚡ Hook Intro &amp; Judul Kinetik (0–3 Detik)
+              </h3>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                Teks animasi pembuka penentu retensi 3 detik pertama agar penonton tidak men-scroll lewat.
+              </p>
+            </div>
+            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Langkah 2 dari 3</span>
+          </div>
+
+          {/* Hook Visual Style Preset Picker */}
+          {enableHookIntro && (
+            <div style={{ marginBottom: '20px' }}>
+              <HookTextStylePresets
+                value={selectedVisualPreset}
+                onChange={setSelectedVisualPreset}
+                disabled={runningTransform}
+                aiRecommendationLabel={
+                  selectedHookIndex !== null && hooks[selectedHookIndex]
+                    ? resolvePresetLabelFromHook(
+                        hooks[selectedHookIndex]?.hookType,
+                        (hooks[selectedHookIndex] as any)?.angle ?? (hooks[selectedHookIndex] as any)?.hookAngle
+                      )
+                    : undefined
+                }
+              />
+            </div>
+          )}
+
+          {/* Hook Intro & Headline Styling Panel */}
+          <HookIntroStylingPanel
+            enableHookIntro={enableHookIntro}
+            setEnableHookIntro={setEnableHookIntro}
+            selectedHookIndex={selectedHookIndex}
+            hooks={hooks}
+            selectedClipIndices={selectedClipIndices}
+            clips={clips}
+            downloadedVideo={downloadedVideo}
+            customHookText={customHookText}
+            setCustomHookText={setCustomHookText}
+            customHookTag={customHookTag}
+            setCustomHookTag={setCustomHookTag}
+          />
+
+          {/* Navigation for Sub-Tab 2 */}
+          <div style={{ marginTop: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button type="button" className="btn ghost" onClick={() => setActiveSubTab('mode')}>
+              ← Kembali ke Tipe &amp; Narasi
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => setActiveSubTab('subtitles')}
+            >
+              Lanjut ke Subtitle &amp; Render (3.3) →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Tab 3: Subtitle Karaoke & Render Video */}
+      {activeSubTab === 'subtitles' && (
+        <div>
+          <div style={{ marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '14px', color: '#fff' }}>
+                🎨 Gaya Subtitle Karaoke &amp; Pengaturan Akhir
+              </h3>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                Tentukan gaya animasi takarir kata per kata dan opsi visual tambahan sebelum merender video master.
+              </p>
+            </div>
+            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Langkah 3 dari 3</span>
+          </div>
+
+          {/* Subtitle Template Picker */}
+          <SubtitleTemplatePicker
+            templateId={templateId}
+            setTemplateId={setTemplateId}
+          />
+
+          {/* B-roll & Outro CTA toggles */}
+          <div className="form-row" style={{ marginTop: '20px' }}>
+            <div className="input-group">
+              <label className="label-main">Sisipan Footage B-Roll Otomatis</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <input
+                  type="checkbox"
+                  id="check-broll"
+                  checked={enableBroll}
+                  onChange={(e) => setEnableBroll(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <label htmlFor="check-broll" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
+                  Aktifkan sisipan video B-roll otomatis sesuai konteks obrolan
+                </label>
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="label-main">Kartu Penutup (Outro Call to Action)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <input
+                  type="checkbox"
+                  id="check-outro"
+                  checked={enableIntroOutro}
+                  onChange={(e) => setEnableIntroOutro(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <label htmlFor="check-outro" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
+                  Pasang kartu promosi 3 detik di akhir video
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Ringkasan Konfigurasi Render */}
+          <div className="step3-summary-card">
+            <div className="step3-summary-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '14px' }}>📋</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ice)' }}>
+                  Ringkasan Konfigurasi Render Video
+                </span>
+              </div>
+              <span style={{ fontSize: '11px', color: '#A3E635', fontWeight: 600 }}>
+                ✓ Siap Diproses
+              </span>
+            </div>
+
+            <div className="step3-summary-grid">
+              <div className="step3-summary-item">
+                <span className="step3-summary-item-label">Tipe Konten</span>
+                <span className="step3-summary-item-value">
+                  {outputMode === 'narration' ? '🎙️ Narasi AI Storyteller' : '🎬 Klip Asli (Reel)'}
+                </span>
+              </div>
+
+              <div className="step3-summary-item">
+                <span className="step3-summary-item-label">Hook Pembuka 0–3s</span>
+                <span className="step3-summary-item-value">
+                  {enableHookIntro ? `⚡ ${selectedVisualPreset.toUpperCase()}` : '⚪ Nonaktif'}
+                </span>
+              </div>
+
+              <div className="step3-summary-item">
+                <span className="step3-summary-item-label">Template Subtitle</span>
+                <span className="step3-summary-item-value">
+                  {templateId === 'beast' || templateId === 'mrbeast' ? '🎨 Gaya MrBeast' : templateId === 'hormozi' ? '🎨 Gaya Hormozi' : '🎨 Gaya Clean'}
+                </span>
+              </div>
+
+              <div className="step3-summary-item">
+                <span className="step3-summary-item-label">Klip Terpilih</span>
+                <span className="step3-summary-item-value">
+                  📦 {selectedClipIndices.length} Klip Siap Render
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Final Render Action Button */}
+          <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button type="button" className="btn ghost" onClick={() => setActiveSubTab('hook')}>
+              ← Kembali ke Desain Hook
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              style={{ padding: '12px 24px', fontSize: '14.5px', fontWeight: 700 }}
+              disabled={runningTransform || selectedClipIndices.length === 0}
+              onClick={startTransform}
+            >
+              {runningTransform
+                ? '⏳ Sedang Merender Video...'
+                : selectedClipIndices.length > 1
+                ? `🚀 Render ${selectedClipIndices.length} Klip → ${outputMode === 'narration' ? 'Video Narasi AI' : 'Video Reel'}`
+                : '🚀 Render Video Master'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

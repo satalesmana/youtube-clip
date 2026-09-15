@@ -35,6 +35,8 @@ export const planSceneSchema = z.object({
   hookTag: z.string().optional(),
   /** Words in the hook headline rendered in accent color. */
   highlightWords: z.array(z.string()).optional(),
+  /** Visual preset id for the hook headline. */
+  visualPreset: z.string().optional(),
 });
 
 /** A caption event with word-level timing. */

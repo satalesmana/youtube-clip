@@ -101,9 +101,11 @@ export const scriptDraftRequestSchema = z
       .optional(),
     /** Optional explicit target duration in seconds for narration. */
     targetDuration: z.number().positive().optional(),
+    /** Force regeneration even when a saved script draft exists on disk. */
+    refresh: z.boolean().optional(),
   })
-  .refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
-    message: 'Provide exactly one of: youtubeUrl OR videoId.',
+  .refine((data) => Boolean(data.youtubeUrl) || Boolean(data.videoId), {
+    message: 'Provide at least one of: youtubeUrl OR videoId.',
     path: ['youtubeUrl'],
   })
   .refine((data) => !data.sourceRange || data.sourceRange.end > data.sourceRange.start, {
@@ -143,8 +145,8 @@ export const ttsSynthesizeRequestSchema = z
         .min(1),
     }),
   })
-  .refine((data) => Boolean(data.youtubeUrl) !== Boolean(data.videoId), {
-    message: 'Provide exactly one of: youtubeUrl OR videoId.',
+  .refine((data) => Boolean(data.youtubeUrl) || Boolean(data.videoId), {
+    message: 'Provide at least one of: youtubeUrl OR videoId.',
     path: ['youtubeUrl'],
   });
 

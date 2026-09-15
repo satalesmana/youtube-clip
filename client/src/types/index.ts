@@ -127,7 +127,9 @@ export interface TransformRequest {
     language?: string;
     sections: ScriptSection[];
   };
+  ttsProvider?: 'edge-tts' | 'openai';
   ttsVoice?: string;
+  ttsRate?: string;
   sourceVolume?: number;
   /** Language for the output narration (used in narration mode). Separate from source transcript language. */
   outputLanguage?: 'id' | 'en';

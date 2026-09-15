@@ -203,9 +203,14 @@ export const ResearchView: React.FC<ResearchViewProps> = ({
                       {t.summary}
                     </p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {t.sources?.map((src, sIdx) => (
-                        <span key={sIdx} className="reason-pill">Sumber: {src.toUpperCase()}</span>
-                      ))}
+                      {t.sources?.map((src: any, sIdx) => {
+                        const name = typeof src === 'string' ? src : src?.source || src?.name || 'RSS';
+                        return (
+                          <span key={sIdx} className="reason-pill">
+                            Sumber: {name.toUpperCase()}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
 

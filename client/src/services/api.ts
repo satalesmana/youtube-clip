@@ -86,12 +86,40 @@ export const api = {
     const res = await fetch('/api/research', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        max_trends: payload.maxTrends,
+      }),
     });
-    const data = await handleResponse<{ topics: TrendTopic[]; count?: number }>(res);
+    const data = await handleResponse<{
+      topics?: any[];
+      trends?: any[];
+      count?: number;
+      signalCount?: number;
+    }>(res);
+
+    const rawList = data.trends || data.topics || [];
+    const topics: TrendTopic[] = rawList.map((item: any) => ({
+      topic: item.title || item.topic || item.slug || 'Topik Trending',
+      score: item.score ?? 50,
+      summary: item.summary || '',
+      sources: (item.sources || []).map((s: any) =>
+        typeof s === 'string' ? s : s.source || s.name || 'rss',
+      ),
+      suggestedSearch: item.keywords,
+      sampleVideos: (item.videos || item.sampleVideos || []).map((v: any) => ({
+        id: v.videoId || v.id || v.url,
+        title: v.title || 'YouTube Video',
+        url: v.url || (v.videoId ? `https://www.youtube.com/watch?v=${v.videoId}` : ''),
+        thumbnail: v.thumbnail || v.thumbnailUrl || '',
+        views: v.views ?? v.viewCount ?? 0,
+        duration: v.durationSeconds ?? v.duration ?? 0,
+      })),
+    }));
+
     return {
-      topics: data.topics || [],
-      count: data.count ?? data.topics?.length ?? 0,
+      topics,
+      count: data.count ?? data.signalCount ?? topics.length,
     };
   },
 
@@ -218,8 +246,7 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        youtubeUrl: payload.url,
-        videoId: payload.videoId,
+        ...(payload.videoId ? { videoId: payload.videoId } : { youtubeUrl: payload.url }),
       }),
     });
 
@@ -328,39 +355,66 @@ export const api = {
     customPrompt?: string;
     targetDuration?: number;
     selectedClips?: Array<{ start: number; end: number; title?: string }>;
+    refresh?: boolean;
   }): Promise<{
     script: { language?: string; sections: ScriptSection[] };
     videoId?: string;
+    cached?: boolean;
   }> {
     const res = await fetch('/api/scripts/draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        youtubeUrl: payload.url,
-        videoId: payload.videoId,
+        ...(payload.videoId ? { videoId: payload.videoId } : { youtubeUrl: payload.url }),
         language: payload.language && payload.language !== 'auto' ? payload.language : undefined,
         genre: payload.genre && payload.genre !== 'auto' ? payload.genre : undefined,
         customPrompt: payload.customPrompt,
         targetDuration: payload.targetDuration,
         selectedClips: payload.selectedClips,
+        refresh: payload.refresh,
       }),
     });
     return await handleResponse(res);
+  },
+
+  async getSavedScript(videoId: string): Promise<{
+    success: boolean;
+    cached: boolean;
+    script: { language?: string; sections: ScriptSection[] } | null;
+  }> {
+    try {
+      const res = await fetch(`/api/scripts/draft?videoId=${encodeURIComponent(videoId)}`);
+      const data = await handleResponse<{
+        success?: boolean;
+        cached?: boolean;
+        script?: { language?: string; sections: ScriptSection[] };
+      }>(res);
+      return {
+        success: Boolean(data.success),
+        cached: Boolean(data.cached),
+        script: data.script || null,
+      };
+    } catch {
+      return { success: false, cached: false, script: null };
+    }
   },
 
   async synthesizeTts(payload: {
     url?: string;
     videoId?: string;
     ttsVoice?: string;
+    ttsProvider?: 'edge-tts' | 'openai';
+    ttsRate?: string;
     customScript: { language?: string; sections: ScriptSection[] };
-  }): Promise<{ audioUrl?: string; audioPath?: string; durationSeconds?: number }> {
+  }): Promise<{ audioUrl?: string; audioPath?: string; durationSeconds?: number; narration?: { url?: string } }> {
     const res = await fetch('/api/tts/synthesize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        youtubeUrl: payload.url,
-        videoId: payload.videoId,
-        ttsVoice: payload.ttsVoice,
+        ...(payload.videoId ? { videoId: payload.videoId } : { youtubeUrl: payload.url }),
+        ttsVoice: payload.ttsVoice?.trim(),
+        ttsProvider: payload.ttsProvider,
+        ttsRate: payload.ttsRate,
         customScript: payload.customScript,
       }),
     });
@@ -379,10 +433,21 @@ export const api = {
         template: 'commentary',
         subtitleStyle: payload.templateId || 'beast',
         engine: 'remotion',
-        audioMode: payload.audioMode,
+        audioMode:
+          payload.audioMode === 'keep'
+            ? 'keep_original'
+            : payload.audioMode === 'speech'
+            ? 'voice_over'
+            : payload.audioMode === 'music'
+            ? 'strip_original'
+            : payload.audioMode,
+        sourceAudioVolume:
+          payload.sourceVolume !== undefined ? payload.sourceVolume / 100 : undefined,
         outputMode: payload.outputMode,
         customScript: payload.customScript,
-        ttsVoice: payload.ttsVoice,
+        ttsProvider: payload.ttsProvider,
+        ttsVoice: payload.ttsVoice?.trim(),
+        ttsRate: payload.ttsRate,
         sourceVolume: payload.sourceVolume,
         selectedClips: payload.selectedClips,
         customHook: payload.customHook,
@@ -390,6 +455,9 @@ export const api = {
         hookTag: payload.hookTag,
         hookHighlightWords: payload.hookHighlightWords,
         hookPreviewPath: payload.hookPreviewPath,
+        visualPreset: payload.visualPreset,
+        enableBroll: payload.enableBroll,
+        enableIntroOutro: payload.enableIntroOutro,
         sourceRange:
           payload.sourceRange
             ? payload.sourceRange
@@ -399,7 +467,7 @@ export const api = {
       }),
     });
     const data = await handleResponse<{
-      outputVideo?: string;
+      outputVideo?: string | { url?: string; path?: string; durationSeconds?: number };
       videoUrl?: string;
       video?: string;
       duration?: number;
@@ -409,11 +477,24 @@ export const api = {
       transcript?: string;
     }>(res);
 
-    const videoPath = data.videoUrl || data.outputVideo || data.video || '';
+    const resolvedVideoUrl =
+      (typeof data.videoUrl === 'string' && data.videoUrl ? data.videoUrl : undefined) ||
+      (typeof data.outputVideo === 'object' && data.outputVideo?.url ? data.outputVideo.url : undefined) ||
+      (typeof data.outputVideo === 'string' && data.outputVideo ? data.outputVideo : undefined) ||
+      (typeof data.video === 'string' && data.video ? data.video : undefined) ||
+      '';
+
+    const resolvedDuration =
+      (typeof data.outputVideo === 'object' && data.outputVideo?.durationSeconds
+        ? data.outputVideo.durationSeconds
+        : undefined) ||
+      data.duration ||
+      60;
+
     return {
-      outputVideo: videoPath,
-      videoUrl: videoPath,
-      duration: data.duration ?? 60,
+      outputVideo: resolvedVideoUrl,
+      videoUrl: resolvedVideoUrl,
+      duration: resolvedDuration,
       title: data.title || 'TRANSFORMED_REEL_MASTER',
       videoId: data.videoId,
       thumbnailUrl: data.thumbnailUrl,

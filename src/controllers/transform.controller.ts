@@ -193,10 +193,34 @@ export class TransformController {
     } else {
       videoId = request.videoId!;
       this.emit('download', { skipped: true });
-      this.emit('transcript', { skipped: true });
-      transcript = await this.deps.transcriptService.loadTranscript(videoId);
-      if (!transcript) throw AppError.missingSourceVideo(`No transcript for ${videoId}.`);
       videoPath = join(outputsDir, videoId, 'downloads', `${videoId}.mp4`);
+      transcript = await this.loadTranscriptForVideoId(videoId);
+      if (!transcript) {
+        const hasVideo = await access(videoPath).then(() => true).catch(() => false);
+        if (hasVideo) {
+          logger.info({ videoId }, 'Video found in workspace but transcript missing — transcribing');
+          this.emit('transcript');
+          const { createWhisperServiceWith } = await import('../container/index.js');
+          const whisperService = request.sttProvider
+            ? createWhisperServiceWith(request.sttProvider)
+            : this.deps.whisperService;
+          const jobWorkspace = await createJobWorkspace(this.deps.outputsDir, videoId);
+          const audio = await this.deps.transcriptService.extractAudio(videoPath, videoId, jobWorkspace);
+          const whisperResult = await whisperService.transcribe(audio.audioPath, jobWorkspace);
+          const transcriptDoc: TranscriptDocument = {
+            ...whisperResult,
+            videoId,
+            sourceUrl: request.youtubeUrl ?? `https://www.youtube.com/watch?v=${videoId}`,
+            createdAt: new Date().toISOString(),
+          };
+          await this.deps.transcriptService.saveTranscript(transcriptDoc, jobWorkspace);
+          transcript = transcriptDoc;
+        } else {
+          throw AppError.missingSourceVideo(`No transcript for ${videoId}.`);
+        }
+      } else {
+        this.emit('transcript', { skipped: true });
+      }
     }
 
     if (!transcript) {
@@ -213,6 +237,15 @@ export class TransformController {
   async draftScript(request: ScriptDraftRequestInput): Promise<Record<string, unknown>> {
     const { logger } = this.deps;
     const { videoId, transcript } = await this.resolveTranscriptAndVideo(request);
+
+    // Fast path: return previously saved script draft from disk unless refresh is requested
+    if (!request.refresh) {
+      const saved = await this.loadSavedScript(videoId);
+      if (saved && saved.script) {
+        logger.info({ videoId }, 'Returning saved script draft from disk cache');
+        return saved;
+      }
+    }
 
     const selection = request.selectedClips?.length
       ? this.selectClips(transcript, request.selectedClips)
@@ -309,10 +342,14 @@ export class TransformController {
       request.customPrompt,
       targetDurationSeconds ? `dur_${targetDurationSeconds}` : undefined,
     );
-    const cachedScript = await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey);
+    let isServedFromCache = false;
+    const cachedScript = !request.refresh
+      ? await this.deps.contentCache?.get<OriginalScript>(scriptCacheKey)
+      : undefined;
     if (cachedScript) {
       logger.info({ cache: 'script', videoId, candidateId: request.candidateId }, 'Script generation served from cache');
       script = cachedScript;
+      isServedFromCache = true;
     } else {
       try {
         const scriptContext = {
@@ -345,11 +382,30 @@ export class TransformController {
       }
     }
 
+    if (script?.sections) {
+      for (const section of script.sections) {
+        if (!section.spokenText || !section.spokenText.trim()) {
+          section.spokenText = normalizeForSpeech(section.text, script.language);
+        }
+      }
+    }
+
     const returnedAngle = {
       ...selectedAngle,
       ...(request.hookTitle ? { hook: request.hookTitle } : {}),
       ...(request.customAngleTitle ? { title: request.customAngleTitle } : {}),
     };
+
+    const draftResult = {
+      candidateId: request.candidateId,
+      angle: returnedAngle,
+      story,
+      storyApplied: story != null,
+      script,
+      language: targetLang,
+      savedAt: new Date().toISOString(),
+    };
+    await this.saveScriptDraft(videoId, draftResult);
 
     return {
       success: true,
@@ -359,6 +415,7 @@ export class TransformController {
       story,
       storyApplied: story != null,
       script,
+      cached: isServedFromCache,
     };
   }
 
@@ -382,9 +439,16 @@ export class TransformController {
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(workspaceDir);
 
-    const { createTtsServiceWith } = await import('../container/index.js');
-    const ttsService = (request.ttsProvider && request.ttsVoice)
-      ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
+    const { createTtsServiceWith, resolveTtsProviderKind } = await import('../container/index.js');
+    const { env } = await import('../config/env.js');
+
+    const effectiveVoice = request.ttsVoice?.trim() || env.TTS_VOICE;
+    const effectiveProvider = resolveTtsProviderKind(request.ttsProvider, effectiveVoice);
+    const effectiveRate = request.ttsRate ?? env.TTS_RATE;
+
+    const hasTtsOverride = Boolean(request.ttsProvider || request.ttsVoice?.trim() || request.ttsRate);
+    const ttsService = hasTtsOverride
+      ? createTtsServiceWith(effectiveProvider, effectiveVoice, effectiveRate)
       : this.deps.ttsService;
 
     const lang = request.customScript.language ?? 'id';
@@ -415,9 +479,9 @@ export class TransformController {
     const ttsCacheKey = this.cacheKey(
       'tts',
       videoId,
-      request.ttsProvider,
-      request.ttsVoice,
-      request.ttsRate,
+      effectiveProvider,
+      effectiveVoice,
+      effectiveRate,
       script.language,
       ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
     );
@@ -444,13 +508,18 @@ export class TransformController {
       }
     }
 
+    const mediaUrl = ttsResult.outputPath ? this.toMediaUrl(ttsResult.outputPath) : undefined;
+
     return {
       success: true,
       jobId,
       videoId,
+      audioUrl: mediaUrl,
+      audioPath: ttsResult.outputPath,
+      durationSeconds: ttsResult.durationSeconds,
       narration: {
         ...ttsResult,
-        url: ttsResult.outputPath ? this.toMediaUrl(ttsResult.outputPath) : undefined,
+        url: mediaUrl,
       },
     };
   }
@@ -683,31 +752,40 @@ export class TransformController {
 
       // Use per-request TTS provider/voice when specified, otherwise fall back
       // to the env-configured default service.
-      const { createTtsServiceWith } = await import('../container/index.js');
-      const ttsService = (request.ttsProvider && request.ttsVoice)
-        ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
-        : this.deps.ttsService;
+      const { createTtsServiceWith, resolveTtsProviderKind } = await import('../container/index.js');
+      const { env } = await import('../config/env.js');
+
+      const effectiveVoice = request.ttsVoice?.trim() || env.TTS_VOICE;
+      const effectiveProvider = resolveTtsProviderKind(request.ttsProvider, effectiveVoice);
+      const effectiveRate = request.ttsRate ?? env.TTS_RATE;
+
       const ttsCacheKey = this.cacheKey(
-        'tts', videoId, request.ttsProvider, request.ttsVoice, request.ttsRate,
+        'tts', videoId, effectiveProvider, effectiveVoice, effectiveRate,
         script.language, ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
       );
       await this.deps.contentCache?.set(ttsCacheKey, ttsResult);
-      void ttsService; // suppress unused warning
     } else {
       // Use per-request TTS provider/voice when specified, otherwise fall back
       // to the env-configured default service. Voice↔language pairing is the
       // frontend's responsibility (it syncs the dropdown on change).
-      const { createTtsServiceWith } = await import('../container/index.js');
-      const ttsService = (request.ttsProvider && request.ttsVoice)
-        ? createTtsServiceWith(request.ttsProvider, request.ttsVoice, request.ttsRate)
+      const { createTtsServiceWith, resolveTtsProviderKind } = await import('../container/index.js');
+      const { env } = await import('../config/env.js');
+
+      const effectiveVoice = request.ttsVoice?.trim() || env.TTS_VOICE;
+      const effectiveProvider = resolveTtsProviderKind(request.ttsProvider, effectiveVoice);
+      const effectiveRate = request.ttsRate ?? env.TTS_RATE;
+
+      const hasTtsOverride = Boolean(request.ttsProvider || request.ttsVoice?.trim() || request.ttsRate);
+      const ttsService = hasTtsOverride
+        ? createTtsServiceWith(effectiveProvider, effectiveVoice, effectiveRate)
         : this.deps.ttsService;
 
       const ttsCacheKey = this.cacheKey(
         'tts',
         videoId,
-        request.ttsProvider,
-        request.ttsVoice,
-        request.ttsRate,
+        effectiveProvider,
+        effectiveVoice,
+        effectiveRate,
         script.language,
         ...script.sections.map((s) => `${s.type}:${s.spokenText || s.text}`),
       );
@@ -746,6 +824,7 @@ export class TransformController {
         hookTitle: request.hookTitle,
         hookTag: request.hookTag,
         hookHighlightWords: request.hookHighlightWords,
+        visualPreset: request.visualPreset,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
     } catch (err) {
@@ -887,14 +966,17 @@ export class TransformController {
     // intro file exists, it is used verbatim (WYSIWYG) and the anti-repeat
     // guard still applies to the clips that follow.
     const intro = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
-      ? { start: request.sourceRange.start, end: request.sourceRange.end }
+      ? {
+          start: request.sourceRange.start,
+          end: Math.min(request.sourceRange.end, request.sourceRange.start + 3.5),
+        }
       : undefined;
     // Check whether the styled hook intro file (from a previous render) is
-    // still accessible on disk. When missing, we fall back to re-cutting the
-    // sourceRange from the source video and expose the miss in the response so
-    // the UI can display a clear warning instead of silently omitting the hook.
+    // still accessible on disk. If the user explicitly chose a visual preset or
+    // custom hook headline/tag in Step 3, re-render fresh so user presets are honored.
     let hookIntroFile: string | undefined;
-    if (request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
+    const isCustomizedHook = Boolean(request.customHook || request.hookTitle || request.hookTag || request.visualPreset);
+    if (!isCustomizedHook && request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
       const { access } = await import('node:fs/promises');
       hookIntroFile = await access(request.hookPreviewPath)
         .then(() => request.hookPreviewPath)
@@ -1122,6 +1204,36 @@ export class TransformController {
     }
   }
 
+  /** Loads previously saved script draft from outputs/{videoId}/scripts/draft.json */
+  async loadSavedScript(videoId: string): Promise<Record<string, unknown> | null> {
+    try {
+      const filePath = join(this.deps.outputsDir, videoId, 'scripts', 'draft.json');
+      const { readFile } = await import('node:fs/promises');
+      const raw = await readFile(filePath, 'utf-8');
+      const data = JSON.parse(raw) as Record<string, unknown>;
+      return {
+        ...data,
+        success: true,
+        videoId,
+        cached: true,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Saves script draft to outputs/{videoId}/scripts/draft.json */
+  async saveScriptDraft(videoId: string, data: Record<string, unknown>): Promise<void> {
+    try {
+      const filePath = join(this.deps.outputsDir, videoId, 'scripts', 'draft.json');
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      await mkdir(join(filePath, '..'), { recursive: true });
+      await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (err) {
+      this.deps.logger.warn({ err, videoId }, 'Failed to persist script draft to disk');
+    }
+  }
+
   private async renderVideo(
     videoPath: string,
     videoId: string,
@@ -1201,6 +1313,7 @@ export class TransformController {
       engine,
       style: this.toCompositionStyle(templateId),
       templateId,
+      subtitleStyle: subtitleStyle || (this.deps as any)?.assStyle?.name,
       audioMode: audioOptions?.audioMode,
       sourceAudioVolume: audioOptions?.sourceAudioVolume,
     };
@@ -1303,6 +1416,9 @@ export class TransformController {
   private fallbackScript(angle: ContentAngle, language: string, customHook?: string): OriginalScript {
     const isId = language === 'id';
     const hookText = customHook?.trim() || angle.hook;
+    const contextText = isId ? 'Berikut adalah fakta penting seputar momen ini.' : 'Here is the key context behind this moment.';
+    const commentaryText = angle.reason;
+    const conclusionText = isId ? 'Itulah momen luar biasa yang baru saja terjadi.' : 'That concludes this incredible moment.';
     return {
       candidateId: '',
       angleId: angle.id,
@@ -1310,9 +1426,9 @@ export class TransformController {
       language,
       sections: [
         { type: 'hook', text: hookText, spokenText: hookText },
-        { type: 'context', text: isId ? 'Berikut adalah fakta penting seputar momen ini.' : 'Here is the key context behind this moment.' },
-        { type: 'commentary', text: angle.reason },
-        { type: 'conclusion', text: isId ? 'Itulah momen luar biasa yang baru saja terjadi.' : 'That concludes this incredible moment.' },
+        { type: 'context', text: contextText, spokenText: contextText },
+        { type: 'commentary', text: commentaryText, spokenText: commentaryText },
+        { type: 'conclusion', text: conclusionText, spokenText: conclusionText },
       ],
       originality: { status: 'WARNING', notes: ['fallback'] },
       estimatedDurationSeconds: 30,

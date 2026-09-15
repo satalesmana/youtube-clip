@@ -26,6 +26,8 @@ export interface IResearchService {
     maxTrends?: number;
     keyword?: string;
     language?: string;
+    subreddits?: string[];
+    rssFeeds?: string[];
   }): Promise<ResearchResult>;
 }
 
@@ -55,9 +57,17 @@ export class ResearchService implements IResearchService {
     maxTrends?: number;
     keyword?: string;
     language?: string;
+    subreddits?: string[];
+    rssFeeds?: string[];
   }): Promise<ResearchResult> {
     const skippedSources: { source: string; reason: string }[] = [];
-    const collected = await this.collectSignals(skippedSources, options?.enabledProviders, options?.keyword);
+    const collected = await this.collectSignals(
+      skippedSources,
+      options?.enabledProviders,
+      options?.keyword,
+      options?.subreddits,
+      options?.rssFeeds,
+    );
 
     if (collected.length === 0) {
       throw AppError.researchSourceFailed(
@@ -88,14 +98,16 @@ export class ResearchService implements IResearchService {
     skippedSources: { source: string; reason: string }[],
     enabledProviders?: ('rss' | 'reddit' | 'trends' | 'x')[],
     keyword?: string,
+    subreddits?: string[],
+    rssFeeds?: string[],
   ): Promise<ResearchSourceItem[]> {
     const providerSet = new Set(
       enabledProviders ?? this.options.enabledProviders ?? ['rss', 'reddit', 'trends', 'x'],
     );
 
     const sources: { name: string; fetch: () => Promise<ResearchSourceItem[] | null> }[] = [
-      { name: 'rss', fetch: () => this.rssProvider.fetchLatest() },
-      { name: 'reddit', fetch: () => this.redditProvider.fetchHotPosts() },
+      { name: 'rss', fetch: () => this.rssProvider.fetchLatest(rssFeeds) },
+      { name: 'reddit', fetch: () => this.redditProvider.fetchHotPosts(subreddits) },
       { name: 'trends', fetch: () => this.trendsProvider.fetchTrendingQueries(keyword) },
       { name: 'x', fetch: () => this.xProvider.fetchRecentPosts() },
     ].filter((s) => providerSet.has(s.name));

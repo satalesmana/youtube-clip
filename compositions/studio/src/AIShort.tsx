@@ -84,6 +84,7 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   channelName,
   hookBadge,
   creatorLogoUrl,
+  subtitleStyle,
   skin,
 }) => {
   const { fps } = useVideoConfig();
@@ -150,6 +151,7 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
                 theme={theme}
                 durationFrames={capDur}
                 absoluteStartFrame={startFrame}
+                subtitleStyle={subtitleStyle}
               />
             </Sequence>
           );

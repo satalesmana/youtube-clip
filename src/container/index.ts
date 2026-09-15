@@ -517,16 +517,39 @@ export function createTtsService(overrides?: { provider?: ReturnType<typeof crea
   );
 }
 
+const OPENAI_VOICES = new Set(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
+
+/**
+ * Resolves the TTS provider kind based on explicit parameter, known voice names,
+ * or the default provider from env.
+ */
+export function resolveTtsProviderKind(
+  kind?: 'edge-tts' | 'openai',
+  voice?: string,
+): 'edge-tts' | 'openai' {
+  if (kind) return kind;
+  if (voice && OPENAI_VOICES.has(voice.trim().toLowerCase())) {
+    return 'openai';
+  }
+  return env.TTS_PROVIDER;
+}
+
 /**
  * Creates a TtsService with an explicit provider kind and voice — used when
- * the request overrides the env-configured TTS provider (e.g. user picks
- * OpenAI instead of edge-tts from the UI).
+ * the request overrides the env-configured TTS provider or voice (e.g. user picks
+ * a specific voice from the UI, or switches provider/rate).
  */
-export function createTtsServiceWith(kind: 'edge-tts' | 'openai', voice: string, rate?: string): TtsService {
+export function createTtsServiceWith(
+  kind?: 'edge-tts' | 'openai',
+  voice?: string,
+  rate?: string,
+): TtsService {
   const logger = createLogger('tts.service');
+  const effectiveVoice = (voice && voice.trim()) ? voice.trim() : env.TTS_VOICE;
+  const effectiveKind = resolveTtsProviderKind(kind, effectiveVoice);
   const effectiveRate = rate ?? env.TTS_RATE;
   const provider = createTtsProvider({
-    kind,
+    kind: effectiveKind,
     edge: {
       outputDir: resolve(rootDir, env.OUTPUTS_DIR),
       binaryPath: env.TTS_BINARY_PATH,
@@ -542,13 +565,16 @@ export function createTtsServiceWith(kind: 'edge-tts' | 'openai', voice: string,
     logger,
   });
 
+  const wordAligner = new WordTimingService(whisperService, logger.child({ component: 'word-timing' }));
+
   return new TtsService(
     provider,
     {
-      voice,
+      voice: effectiveVoice,
       rate: effectiveRate,
       outputDir: resolve(rootDir, env.OUTPUTS_DIR),
       language: env.TTS_LANGUAGE,
+      wordAligner,
     },
     logger,
   );

@@ -3,6 +3,7 @@ import * as React from 'react';
 import type { Theme } from './design';
 import type { PlanCaption, PlanScene } from './types';
 import { HookHeadline } from './HookHeadline';
+import { resolveVisualPreset, type VisualPresetId } from './visual-preset/index';
 
 /** Per-scene text: Hook headline during hook scene, clean for other scenes. */
 export const SceneText: React.FC<{
@@ -19,11 +20,16 @@ export const SceneText: React.FC<{
   const { fps } = useVideoConfig();
 
   if (scene.type === 'hook') {
+    const visualPreset = resolveVisualPreset({
+      manualPreset: scene.visualPreset as VisualPresetId | undefined,
+    });
+
     return (
       <HookHeadline
         text={scene.hookTitle || scene.quotableLine || scene.narration || ''}
         tag={scene.hookTag}
         highlightWords={scene.highlightWords}
+        visualPreset={visualPreset}
         theme={theme}
         wordTimings={wordTimings}
         absoluteStartFrame={absoluteStartFrame ?? 0}

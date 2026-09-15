@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { extractAudio, probeDurationSeconds } from '../utils/ffmpeg.js';
 import { ensureDir } from '../utils/fs.js';
@@ -75,14 +75,21 @@ export class TranscriptService implements ITranscriptService {
     return { audioPath, durationSeconds };
   }
 
-  /** Loads a saved transcript by video ID. */
+  /** Loads a saved transcript by video ID (shared directory first, per-video workspace second). */
   async loadTranscript(videoId: string): Promise<TranscriptDocument | null> {
     const transcriptPath = join(this.options.transcriptsDir, `${videoId}.json`);
     try {
       const data = await readFile(transcriptPath, 'utf-8');
       return JSON.parse(data) as TranscriptDocument;
     } catch {
-      return null;
+      // Fallback: check workspace directory outputs/{videoId}/transcripts/{videoId}.json
+      try {
+        const workspacePath = join(dirname(this.options.transcriptsDir), videoId, 'transcripts', `${videoId}.json`);
+        const data = await readFile(workspacePath, 'utf-8');
+        return JSON.parse(data) as TranscriptDocument;
+      } catch {
+        return null;
+      }
     }
   }
 

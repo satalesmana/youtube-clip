@@ -19,7 +19,7 @@ export interface RssProviderOptions {
 
 export interface IRssProvider {
   /** Collects the most recent items from every configured feed. */
-  fetchLatest(): Promise<ResearchSourceItem[]>;
+  fetchLatest(overrideFeeds?: string[]): Promise<ResearchSourceItem[]>;
 }
 
 interface FeedItem {
@@ -109,8 +109,15 @@ export class RssProvider implements IRssProvider {
     private readonly logger: Logger,
   ) {}
 
-  async fetchLatest(): Promise<ResearchSourceItem[]> {
-    const { feeds, maxItemsPerFeed, timeoutMs } = this.options;
+  async fetchLatest(overrideFeeds?: string[]): Promise<ResearchSourceItem[]> {
+    const { feeds: configFeeds, maxItemsPerFeed, timeoutMs } = this.options;
+    let feeds = configFeeds;
+    if (overrideFeeds && overrideFeeds.length > 0) {
+      feeds = overrideFeeds.map((urlOrLabel) => {
+        const existing = configFeeds.find((f) => f.url === urlOrLabel || f.label === urlOrLabel);
+        return existing || { url: urlOrLabel, label: urlOrLabel };
+      });
+    }
 
     const settled = await Promise.allSettled(
       feeds.map((feed) => this.fetchFeed(feed, maxItemsPerFeed, timeoutMs)),
