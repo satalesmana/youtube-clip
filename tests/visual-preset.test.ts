@@ -8,7 +8,7 @@ import {
 } from '../src/types/visual-preset.js';
 
 test('Viral Hook Text Style System — Visual Preset Resolver Suite', async (suite) => {
-  await suite.test('Registry Integrity: all 7 presets exist and have valid configuration', () => {
+  await suite.test('Registry Integrity: all 12 presets exist and have valid configuration', () => {
     const expectedIds: VisualPresetId[] = [
       'kinetic-punch',
       'curiosity-stack',
@@ -17,6 +17,11 @@ test('Viral Hook Text Style System — Visual Preset Resolver Suite', async (sui
       'bold-impact',
       'data-punch',
       'opportunity-glow',
+      'focus-brush',
+      'clean-fade',
+      'scribble-quote',
+      'action-pointer',
+      'burst-stat',
     ];
 
     for (const id of expectedIds) {
@@ -26,8 +31,8 @@ test('Viral Hook Text Style System — Visual Preset Resolver Suite', async (sui
       assert.ok(preset.label.length > 0, `Preset ${id} must have a label`);
       assert.ok(preset.description.length > 0, `Preset ${id} must have a description`);
       assert.ok(['kinetic', 'stacked', 'minimal', 'bold-caps'].includes(preset.typography));
-      assert.ok(['spring-punch', 'word-cascade', 'slide-up', 'scale-burst'].includes(preset.animation));
-      assert.ok(['neon-glow', 'underline', 'background-chip', 'none'].includes(preset.highlight));
+      assert.ok(['spring-punch', 'word-cascade', 'slide-up', 'scale-burst', 'fade'].includes(preset.animation));
+      assert.ok(['neon-glow', 'underline', 'background-chip', 'brush', 'stroke', 'box', 'none'].includes(preset.highlight));
     }
   });
 
@@ -163,4 +168,120 @@ test('Viral Hook Text Style System — Visual Preset Resolver Suite', async (sui
     assert.equal(adaptLegacyHookStyle(''), undefined);
     assert.equal(adaptLegacyHookStyle('invalid_style'), undefined);
   });
+
+  await suite.test('Composition Layout & Animation Override Support in Transform Schema', async () => {
+    const { transformRequestSchema } = await import('../src/schemas/transform.schema.js');
+
+    const validLayouts = [
+      'centered',
+      'top-heavy',
+      'split-proof',
+      'full-screen-text',
+      'subject-first',
+      'data-focus',
+      'question-focus',
+    ];
+
+    const validAnimations = [
+      'spring-punch',
+      'word-cascade',
+      'slide-up',
+      'scale-burst',
+      'fade',
+    ];
+
+    for (const layout of validLayouts) {
+      const parsed = transformRequestSchema.safeParse({
+        youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+        outputMode: 'narration',
+        hookLayout: layout,
+      });
+      assert.ok(parsed.success, `Expected hookLayout "${layout}" to be valid in schema: ${JSON.stringify(parsed)}`);
+      assert.equal((parsed as any).data.hookLayout, layout);
+    }
+
+    for (const anim of validAnimations) {
+      const parsed = transformRequestSchema.safeParse({
+        youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+        outputMode: 'narration',
+        hookAnimation: anim,
+      });
+      assert.ok(parsed.success, `Expected hookAnimation "${anim}" to be valid in schema: ${JSON.stringify(parsed)}`);
+      assert.equal((parsed as any).data.hookAnimation, anim);
+    }
+
+    const validTypographies = [
+      'kinetic',
+      'stacked',
+      'minimal',
+      'bold-caps',
+      'bebas-neue',
+      'montserrat',
+      'anton',
+      'archivo-black',
+      'poppins',
+      'oswald',
+      'barlow-condensed',
+    ];
+
+    for (const typo of validTypographies) {
+      const parsed = transformRequestSchema.safeParse({
+        youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+        outputMode: 'narration',
+        hookTypography: typo,
+      });
+      assert.ok(parsed.success, `Expected hookTypography "${typo}" to be valid in schema: ${JSON.stringify(parsed)}`);
+      assert.equal((parsed as any).data.hookTypography, typo);
+    }
+
+    // Invalid values should fail
+    const invalidLayout = transformRequestSchema.safeParse({
+      youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+      outputMode: 'narration',
+      hookLayout: 'non-existent-layout',
+    });
+    assert.equal(invalidLayout.success, false);
+
+    const invalidAnim = transformRequestSchema.safeParse({
+      youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+      outputMode: 'narration',
+      hookAnimation: 'non-existent-animation',
+    });
+    assert.equal(invalidAnim.success, false);
+
+    const invalidTypo = transformRequestSchema.safeParse({
+      youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+      outputMode: 'narration',
+      hookTypography: 'non-existent-typography',
+    });
+    assert.equal(invalidTypo.success, false);
+  });
+
+  await suite.test('Font Resolution: all 7 typography variants resolve to valid font families', async () => {
+    const { getPresetFont } = await import('../compositions/studio/src/design.js');
+    const fonts = [
+      'montserrat',
+      'anton',
+      'bebas-neue',
+      'archivo-black',
+      'poppins',
+      'oswald',
+      'barlow-condensed',
+    ];
+    for (const f of fonts) {
+      const family = getPresetFont(undefined, f);
+      assert.ok(family && typeof family === 'string', `Expected valid font family for "${f}", got ${family}`);
+    }
+  });
+
+  await suite.test('Variable Font Outline: Montserrat avoids -webkit-text-stroke raw contour artifacts', async () => {
+    const { getTextOutlineStyle } = await import('../compositions/studio/src/headline-renderers/highlightUtil.js');
+    const montserratStyle = getTextOutlineStyle('Montserrat', 6, '#000000');
+    assert.equal(montserratStyle.WebkitTextStroke, '0px transparent');
+    assert.ok(typeof montserratStyle.textShadow === 'string' && montserratStyle.textShadow.length > 0);
+
+    const antonStyle = getTextOutlineStyle('Anton', 6, '#000000');
+    assert.equal(antonStyle.WebkitTextStroke, '6px #000000');
+  });
 });
+

@@ -17,12 +17,45 @@ export type VisualPresetId =
   | 'minimal-question'
   | 'bold-impact'
   | 'data-punch'
-  | 'opportunity-glow';
+  | 'opportunity-glow'
+  | 'focus-brush'
+  | 'clean-fade'
+  | 'scribble-quote'
+  | 'action-pointer'
+  | 'burst-stat';
 
-export type TypographyVariant = 'kinetic' | 'stacked' | 'minimal' | 'bold-caps';
-export type AnimationPreset   = 'spring-punch' | 'word-cascade' | 'slide-up' | 'scale-burst';
-export type HighlightMode     = 'neon-glow' | 'underline' | 'background-chip' | 'none';
-export type DecorationKind    = 'question-mark' | 'number-badge';
+export type TypographyVariant =
+  | 'kinetic'
+  | 'stacked'
+  | 'minimal'
+  | 'bold-caps'
+  | 'bebas-neue'
+  | 'montserrat'
+  | 'anton'
+  | 'archivo-black'
+  | 'poppins'
+  | 'oswald'
+  | 'barlow-condensed';
+export type AnimationPreset   = 'spring-punch' | 'word-cascade' | 'slide-up' | 'scale-burst' | 'fade';
+export type HighlightMode     = 'neon-glow' | 'underline' | 'background-chip' | 'brush' | 'stroke' | 'box' | 'none';
+export type DecorationKind    =
+  | 'question-mark'
+  | 'number-badge'
+  | 'arrow'
+  | 'scribble'
+  | 'spark'
+  | 'burst'
+  | 'corner-frame'
+  | 'question-doodle';
+
+export type CompositionLayout =
+  | 'centered'
+  | 'top-heavy'
+  | 'split-proof'
+  | 'full-screen-text'
+  | 'subject-first'
+  | 'data-focus'
+  | 'question-focus';
 
 /** Visual-only configuration — the only thing Remotion needs to know. */
 export interface VisualPreset {
@@ -33,6 +66,7 @@ export interface VisualPreset {
   animation:   AnimationPreset;
   highlight:   HighlightMode;
   decoration?: DecorationKind;
+  layout?:     CompositionLayout;
 }
 
 export interface ResolveVisualPresetInput {
@@ -51,6 +85,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'kinetic',
     animation:   'spring-punch',
     highlight:   'neon-glow',
+    layout:      'centered',
   },
   'curiosity-stack': {
     id:          'curiosity-stack',
@@ -59,6 +94,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'stacked',
     animation:   'word-cascade',
     highlight:   'neon-glow',
+    layout:      'subject-first',
   },
   'story-slide': {
     id:          'story-slide',
@@ -67,6 +103,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'minimal',
     animation:   'slide-up',
     highlight:   'underline',
+    layout:      'centered',
   },
   'minimal-question': {
     id:          'minimal-question',
@@ -76,6 +113,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     animation:   'slide-up',
     highlight:   'underline',
     decoration:  'question-mark',
+    layout:      'question-focus',
   },
   'bold-impact': {
     id:          'bold-impact',
@@ -84,6 +122,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'bold-caps',
     animation:   'scale-burst',
     highlight:   'background-chip',
+    layout:      'top-heavy',
   },
   'data-punch': {
     id:          'data-punch',
@@ -93,6 +132,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     animation:   'scale-burst',
     highlight:   'background-chip',
     decoration:  'number-badge',
+    layout:      'data-focus',
   },
   'opportunity-glow': {
     id:          'opportunity-glow',
@@ -101,6 +141,57 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'stacked',
     animation:   'word-cascade',
     highlight:   'neon-glow',
+    layout:      'centered',
+  },
+  'focus-brush': {
+    id:          'focus-brush',
+    label:       '🖌️ Focus Brush',
+    description: 'Vibrant brush stroke highlight with sparkling attention accents',
+    typography:  'kinetic',
+    animation:   'spring-punch',
+    highlight:   'brush',
+    decoration:  'spark',
+    layout:      'top-heavy',
+  },
+  'clean-fade': {
+    id:          'clean-fade',
+    label:       '✨ Clean Fade',
+    description: 'Smooth elegant fade entrance with framing corner brackets',
+    typography:  'minimal',
+    animation:   'fade',
+    highlight:   'box',
+    decoration:  'corner-frame',
+    layout:      'centered',
+  },
+  'scribble-quote': {
+    id:          'scribble-quote',
+    label:       '✏️ Scribble Accent',
+    description: 'Playful hand-drawn scribble with outlined keyword emphasis',
+    typography:  'stacked',
+    animation:   'word-cascade',
+    highlight:   'stroke',
+    decoration:  'scribble',
+    layout:      'subject-first',
+  },
+  'action-pointer': {
+    id:          'action-pointer',
+    label:       '👉 Action Pointer',
+    description: 'High-energy scale burst with an action arrow directing focus',
+    typography:  'bold-caps',
+    animation:   'scale-burst',
+    highlight:   'background-chip',
+    decoration:  'arrow',
+    layout:      'split-proof',
+  },
+  'burst-stat': {
+    id:          'burst-stat',
+    label:       '💥 Viral Burst',
+    description: 'Dynamic burst rays framing full-screen bold claims',
+    typography:  'bold-caps',
+    animation:   'scale-burst',
+    highlight:   'neon-glow',
+    decoration:  'burst',
+    layout:      'full-screen-text',
   },
 };
 

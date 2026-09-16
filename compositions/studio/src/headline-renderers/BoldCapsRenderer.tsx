@@ -1,20 +1,15 @@
-/**
- * BoldCapsRenderer — Full-width scale-burst with chip highlights.
- *
- * Visual preset: bold-impact, data-punch
- * Animation:     scale-burst (1.28 → 1.0 heavy overshoot spring)
- * Highlight:     background-chip (filled accent chip around highlight words)
- * Decoration:    number-badge (📊 badge prepended to first number-like word)
- */
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
-import { HOOK_FONT } from '../design';
+import { getPresetFont } from '../design';
 import type { Theme } from '../design';
 import { scaleBurstProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
+import { HookDecoration } from '../decorations/HookDecoration';
+import { HighlightWord, getTextOutlineStyle } from './highlightUtil';
+import { HookTagPill } from './HookTagPill';
 
-const MAX_WORDS = 8;
+const MAX_WORDS = 10;
 
 interface BoldCapsRendererProps {
   text: string;
@@ -34,10 +29,12 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
+  const font = getPresetFont(visualPreset.id, visualPreset.typography);
+  const isDataPunch = visualPreset.id === 'data-punch' || visualPreset.decoration === 'number-badge';
+
   const progress = scaleBurstProgress(frame, fps);
   const opacity = interpolate(progress, [0, 0.25], [0, 1], { extrapolateRight: 'clamp' });
   const scale = interpolate(progress, [0, 1], [1.28, 1.0]);
-  const hasNumberBadge = visualPreset.decoration === 'number-badge';
 
   const allWords = text.toUpperCase().split(/\s+/).filter(Boolean);
   const tokens = allWords.slice(0, MAX_WORDS);
@@ -45,25 +42,79 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
   const keywordSet = new Set(
     (highlightWords ?? []).map((w) => w.toLowerCase().trim()),
   );
-  const isKeyword = (token: string): boolean => {
-    const t = token.toLowerCase().replace(/[.,!?…]/g, '');
-    return keywordSet.has(t) || /^\d/.test(t);
-  };
 
+  // Determine which token gets the chip/badge
+  let chipIndex = -1;
+
+  if (isDataPunch) {
+    // Look for number/stat token first (e.g. 97%, $100, #1, 10)
+    chipIndex = tokens.findIndex((t) => /\d/.test(t));
+    if (chipIndex === -1) {
+      // Fallback: use first token
+      chipIndex = 0;
+    }
+  } else {
+    // Bold impact: check explicit keyword, then trigger words, then middle token
+    chipIndex = tokens.findIndex((t) => {
+      const clean = t.toLowerCase().replace(/[.,!?…]/g, '');
+      return keywordSet.has(clean);
+    });
+    if (chipIndex === -1) {
+      chipIndex = tokens.findIndex((t) => {
+        const clean = t.toLowerCase().replace(/[.,!?…]/g, '');
+        return /\b(gila|heboh|viral|kaget|rahasia|tercepat|terakhir|terbesar|terbaik|menegangkan|mustahil|ternyata|bahaya|penting|jangan|stop|never|always|secret|mistake|shock|insane|best|truth|wrong)\b/.test(clean);
+      });
+    }
+    if (chipIndex === -1) {
+      // Fallback to middle word
+      chipIndex = Math.max(0, Math.floor(tokens.length / 2));
+    }
+  }
+
+  // Format into 3-part stacked layout: [beforeLine, chipText, afterLine]
+  let beforeLine = '';
+  const chipText = tokens[chipIndex] ?? '';
+  let afterLine = '';
+  let afterLine2 = '';
+
+  if (isDataPunch && chipIndex === 0) {
+    // If badge is first (e.g. "97% OF PEOPLE FAIL")
+    const remaining = tokens.slice(1);
+    if (remaining.length <= 2) {
+      afterLine = remaining.join(' ');
+    } else {
+      const mid = Math.ceil(remaining.length / 2);
+      afterLine = remaining.slice(0, mid).join(' ');
+      afterLine2 = remaining.slice(mid).join(' ');
+    }
+  } else {
+    beforeLine = tokens.slice(0, chipIndex).join(' ');
+    const after = tokens.slice(chipIndex + 1);
+    if (after.length <= 2) {
+      afterLine = after.join(' ');
+    } else {
+      const mid = Math.ceil(after.length / 2);
+      afterLine = after.slice(0, mid).join(' ');
+      afterLine2 = after.slice(mid).join(' ');
+    }
+  }
+
+  const longestLine = [beforeLine, chipText, afterLine, afterLine2].sort((a, b) => b.length - a.length)[0] || 'A';
   const fitted = fitText({
-    text: tokens.join(' '),
-    fontFamily: HOOK_FONT,
-    withinWidth: width * 0.92,
+    text: longestLine,
+    fontFamily: font,
+    withinWidth: width * 0.85,
   });
-  const headlineSize = Math.max(52, Math.min(84, Math.round(fitted.fontSize)));
-  const strokeWidth = Math.max(4, Math.round(headlineSize / 8));
+  const headlineSize = Math.max(46, Math.min(78, Math.round(fitted.fontSize)));
+  const strokeWidth = Math.max(3, Math.round(headlineSize / 9));
+  const outlineStyle = getTextOutlineStyle(font, strokeWidth, '#000000', '0 6px 18px rgba(0,0,0,0.95)');
 
   return (
     <AbsoluteFill
       style={{
         justifyContent: 'flex-start',
         alignItems: 'center',
-        paddingTop: height * 0.16,
+        paddingTop: height * 0.10,
         paddingLeft: 24,
         paddingRight: 24,
         pointerEvents: 'none',
@@ -78,104 +129,106 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
           flexDirection: 'column',
           alignItems: 'center',
           textAlign: 'center',
-          maxWidth: width * 0.96,
-          gap: 14,
+          maxWidth: width * 0.94,
+          gap: 12,
+          padding: '24px 36px',
+          borderRadius: 24,
+          background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
         {/* Tag pill */}
-        {tag ? (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              backgroundColor: 'rgba(10, 14, 24, 0.8)',
-              backdropFilter: 'blur(16px)',
-              border: `2px solid ${theme.accent}`,
-              borderRadius: 9999,
-              padding: '6px 20px',
-              boxShadow: `0 8px 24px rgba(0,0,0,0.6)`,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: HOOK_FONT,
-                fontSize: 20,
-                fontWeight: 900,
-                letterSpacing: '1.5px',
-                color: theme.accent,
-                textTransform: 'uppercase',
-              }}
-            >
-              {tag}
-            </span>
-          </div>
-        ) : null}
+        <HookTagPill tag={tag} fontFamily={font} fallbackAccent={theme.accent} marginBottom={6} />
 
-        {/* Bold caps headline */}
+        {/* Stacked 3-part Bold Headline */}
         <div
           style={{
             display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
+            flexDirection: 'column',
             alignItems: 'center',
-            columnGap: 10,
-            rowGap: 6,
+            justifyContent: 'center',
+            gap: 10,
             filter: 'drop-shadow(0 14px 32px rgba(0,0,0,0.98))',
           }}
         >
-          {tokens.map((token, i) => {
-            const keyword = isKeyword(token);
-            // Number badge: show 📊 before the first numeric token
-            const showBadge = hasNumberBadge && keyword && /^\d/.test(token) && i === tokens.findIndex((t) => /^\d/.test(t));
+          {/* Top Line */}
+          {beforeLine ? (
+            <span
+              style={{
+                fontFamily: font,
+                fontSize: headlineSize,
+                lineHeight: 1.15,
+                fontWeight: 900,
+                color: '#FFFFFF',
+                letterSpacing: '0.6px',
+                textAlign: 'center',
+                ...outlineStyle,
+              }}
+            >
+              {beforeLine}
+            </span>
+          ) : null}
 
-            if (keyword) {
-              // Chip-style highlighted word
-              return (
-                <span
-                  key={`${token}-${i}`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    backgroundColor: theme.accent,
-                    borderRadius: 8,
-                    padding: `4px 14px`,
-                    fontFamily: HOOK_FONT,
-                    fontSize: headlineSize,
-                    lineHeight: 1.15,
-                    fontWeight: 900,
-                    color: '#000000',
-                    letterSpacing: '0.5px',
-                    boxShadow: `0 0 28px ${theme.accent}60`,
-                  }}
-                >
-                  {showBadge && <span style={{ fontSize: headlineSize * 0.7 }}>📊</span>}
-                  {token}
-                </span>
-              );
-            }
+          {/* Center Highlight Line */}
+          {chipText ? (
+            <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
+              <HighlightWord
+                token={chipText}
+                isKeyword={true}
+                highlightMode={visualPreset.highlight}
+                theme={theme}
+                font={font}
+                fontSize={headlineSize}
+                strokeWidth={strokeWidth}
+                isUppercase={true}
+              />
+            </div>
+          ) : null}
 
-            return (
-              <span
-                key={`${token}-${i}`}
-                style={{
-                  fontFamily: HOOK_FONT,
-                  fontSize: headlineSize,
-                  lineHeight: 1.15,
-                  fontWeight: 900,
-                  color: '#FFFFFF',
-                  WebkitTextStroke: `${strokeWidth}px #000000`,
-                  paintOrder: 'stroke fill',
-                  letterSpacing: '0.5px',
-                  textShadow: '0 6px 18px rgba(0,0,0,0.95)',
-                }}
-              >
-                {token}
-              </span>
-            );
-          })}
+          {/* Bottom Line 1 */}
+          {afterLine ? (
+            <span
+              style={{
+                fontFamily: font,
+                fontSize: headlineSize,
+                lineHeight: 1.15,
+                fontWeight: 900,
+                color: '#FFFFFF',
+                letterSpacing: '0.6px',
+                textAlign: 'center',
+                ...outlineStyle,
+              }}
+            >
+              {afterLine}
+            </span>
+          ) : null}
+
+          {/* Bottom Line 2 (if longer text) */}
+          {afterLine2 ? (
+            <span
+              style={{
+                fontFamily: font,
+                fontSize: headlineSize,
+                lineHeight: 1.15,
+                fontWeight: 900,
+                color: '#FFFFFF',
+                letterSpacing: '0.6px',
+                textAlign: 'center',
+                ...outlineStyle,
+              }}
+            >
+              {afterLine2}
+            </span>
+          ) : null}
         </div>
+
+        {/* Decoration (e.g. number-badge, arrow, burst, etc.) */}
+        {visualPreset.decoration && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
+            <HookDecoration kind={visualPreset.decoration} theme={theme} size={54} />
+          </div>
+        )}
       </div>
     </AbsoluteFill>
   );
 };
+

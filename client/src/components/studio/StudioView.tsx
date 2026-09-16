@@ -84,6 +84,12 @@ export const StudioView: React.FC<StudioViewProps> = ({
     generatingHooks,
     selectedVisualPreset,
     setSelectedVisualPreset,
+    selectedHookLayout,
+    setSelectedHookLayout,
+    selectedHookAnimation,
+    setSelectedHookAnimation,
+    selectedHookTypography,
+    setSelectedHookTypography,
     startGenerateClips,
     refreshClips,
     rerenderClipPreviews,
@@ -289,6 +295,12 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setEnableHookIntro={setEnableHookIntro}
         selectedVisualPreset={selectedVisualPreset}
         setSelectedVisualPreset={setSelectedVisualPreset}
+        selectedHookLayout={selectedHookLayout}
+        setSelectedHookLayout={setSelectedHookLayout}
+        selectedHookAnimation={selectedHookAnimation}
+        setSelectedHookAnimation={setSelectedHookAnimation}
+        selectedHookTypography={selectedHookTypography}
+        setSelectedHookTypography={setSelectedHookTypography}
         runningTransform={runningTransform}
         selectedHookIndex={selectedHookIndex}
         hooks={hooks}

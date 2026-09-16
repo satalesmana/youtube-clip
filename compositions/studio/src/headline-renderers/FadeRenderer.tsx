@@ -1,24 +1,17 @@
-/**
- * KineticRenderer — High-Impact Kinetic Typography.
- *
- * Extracted from HookHeadline (zero behavior change).
- * Visual preset: kinetic-punch
- * Animation:     spring-punch (1.12 → 1.0 scale)
- * Highlight:     neon-glow (accent color + text-shadow glow)
- */
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { getPresetFont } from '../design';
 import type { Theme } from '../design';
+import { fadeProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill } from './HookTagPill';
 
-const MAX_WORDS = 10;
+const MAX_WORDS = 12;
 
-interface KineticRendererProps {
+interface FadeRendererProps {
   text: string;
   theme: Theme;
   tag?: string;
@@ -26,7 +19,7 @@ interface KineticRendererProps {
   visualPreset: VisualPreset;
 }
 
-export const KineticRenderer: React.FC<KineticRendererProps> = ({
+export const FadeRenderer: React.FC<FadeRendererProps> = ({
   text,
   theme,
   tag,
@@ -37,19 +30,17 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
   const { fps, width, height } = useVideoConfig();
 
   const font = getPresetFont(visualPreset.id, visualPreset.typography);
+  const opacity = fadeProgress(frame, fps, 10);
 
-  const allWords = text.split(/\s+/).filter(Boolean);
-  const displayWords = allWords.slice(0, MAX_WORDS);
-  const hasMore = displayWords.length < allWords.length;
-  const tokens = hasMore ? [...displayWords, '…'] : displayWords;
+  const allWords = text.trim().split(/\s+/).filter(Boolean);
+  const tokens = allWords.slice(0, MAX_WORDS);
 
   const keywordSet = new Set(
     (highlightWords ?? []).map((w) => w.toLowerCase().trim()),
   );
   const explicitKeyword = (token: string): boolean => {
     const t = token.toLowerCase().replace(/[.,!?…]/g, '');
-    if (keywordSet.has(t)) return true;
-    return /\b(\d+([.,]\d+)?%?|gila|heboh|viral|kaget|rahasia|tercepat|terakhir|terbesar|terbaik|menegangkan|mustahil|ternyata|bahaya|penting|jangan|stop|never|always|secret|mistake|shock|insane|best|truth|hidden|exposed)\b/.test(t);
+    return keywordSet.has(t);
   };
 
   const hasExplicitMatch = tokens.some((t) => explicitKeyword(t));
@@ -57,33 +48,17 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
     if (hasExplicitMatch) {
       return explicitKeyword(token);
     }
-    // Fallback: alternate glow (odd indices) like the preset preview ("YOU'RE [DOING] THIS [WRONG]")
-    return i % 2 === 1;
+    // Default fallback: highlight middle/last key phrase
+    return tokens.length > 2 ? i >= tokens.length - 2 : i === tokens.length - 1;
   };
 
-  // Spring punch-in: 1.12 → 1.0
-  const entrySpring = spring({
-    frame,
-    fps,
-    config: { damping: 13, stiffness: 140, mass: 0.8 },
-  });
-  const scale = interpolate(entrySpring, [0, 1], [1.12, 1]);
-  const opacity = interpolate(entrySpring, [0, 0.3], [0, 1], { extrapolateRight: 'clamp' });
-
-  const mid = Math.ceil(tokens.length / 2);
-  const longestLine = tokens.length > 4
-    ? (tokens.slice(0, mid).join(' ').length > tokens.slice(mid).join(' ').length
-        ? tokens.slice(0, mid).join(' ')
-        : tokens.slice(mid).join(' '))
-    : tokens.join(' ');
-
   const fitted = fitText({
-    text: longestLine,
+    text: tokens.join(' '),
     fontFamily: font,
     withinWidth: width * 0.86,
   });
-  const headlineSize = Math.max(64, Math.min(84, Math.round(fitted.fontSize)));
-  const strokeWidth = Math.max(4, Math.round(headlineSize / 9));
+  const headlineSize = Math.max(44, Math.min(70, Math.round(fitted.fontSize)));
+  const strokeWidth = Math.max(3, Math.round(headlineSize / 9));
 
   return (
     <AbsoluteFill
@@ -98,33 +73,38 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
     >
       <div
         style={{
-          transform: `scale(${scale})`,
           opacity,
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           textAlign: 'center',
           maxWidth: width * 0.94,
           gap: 14,
-          padding: '24px 36px',
+          padding: '28px 40px',
           borderRadius: 24,
-          background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
+          background:
+            'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.4) 60%, rgba(0, 0, 0, 0) 90%)',
         }}
       >
-        {/* Floating Social Pill Tag */}
+        {/* Optional Corner Frame Decoration enclosing the card */}
+        {visualPreset.decoration === 'corner-frame' && (
+          <HookDecoration kind="corner-frame" theme={theme} />
+        )}
+
+        {/* Tag pill */}
         <HookTagPill tag={tag} fontFamily={font} fallbackAccent={theme.accent} marginBottom={6} />
 
-        {/* High-Impact Kinetic Headline */}
+        {/* Headline Words */}
         <div
           style={{
             display: 'flex',
             flexWrap: 'wrap',
             justifyContent: 'center',
             alignItems: 'center',
-            columnGap: 12,
+            columnGap: 14,
             rowGap: 8,
-            textAlign: 'center',
-            filter: 'drop-shadow(0 12px 28px rgba(0,0,0,0.95))',
+            filter: 'drop-shadow(0 10px 24px rgba(0,0,0,0.95))',
           }}
         >
           {tokens.map((token, i) => (
@@ -137,15 +117,15 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
               font={font}
               fontSize={headlineSize}
               strokeWidth={strokeWidth}
-              isUppercase={true}
+              isUppercase={visualPreset.typography === 'bold-caps' || visualPreset.typography === 'kinetic'}
             />
           ))}
         </div>
 
-        {/* Decoration (e.g. spark, burst, etc.) */}
-        {visualPreset.decoration && (
+        {/* Other Decoration (e.g. spark, burst, arrow, scribble) */}
+        {visualPreset.decoration && visualPreset.decoration !== 'corner-frame' && (
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
-            <HookDecoration kind={visualPreset.decoration} theme={theme} size={48} />
+            <HookDecoration kind={visualPreset.decoration} theme={theme} size={46} />
           </div>
         )}
       </div>

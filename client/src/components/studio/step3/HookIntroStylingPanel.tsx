@@ -15,12 +15,7 @@ interface HookIntroStylingPanelProps {
   setCustomHookTag: (tag: string) => void;
 }
 
-const DEFAULT_TAG_OPTIONS = [
-  '🔥 MOMEN VIRAL',
-  '⚡ FAKTA MENGEJUTKAN',
-  '🎯 DETIK KRUSIAL',
-  '❓ TAHUKAH KAMU?',
-];
+import { DEFAULT_TAG_OPTIONS } from '../../../lib/hook-tags';
 
 export const HookIntroStylingPanel: React.FC<HookIntroStylingPanelProps> = ({
   enableHookIntro,

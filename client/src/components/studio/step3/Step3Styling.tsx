@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
 import { HookTextStylePresets } from '../HookTextStylePresets';
-import { resolvePresetLabelFromHook } from '../../../lib/visual-presets';
-import type { DownloadedVideo, ScriptSection, ViralClip, ViralHook, VisualPresetSelection } from '../../../types';
+import { resolvePresetLabelFromHook, resolvePresetIdFromHook } from '../../../lib/visual-presets';
+import type {
+  DownloadedVideo,
+  ScriptSection,
+  ViralClip,
+  ViralHook,
+  VisualPresetSelection,
+  CompositionLayout,
+  AnimationPreset,
+  TypographyVariant,
+} from '../../../types';
 import { ScriptEditorPanel } from './ScriptEditorPanel';
-import { HookIntroStylingPanel } from './HookIntroStylingPanel';
 import { SubtitleTemplatePicker } from './SubtitleTemplatePicker';
 
 export type Step3SubTab = 'mode' | 'hook' | 'subtitles';
@@ -36,6 +44,12 @@ interface Step3StylingProps {
   setEnableHookIntro: (val: boolean) => void;
   selectedVisualPreset: VisualPresetSelection;
   setSelectedVisualPreset: (preset: VisualPresetSelection) => void;
+  selectedHookLayout: CompositionLayout | 'auto';
+  setSelectedHookLayout: (layout: CompositionLayout | 'auto') => void;
+  selectedHookAnimation: AnimationPreset | 'auto';
+  setSelectedHookAnimation: (anim: AnimationPreset | 'auto') => void;
+  selectedHookTypography: TypographyVariant | 'auto';
+  setSelectedHookTypography: (typography: TypographyVariant | 'auto') => void;
   runningTransform: boolean;
   selectedHookIndex: number | null;
   hooks: ViralHook[];
@@ -82,6 +96,12 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   setEnableHookIntro,
   selectedVisualPreset,
   setSelectedVisualPreset,
+  selectedHookLayout,
+  setSelectedHookLayout,
+  selectedHookAnimation,
+  setSelectedHookAnimation,
+  selectedHookTypography,
+  setSelectedHookTypography,
   runningTransform,
   selectedHookIndex,
   hooks,
@@ -268,51 +288,77 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
       {/* Sub-Tab 2: Hook Intro Kinetik (0-3 Detik) */}
       {activeSubTab === 'hook' && (
         <div>
-          <div style={{ marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
-              <h3 style={{ margin: '0 0 4px', fontSize: '14px', color: '#fff' }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: '15px', color: '#fff' }}>
                 ⚡ Hook Intro &amp; Judul Kinetik (0–3 Detik)
               </h3>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
                 Teks animasi pembuka penentu retensi 3 detik pertama agar penonton tidak men-scroll lewat.
               </p>
             </div>
-            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Langkah 2 dari 3</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12.5px' }}>
+                <input
+                  type="checkbox"
+                  checked={enableHookIntro}
+                  onChange={(e) => setEnableHookIntro(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <span style={{ color: enableHookIntro ? 'var(--ice)' : 'var(--text-muted)', fontWeight: 600 }}>
+                  {enableHookIntro ? '✓ Intro Hook Aktif' : 'Intro Hook Nonaktif'}
+                </span>
+              </label>
+              <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Langkah 2 dari 3</span>
+            </div>
           </div>
 
-          {/* Hook Visual Style Preset Picker */}
-          {enableHookIntro && (
-            <div style={{ marginBottom: '20px' }}>
-              <HookTextStylePresets
-                value={selectedVisualPreset}
-                onChange={setSelectedVisualPreset}
-                disabled={runningTransform}
-                aiRecommendationLabel={
-                  selectedHookIndex !== null && hooks[selectedHookIndex]
-                    ? resolvePresetLabelFromHook(
-                        hooks[selectedHookIndex]?.hookType,
-                        (hooks[selectedHookIndex] as any)?.angle ?? (hooks[selectedHookIndex] as any)?.hookAngle
-                      )
-                    : undefined
-                }
-              />
+          {/* Hook Visual Style Preset Picker & Studio Workspace */}
+          {enableHookIntro ? (() => {
+            const fallbackThumb =
+              (selectedClipIndices.length > 0 && clips[selectedClipIndices[0]]?.thumbnailUrl) ||
+              downloadedVideo?.thumbnailUrl ||
+              (downloadedVideo?.videoId ? `https://img.youtube.com/vi/${downloadedVideo.videoId}/hqdefault.jpg` : '');
+
+            const hookThumb =
+              (selectedHookIndex !== null && hooks[selectedHookIndex]?.thumbnailUrl) ||
+              (selectedHookIndex !== null && hooks[selectedHookIndex]?.previewUrl ? hooks[selectedHookIndex].previewUrl!.replace(/\.mp4(\?.*)?$/, '.jpg$1') : '') ||
+              fallbackThumb;
+
+            const hookObj = selectedHookIndex !== null ? hooks[selectedHookIndex] : undefined;
+            const aiLabel = hookObj ? resolvePresetLabelFromHook(hookObj.hookType, (hookObj as any)?.angle ?? (hookObj as any)?.hookAngle) : undefined;
+            const aiRecId = hookObj ? resolvePresetIdFromHook(hookObj.hookType, (hookObj as any)?.angle ?? (hookObj as any)?.hookAngle) : 'kinetic-punch';
+
+            return (
+              <div style={{ marginBottom: '20px' }}>
+                <HookTextStylePresets
+                  value={selectedVisualPreset}
+                  onChange={setSelectedVisualPreset}
+                  selectedLayout={selectedHookLayout}
+                  onLayoutChange={setSelectedHookLayout}
+                  selectedAnimation={selectedHookAnimation}
+                  onAnimationChange={setSelectedHookAnimation}
+                  selectedTypography={selectedHookTypography}
+                  onTypographyChange={setSelectedHookTypography}
+                  disabled={runningTransform}
+                  aiRecommendationLabel={aiLabel}
+                  aiRecommendationId={aiRecId}
+                  customHookText={customHookText}
+                  setCustomHookText={setCustomHookText}
+                  customHookTag={customHookTag}
+                  setCustomHookTag={setCustomHookTag}
+                  highlightWords={hookObj?.highlightWords}
+                  thumbnailUrl={hookThumb}
+                  selectedHookIndex={selectedHookIndex}
+                  hooks={hooks}
+                />
+              </div>
+            );
+          })() : (
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+              Intro hook kinetik dinonaktifkan. Video akan langsung dimulai dari dialog klip pertama tanpa judul pembuka.
             </div>
           )}
-
-          {/* Hook Intro & Headline Styling Panel */}
-          <HookIntroStylingPanel
-            enableHookIntro={enableHookIntro}
-            setEnableHookIntro={setEnableHookIntro}
-            selectedHookIndex={selectedHookIndex}
-            hooks={hooks}
-            selectedClipIndices={selectedClipIndices}
-            clips={clips}
-            downloadedVideo={downloadedVideo}
-            customHookText={customHookText}
-            setCustomHookText={setCustomHookText}
-            customHookTag={customHookTag}
-            setCustomHookTag={setCustomHookTag}
-          />
 
           {/* Navigation for Sub-Tab 2 */}
           <div style={{ marginTop: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

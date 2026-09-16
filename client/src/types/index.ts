@@ -18,7 +18,41 @@ export type VisualPresetId =
   | 'minimal-question'
   | 'bold-impact'
   | 'data-punch'
-  | 'opportunity-glow';
+  | 'opportunity-glow'
+  | 'focus-brush'
+  | 'clean-fade'
+  | 'scribble-quote'
+  | 'action-pointer'
+  | 'burst-stat';
+
+export type CompositionLayout =
+  | 'centered'
+  | 'top-heavy'
+  | 'split-proof'
+  | 'full-screen-text'
+  | 'subject-first'
+  | 'data-focus'
+  | 'question-focus';
+
+export type AnimationPreset =
+  | 'spring-punch'
+  | 'word-cascade'
+  | 'slide-up'
+  | 'scale-burst'
+  | 'fade';
+
+export type TypographyVariant =
+  | 'kinetic'
+  | 'stacked'
+  | 'minimal'
+  | 'bold-caps'
+  | 'bebas-neue'
+  | 'montserrat'
+  | 'anton'
+  | 'archivo-black'
+  | 'poppins'
+  | 'oswald'
+  | 'barlow-condensed';
 
 /**
  * A user can either pick an explicit preset or let the AI auto-resolve.
@@ -144,6 +178,12 @@ export interface TransformRequest {
    * When omitted ("auto" mode), the server auto-resolves using hookType + angle.
    */
   visualPreset?: VisualPresetId;
+  /** Optional user override for composition layout. */
+  hookLayout?: CompositionLayout;
+  /** Optional user override for entrance motion animation. */
+  hookAnimation?: AnimationPreset;
+  /** Optional user override for typography variant. */
+  hookTypography?: TypographyVariant;
 }
 
 export interface TransformProgress {

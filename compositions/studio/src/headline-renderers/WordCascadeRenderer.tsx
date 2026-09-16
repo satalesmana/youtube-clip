@@ -9,10 +9,13 @@
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
-import { HOOK_FONT } from '../design';
+import { getPresetFont } from '../design';
 import type { Theme } from '../design';
 import { wordCascadeProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
+import { HookDecoration } from '../decorations/HookDecoration';
+import { HighlightWord } from './highlightUtil';
+import { HookTagPill } from './HookTagPill';
 
 const MAX_WORDS = 10;
 
@@ -34,24 +37,41 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
+  const font = getPresetFont(visualPreset.id, visualPreset.typography);
+  const isOpportunityGlow = visualPreset.id === 'opportunity-glow';
+
+  // Keep natural sentence case for opportunity-glow, uppercase for curiosity-stack
   const allWords = text.split(/\s+/).filter(Boolean);
   const tokens = allWords.slice(0, MAX_WORDS);
 
   const keywordSet = new Set(
     (highlightWords ?? []).map((w) => w.toLowerCase().trim()),
   );
-  const isKeyword = (token: string): boolean => {
+  const explicitKeyword = (token: string): boolean => {
     const t = token.toLowerCase().replace(/[.,!?…]/g, '');
     return keywordSet.has(t);
   };
 
+  const hasExplicitMatch = tokens.some((t) => explicitKeyword(t));
+  const isKeyword = (token: string, i: number): boolean => {
+    if (hasExplicitMatch) {
+      return explicitKeyword(token);
+    }
+    // Fallback: 2nd word for opportunity-glow ("This [changed] everything"),
+    // 3rd word for curiosity-stack ("DID YOU [KNOW] THAT")
+    if (isOpportunityGlow) {
+      return tokens.length >= 2 ? i === 1 : i === 0;
+    }
+    return tokens.length >= 3 ? i === 2 : i === 0;
+  };
+
   const fitted = fitText({
     text: tokens.join(' '),
-    fontFamily: HOOK_FONT,
+    fontFamily: font,
     withinWidth: width * 0.88,
   });
   const headlineSize = Math.max(42, Math.min(70, Math.round(fitted.fontSize)));
-  const strokeWidth = Math.max(3, Math.round(headlineSize / 10));
+  const strokeWidth = isOpportunityGlow ? 2 : Math.max(3, Math.round(headlineSize / 10));
   const useGlow = visualPreset.highlight === 'neon-glow';
 
   return (
@@ -59,7 +79,7 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
       style={{
         justifyContent: 'flex-start',
         alignItems: 'center',
-        paddingTop: height * 0.17,
+        paddingTop: height * 0.11,
         paddingLeft: 32,
         paddingRight: 32,
         pointerEvents: 'none',
@@ -72,37 +92,14 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
           alignItems: 'center',
           textAlign: 'center',
           maxWidth: width * 0.94,
-          gap: 14,
+          gap: 12,
+          padding: '24px 36px',
+          borderRadius: 24,
+          background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
         {/* Tag pill */}
-        {tag ? (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              backgroundColor: 'rgba(10, 14, 24, 0.75)',
-              backdropFilter: 'blur(16px)',
-              border: `1.5px solid ${theme.accent}`,
-              borderRadius: 9999,
-              padding: '6px 20px',
-              boxShadow: `0 8px 24px rgba(0,0,0,0.6), 0 0 20px ${theme.accent}45`,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: HOOK_FONT,
-                fontSize: 20,
-                fontWeight: 900,
-                letterSpacing: '1.2px',
-                color: theme.accent,
-                textTransform: 'uppercase',
-              }}
-            >
-              {tag}
-            </span>
-          </div>
-        ) : null}
+        <HookTagPill tag={tag} fontFamily={font} fallbackAccent={theme.accent} marginBottom={6} />
 
         {/* Cascading words */}
         <div
@@ -118,56 +115,43 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
         >
           {tokens.map((token, i) => {
             const progress = wordCascadeProgress(frame, fps, i);
-            const wordOpacity = interpolate(progress, [0, 0.4], [0, 1], { extrapolateRight: 'clamp' });
+            const cascadeDecay = isOpportunityGlow ? Math.max(0.75, 1 - i * 0.08) : Math.max(0.65, 1 - i * 0.09);
+            const wordOpacity = interpolate(progress, [0, 0.4], [0, cascadeDecay], { extrapolateRight: 'clamp' });
             const translateY = interpolate(progress, [0, 1], [32, 0]);
-            const keyword = isKeyword(token);
+            const keyword = isKeyword(token, i);
+            const underlineProg = interpolate(progress, [0.5, 1], [0, 1], { extrapolateRight: 'clamp' });
 
             return (
               <div
                 key={`${token}-${i}`}
                 style={{
                   display: 'inline-flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 3,
                   opacity: wordOpacity,
                   transform: `translateY(${translateY}px)`,
                 }}
               >
-                <span
-                  style={{
-                    fontFamily: HOOK_FONT,
-                    fontSize: headlineSize,
-                    lineHeight: 1.15,
-                    fontWeight: 900,
-                    color: keyword ? theme.accent : '#FFFFFF',
-                    WebkitTextStroke: `${strokeWidth}px #000000`,
-                    paintOrder: 'stroke fill',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.4px',
-                    textShadow: useGlow && keyword
-                      ? `0 0 28px ${theme.accent}, 0 4px 14px rgba(0,0,0,0.9)`
-                      : '0 4px 14px rgba(0,0,0,0.9)',
-                  }}
-                >
-                  {token}
-                </span>
-                {/* Underline bar for highlight mode */}
-                {!useGlow && keyword && (
-                  <div
-                    style={{
-                      height: 3,
-                      width: `${interpolate(progress, [0.5, 1], [0, 100], { extrapolateRight: 'clamp' })}%`,
-                      background: theme.accent,
-                      borderRadius: 2,
-                      boxShadow: `0 0 8px ${theme.accent}80`,
-                    }}
-                  />
-                )}
+                <HighlightWord
+                  token={token}
+                  isKeyword={keyword}
+                  highlightMode={visualPreset.highlight}
+                  theme={theme}
+                  font={font}
+                  fontSize={headlineSize}
+                  strokeWidth={strokeWidth}
+                  underlineProgress={underlineProg}
+                  isUppercase={!isOpportunityGlow}
+                />
               </div>
             );
           })}
         </div>
+
+        {/* Decoration (e.g. scribble, spark, etc.) */}
+        {visualPreset.decoration && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
+            <HookDecoration kind={visualPreset.decoration} theme={theme} size={50} />
+          </div>
+        )}
       </div>
     </AbsoluteFill>
   );

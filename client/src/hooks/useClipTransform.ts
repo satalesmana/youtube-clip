@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
-import type { DownloadedVideo, ScriptSection, TransformResult, ViralClip, ViralHook, VisualPresetSelection } from '../types';
+import type {
+  DownloadedVideo,
+  ScriptSection,
+  TransformResult,
+  ViralClip,
+  ViralHook,
+  VisualPresetSelection,
+  CompositionLayout,
+  AnimationPreset,
+  TypographyVariant,
+} from '../types';
 import { resolvePresetIdFromHook } from '../lib/visual-presets';
 
 export function useClipTransform() {
@@ -75,7 +85,7 @@ export function useClipTransform() {
   const [hooks, setHooks] = useState<ViralHook[]>([]);
   const [selectedHookIndex, setSelectedHookIndex] = useState<number | null>(null);
   const [customHookText, setCustomHookText] = useState<string>('');
-  const [customHookTag, setCustomHookTag] = useState<string>('🔥 MOMEN VIRAL');
+  const [customHookTag, setCustomHookTag] = useState<string>('👀 JANGAN DI-SKIP');
   const [enableHookIntro, setEnableHookIntro] = useState<boolean>(true);
   const [generatingHooks, setGeneratingHooks] = useState(false);
   /**
@@ -84,6 +94,24 @@ export function useClipTransform() {
    * Any VisualPresetId = explicit user choice, always overrides auto.
    */
   const [selectedVisualPreset, setSelectedVisualPreset] = useState<VisualPresetSelection>('auto');
+  /**
+   * Composition layout override:
+   * 'auto' = use preset default layout.
+   * Any CompositionLayout = explicit user override.
+   */
+  const [selectedHookLayout, setSelectedHookLayout] = useState<CompositionLayout | 'auto'>('auto');
+  /**
+   * Animation preset override:
+   * 'auto' = use preset default animation.
+   * Any AnimationPreset = explicit user override.
+   */
+  const [selectedHookAnimation, setSelectedHookAnimation] = useState<AnimationPreset | 'auto'>('auto');
+  /**
+   * Typography variant override:
+   * 'auto' = use preset default typography.
+   * Any TypographyVariant = explicit user override.
+   */
+  const [selectedHookTypography, setSelectedHookTypography] = useState<TypographyVariant | 'auto'>('auto');
 
   // Full Transform
   const [runningTransform, setRunningTransform] = useState(false);
@@ -488,6 +516,9 @@ export function useClipTransform() {
             ? resolvePresetIdFromHook(selectedHook.hookType, (selectedHook as any)?.angle ?? (selectedHook as any)?.hookAngle)
             : 'kinetic-punch'
           : undefined,
+        hookLayout: enableHookIntro && selectedHookLayout !== 'auto' ? selectedHookLayout : undefined,
+        hookAnimation: enableHookIntro && selectedHookAnimation !== 'auto' ? selectedHookAnimation : undefined,
+        hookTypography: enableHookIntro && selectedHookTypography !== 'auto' ? selectedHookTypography : undefined,
       });
 
       setProgressPct(100);
@@ -527,6 +558,9 @@ export function useClipTransform() {
     customHookTag,
     enableHookIntro,
     selectedVisualPreset,
+    selectedHookLayout,
+    selectedHookAnimation,
+    selectedHookTypography,
   ]);
 
   return {
@@ -602,6 +636,12 @@ export function useClipTransform() {
     // Visual preset selection
     selectedVisualPreset,
     setSelectedVisualPreset,
+    selectedHookLayout,
+    setSelectedHookLayout,
+    selectedHookAnimation,
+    setSelectedHookAnimation,
+    selectedHookTypography,
+    setSelectedHookTypography,
     startGenerateClips,
     refreshClips,
     rerenderClipPreviews,

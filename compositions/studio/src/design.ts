@@ -1,6 +1,14 @@
 import { loadFont } from '@remotion/google-fonts/BreeSerif';
 import { loadFont as loadHookFont } from '@remotion/google-fonts/ArchivoBlack';
 import { loadFont as loadAntonFont } from '@remotion/google-fonts/Anton';
+import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
+import { loadFont as loadMontserrat } from '@remotion/google-fonts/Montserrat';
+import { loadFont as loadOutfit } from '@remotion/google-fonts/Outfit';
+import { loadFont as loadPoppins } from '@remotion/google-fonts/Poppins';
+import { loadFont as loadPlusJakartaSans } from '@remotion/google-fonts/PlusJakartaSans';
+import { loadFont as loadBebasNeue } from '@remotion/google-fonts/BebasNeue';
+import { loadFont as loadOswald } from '@remotion/google-fonts/Oswald';
+import { loadFont as loadBarlowCondensed } from '@remotion/google-fonts/BarlowCondensed';
 
 export type Theme = {
   id: string;
@@ -147,3 +155,89 @@ export const HOOK_FONT = loadHookFont('normal', {
 export const SPORTS_FONT = loadAntonFont('normal', {
   subsets: ['latin'],
 }).fontFamily;
+
+export const FONT_INTER = loadInter('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_MONTSERRAT = loadMontserrat('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_OUTFIT = loadOutfit('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_POPPINS = loadPoppins('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_PLUS_JAKARTA_SANS = loadPlusJakartaSans('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_BEBAS_NEUE = loadBebasNeue('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_OSWALD = loadOswald('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_BARLOW_CONDENSED = loadBarlowCondensed('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+export const FONT_ARCHIVO_BLACK = loadHookFont('normal', {
+  subsets: ['latin'],
+}).fontFamily;
+
+/**
+ * High-converting typography fonts tailored specifically per visual preset
+ * to match the preview design 1:1.
+ */
+export const PRESET_FONTS: Record<string, string> = {
+  'kinetic-punch': FONT_BEBAS_NEUE,
+  'curiosity-stack': FONT_MONTSERRAT,
+  'story-slide': FONT_POPPINS,
+  'minimal-question': FONT_INTER,
+  'bold-impact': SPORTS_FONT,
+  'data-punch': FONT_INTER,
+  'opportunity-glow': FONT_PLUS_JAKARTA_SANS,
+  'focus-brush': FONT_BEBAS_NEUE,
+  'clean-fade': FONT_INTER,
+  'scribble-quote': FONT_MONTSERRAT,
+  'action-pointer': SPORTS_FONT,
+  'burst-stat': SPORTS_FONT,
+};
+
+export function getPresetFont(presetId?: string, typography?: string): string {
+  if (typography) {
+    switch (typography) {
+      case 'bebas-neue':
+      case 'kinetic':
+        return FONT_BEBAS_NEUE;
+      case 'montserrat':
+      case 'stacked':
+        return FONT_MONTSERRAT;
+      case 'anton':
+      case 'bold-caps':
+        return SPORTS_FONT;
+      case 'archivo-black':
+        return FONT_ARCHIVO_BLACK;
+      case 'poppins':
+        return FONT_POPPINS;
+      case 'oswald':
+        return FONT_OSWALD;
+      case 'barlow-condensed':
+        return FONT_BARLOW_CONDENSED;
+      case 'minimal':
+        return FONT_INTER;
+    }
+  }
+  if (presetId && PRESET_FONTS[presetId]) {
+    return PRESET_FONTS[presetId];
+  }
+  return FONT_INTER;
+}
+

@@ -975,7 +975,15 @@ export class TransformController {
     // still accessible on disk. If the user explicitly chose a visual preset or
     // custom hook headline/tag in Step 3, re-render fresh so user presets are honored.
     let hookIntroFile: string | undefined;
-    const isCustomizedHook = Boolean(request.customHook || request.hookTitle || request.hookTag || request.visualPreset);
+    const isCustomizedHook = Boolean(
+      request.customHook ||
+      request.hookTitle ||
+      request.hookTag ||
+      request.visualPreset ||
+      request.hookLayout ||
+      request.hookAnimation ||
+      request.hookTypography
+    );
     if (!isCustomizedHook && request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
       const { access } = await import('node:fs/promises');
       hookIntroFile = await access(request.hookPreviewPath)
@@ -1000,8 +1008,11 @@ export class TransformController {
           themeSeed: `${videoId}:${request.subtitleStyle || request.template || 'default'}`,
           outputDir,
           fileName: `styled-hook-intro-${jobId}`,
-          // Visual preset: user selection or auto-resolved (Phase 3/5)
+          // Visual preset & custom overrides (layout + animation + typography)
           visualPreset: request.visualPreset,
+          layout: request.hookLayout,
+          animation: request.hookAnimation,
+          typography: request.hookTypography,
         });
 
         hookIntroFile = styled.path;

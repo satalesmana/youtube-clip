@@ -115,6 +115,55 @@ export const transformRequestSchema = z.object({
     'bold-impact',
     'data-punch',
     'opportunity-glow',
+    'focus-brush',
+    'clean-fade',
+    'scribble-quote',
+    'action-pointer',
+    'burst-stat',
+  ] as const).optional(),
+
+  /**
+   * Optional manual override for hook composition layout.
+   * If omitted, the preset's native layout is used.
+   */
+  hookLayout: z.enum([
+    'centered',
+    'top-heavy',
+    'split-proof',
+    'full-screen-text',
+    'subject-first',
+    'data-focus',
+    'question-focus',
+  ] as const).optional(),
+
+  /**
+   * Optional manual override for hook text animation motion.
+   * If omitted, the preset's native animation motion is used.
+   */
+  hookAnimation: z.enum([
+    'spring-punch',
+    'word-cascade',
+    'slide-up',
+    'scale-burst',
+    'fade',
+  ] as const).optional(),
+
+  /**
+   * Optional manual override for hook text typography style.
+   * If omitted, the preset's native typography style is used.
+   */
+  hookTypography: z.enum([
+    'kinetic',
+    'stacked',
+    'minimal',
+    'bold-caps',
+    'bebas-neue',
+    'montserrat',
+    'anton',
+    'archivo-black',
+    'poppins',
+    'oswald',
+    'barlow-condensed',
   ] as const).optional(),
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),

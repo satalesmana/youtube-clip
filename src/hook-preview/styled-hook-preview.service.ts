@@ -5,11 +5,14 @@ import { runCommand } from '../utils/exec.js';
 import { ensureDir } from '../utils/fs.js';
 import type { Logger } from '../utils/logger.js';
 import {
-  resolveVisualPreset,
-  adaptLegacyHookStyle,
   type VisualPresetId,
   type HookType,
   type HookAngle,
+  type CompositionLayout,
+  type AnimationPreset,
+  type TypographyVariant,
+  resolveVisualPreset,
+  adaptLegacyHookStyle,
 } from '../types/visual-preset.js';
 
 export interface StyledHookPreviewOptions {
@@ -65,6 +68,9 @@ export interface StyledHookPreviewInput {
    * Used by the resolver when no manual preset is given.
    */
   angle?: HookAngle;
+  layout?: CompositionLayout;
+  animation?: AnimationPreset;
+  typography?: TypographyVariant;
   /**
    * Legacy flat hook style string from the LLM pipeline.
    * Used only as a last-resort fallback via adaptLegacyHookStyle().
@@ -138,6 +144,9 @@ export class StyledHookPreviewService {
         themeSeed: input.themeSeed,
         // New: visual preset ID consumed by HookIntroShort → HookHeadline.
         visualPresetId: resolvedPreset.id,
+        layout: input.layout ?? resolvedPreset.layout ?? 'centered',
+        ...(input.animation ? { animation: input.animation } : {}),
+        ...(input.typography ? { typography: input.typography } : {}),
       },
       sourceVideoPath: stagedVideoPath,
       sourceStart: input.start,

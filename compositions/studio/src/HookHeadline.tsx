@@ -22,6 +22,7 @@ import { KineticRenderer } from './headline-renderers/KineticRenderer';
 import { WordCascadeRenderer } from './headline-renderers/WordCascadeRenderer';
 import { SlideUpRenderer } from './headline-renderers/SlideUpRenderer';
 import { BoldCapsRenderer } from './headline-renderers/BoldCapsRenderer';
+import { FadeRenderer } from './headline-renderers/FadeRenderer';
 import { VISUAL_PRESET_REGISTRY } from './visual-preset/index';
 
 interface HookHeadlineProps {
@@ -49,14 +50,25 @@ export const HookHeadline: React.FC<HookHeadlineProps> = ({
 
   const commonProps = { text, theme, tag, highlightWords, visualPreset: preset };
 
+  if (preset.animation === 'fade') {
+    return <FadeRenderer {...commonProps} />;
+  }
+
   switch (preset.typography) {
     case 'stacked':
+    case 'montserrat':
       return <WordCascadeRenderer {...commonProps} />;
     case 'minimal':
+    case 'poppins':
       return <SlideUpRenderer {...commonProps} />;
     case 'bold-caps':
+    case 'anton':
+    case 'archivo-black':
+    case 'oswald':
+    case 'barlow-condensed':
       return <BoldCapsRenderer {...commonProps} />;
     case 'kinetic':
+    case 'bebas-neue':
     default:
       return <KineticRenderer {...commonProps} />;
   }

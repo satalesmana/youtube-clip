@@ -85,6 +85,12 @@ export type HookIntroProps = {
      * When absent, falls back to KineticRenderer (backward compat).
      */
     visualPresetId?: string;
+    /** Composition layout mode from the Hook Klip design system. */
+    layout?: string;
+    /** Animation motion override from the Hook Klip design system. */
+    animation?: string;
+    /** Typography variant override from the Hook Klip design system. */
+    typography?: string;
   };
   /** Staged source video (public-relative path, absolute for Studio testing). */
   sourceVideoPath: string;

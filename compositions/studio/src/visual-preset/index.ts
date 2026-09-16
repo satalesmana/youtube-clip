@@ -5,6 +5,7 @@ export type {
   AnimationPreset,
   HighlightMode,
   DecorationKind,
+  CompositionLayout,
   ResolveVisualPresetInput,
 } from './registry';
 

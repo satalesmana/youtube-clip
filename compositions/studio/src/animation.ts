@@ -94,3 +94,13 @@ export const scaleBurstProgress = (frame: number, fps: number): number =>
     fps,
     config: { damping: 11, stiffness: 260, mass: 0.75 },
   });
+
+/**
+ * Smooth fade entrance for FadeRenderer / fade animation preset.
+ * Eases opacity from 0 to 1 over ~8 frames with clamp.
+ */
+export const fadeProgress = (frame: number, fps: number, durationFrames = 8): number =>
+  interpolate(frame, [0, Math.max(1, durationFrames)], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });

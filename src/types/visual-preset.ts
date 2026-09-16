@@ -53,26 +53,49 @@ export type HookAngle =
 // ─── Visual layer (presentation) ────────────────────────────────────────────
 
 /** Typography weight/style variant. Maps 1:1 to a Remotion renderer component. */
-export type TypographyVariant = 'kinetic' | 'stacked' | 'minimal' | 'bold-caps';
+export type TypographyVariant =
+  | 'kinetic'
+  | 'stacked'
+  | 'minimal'
+  | 'bold-caps'
+  | 'bebas-neue'
+  | 'montserrat'
+  | 'anton'
+  | 'archivo-black'
+  | 'poppins'
+  | 'oswald'
+  | 'barlow-condensed';
 
 /** Entrance animation preset. */
-export type AnimationPreset = 'spring-punch' | 'word-cascade' | 'slide-up' | 'scale-burst';
+export type AnimationPreset = 'spring-punch' | 'word-cascade' | 'slide-up' | 'scale-burst' | 'fade';
 
 /** Highlight treatment applied to accent words inside the headline. */
-export type HighlightMode = 'neon-glow' | 'underline' | 'background-chip' | 'none';
+export type HighlightMode = 'neon-glow' | 'underline' | 'background-chip' | 'brush' | 'stroke' | 'box' | 'none';
 
 /** Optional decoration added to the rendered headline. */
-export type DecorationKind = 'question-mark' | 'number-badge';
+export type DecorationKind =
+  | 'question-mark'
+  | 'number-badge'
+  | 'arrow'
+  | 'scribble'
+  | 'spark'
+  | 'burst'
+  | 'corner-frame'
+  | 'question-doodle';
+
+/** Composition layout for hook presentation (safe-zone aligned). */
+export type CompositionLayout =
+  | 'centered'
+  | 'top-heavy'
+  | 'split-proof'
+  | 'full-screen-text'
+  | 'subject-first'
+  | 'data-focus'
+  | 'question-focus';
 
 /**
  * Typed union of all valid visual preset IDs.
  * This is the single source of truth for the preset vocabulary.
- *
- * To add a new preset:
- *   1. Add the ID here.
- *   2. Add the entry to VISUAL_PRESET_REGISTRY below.
- *   3. Mirror in compositions/studio/src/visual-preset/registry.ts.
- *   4. Mirror label+description in client/src/lib/visual-presets.ts.
  */
 export type VisualPresetId =
   | 'kinetic-punch'    // Hard-impact spring entrance, uppercase, neon glow
@@ -81,7 +104,12 @@ export type VisualPresetId =
   | 'minimal-question' // Slide-up block, question-mark decoration
   | 'bold-impact'      // Full-width scale-burst, background chip highlight
   | 'data-punch'       // Scale-burst, number-badge decoration
-  | 'opportunity-glow'; // Word cascade, warm accent glow
+  | 'opportunity-glow' // Word cascade, warm accent glow
+  | 'focus-brush'      // Brush stroke highlight on key words with spark accents
+  | 'clean-fade'       // Smooth elegant fade entrance with framing corner brackets
+  | 'scribble-quote'   // Hand-drawn scribble underline with stroke outline
+  | 'action-pointer'   // Scale burst with action arrow pointing
+  | 'burst-stat';      // Shockwave burst rays with neon highlights
 
 /**
  * A visual preset: purely visual configuration.
@@ -97,6 +125,7 @@ export interface VisualPreset {
   animation:   AnimationPreset;
   highlight:   HighlightMode;
   decoration?: DecorationKind;
+  layout?:     CompositionLayout;
 }
 
 // ─── Resolver input ──────────────────────────────────────────────────────────
@@ -145,6 +174,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'kinetic',
     animation:   'spring-punch',
     highlight:   'neon-glow',
+    layout:      'centered',
   },
   'curiosity-stack': {
     id:          'curiosity-stack',
@@ -153,6 +183,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'stacked',
     animation:   'word-cascade',
     highlight:   'neon-glow',
+    layout:      'subject-first',
   },
   'story-slide': {
     id:          'story-slide',
@@ -161,6 +192,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'minimal',
     animation:   'slide-up',
     highlight:   'underline',
+    layout:      'centered',
   },
   'minimal-question': {
     id:          'minimal-question',
@@ -170,6 +202,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     animation:   'slide-up',
     highlight:   'underline',
     decoration:  'question-mark',
+    layout:      'question-focus',
   },
   'bold-impact': {
     id:          'bold-impact',
@@ -178,6 +211,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'bold-caps',
     animation:   'scale-burst',
     highlight:   'background-chip',
+    layout:      'top-heavy',
   },
   'data-punch': {
     id:          'data-punch',
@@ -187,6 +221,7 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     animation:   'scale-burst',
     highlight:   'background-chip',
     decoration:  'number-badge',
+    layout:      'data-focus',
   },
   'opportunity-glow': {
     id:          'opportunity-glow',
@@ -195,10 +230,61 @@ export const VISUAL_PRESET_REGISTRY: Record<VisualPresetId, VisualPreset> = {
     typography:  'stacked',
     animation:   'word-cascade',
     highlight:   'neon-glow',
+    layout:      'centered',
+  },
+  'focus-brush': {
+    id:          'focus-brush',
+    label:       '🖌️ Focus Brush',
+    description: 'Vibrant brush stroke highlight with sparkling attention accents',
+    typography:  'kinetic',
+    animation:   'spring-punch',
+    highlight:   'brush',
+    decoration:  'spark',
+    layout:      'top-heavy',
+  },
+  'clean-fade': {
+    id:          'clean-fade',
+    label:       '✨ Clean Fade',
+    description: 'Smooth elegant fade entrance with framing corner brackets',
+    typography:  'minimal',
+    animation:   'fade',
+    highlight:   'box',
+    decoration:  'corner-frame',
+    layout:      'centered',
+  },
+  'scribble-quote': {
+    id:          'scribble-quote',
+    label:       '✏️ Scribble Accent',
+    description: 'Playful hand-drawn scribble with outlined keyword emphasis',
+    typography:  'stacked',
+    animation:   'word-cascade',
+    highlight:   'stroke',
+    decoration:  'scribble',
+    layout:      'subject-first',
+  },
+  'action-pointer': {
+    id:          'action-pointer',
+    label:       '👉 Action Pointer',
+    description: 'High-energy scale burst with an action arrow directing focus',
+    typography:  'bold-caps',
+    animation:   'scale-burst',
+    highlight:   'background-chip',
+    decoration:  'arrow',
+    layout:      'split-proof',
+  },
+  'burst-stat': {
+    id:          'burst-stat',
+    label:       '💥 Viral Burst',
+    description: 'Dynamic burst rays framing full-screen bold claims',
+    typography:  'bold-caps',
+    animation:   'scale-burst',
+    highlight:   'neon-glow',
+    decoration:  'burst',
+    layout:      'full-screen-text',
   },
 };
 
-/** Ordered list of presets for the UI picker (most commonly useful first). */
+/** Ordered list of presets for the UI picker (all presets displayed directly). */
 export const VISUAL_PRESET_ORDER: VisualPresetId[] = [
   'kinetic-punch',
   'curiosity-stack',
@@ -207,6 +293,11 @@ export const VISUAL_PRESET_ORDER: VisualPresetId[] = [
   'bold-impact',
   'data-punch',
   'opportunity-glow',
+  'focus-brush',
+  'clean-fade',
+  'scribble-quote',
+  'action-pointer',
+  'burst-stat',
 ];
 
 // ─── Resolver ────────────────────────────────────────────────────────────────
