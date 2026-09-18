@@ -11,6 +11,7 @@ import {
   type CompositionLayout,
   type AnimationPreset,
   type TypographyVariant,
+  type BadgePresetId,
   resolveVisualPreset,
   adaptLegacyHookStyle,
 } from '../types/visual-preset.js';
@@ -71,7 +72,7 @@ export interface StyledHookPreviewInput {
   layout?: CompositionLayout;
   animation?: AnimationPreset;
   typography?: TypographyVariant;
-  badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  badgePresetId?: BadgePresetId;
   badgeColor?: string;
   /**
    * Legacy flat hook style string from the LLM pipeline.

@@ -20,9 +20,15 @@ export const SceneText: React.FC<{
   const { fps } = useVideoConfig();
 
   if (scene.type === 'hook') {
-    const visualPreset = resolveVisualPreset({
+    const baseVisualPreset = resolveVisualPreset({
       manualPreset: scene.visualPreset as VisualPresetId | undefined,
     });
+    const visualPreset = {
+      ...baseVisualPreset,
+      ...(scene.hookLayout ? { layout: scene.hookLayout as any } : {}),
+      ...(scene.hookAnimation ? { animation: scene.hookAnimation as any } : {}),
+      ...(scene.hookTypography ? { typography: scene.hookTypography as any } : {}),
+    };
 
     return (
       <HookHeadline

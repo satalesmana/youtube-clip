@@ -93,12 +93,16 @@ export type CompositionLayout =
   | 'data-focus'
   | 'question-focus';
 
-/** 4 Badge Pill Presets according to the Badge Design System. */
+/** 8 Badge Pill Presets according to the Badge Design System. */
 export type BadgePresetId =
   | 'neon-outline'
   | 'solid-impact'
   | 'highlight-chip'
-  | 'editorial-label';
+  | 'editorial-label'
+  | 'price-tag'
+  | 'speech-bubble'
+  | 'burst-stamp'
+  | 'diagonal-slash';
 
 export type BadgeColorVariant =
   | 'cyan'

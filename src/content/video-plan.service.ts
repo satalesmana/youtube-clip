@@ -56,10 +56,24 @@ export interface VideoPlanBuildInput {
   hookHighlightWords?: string[];
   /** Visual preset id for the hook intro. */
   visualPreset?: string;
-  /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
-  hookBadgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  /** Badge pill preset id */
+  hookBadgePresetId?:
+    | 'neon-outline'
+    | 'solid-impact'
+    | 'highlight-chip'
+    | 'editorial-label'
+    | 'price-tag'
+    | 'speech-bubble'
+    | 'burst-stamp'
+    | 'diagonal-slash';
   /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
   hookBadgeColor?: string;
+  /** Composition layout override */
+  hookLayout?: string;
+  /** Entrance animation override */
+  hookAnimation?: string;
+  /** Typography variant override */
+  hookTypography?: string;
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -114,6 +128,9 @@ export class VideoPlanService implements IVideoPlanService {
       visualPreset,
       hookBadgePresetId,
       hookBadgeColor,
+      hookLayout,
+      hookAnimation,
+      hookTypography,
     } = input;
     const configuredTarget = this.options.targetDuration ?? 60;
     // Never make a video longer than its narration: that produces a frozen
@@ -281,6 +298,15 @@ export class VideoPlanService implements IVideoPlanService {
         }
         if (hookBadgeColor) {
           firstScene.hookBadgeColor = hookBadgeColor;
+        }
+        if (hookLayout) {
+          firstScene.hookLayout = hookLayout;
+        }
+        if (hookAnimation) {
+          firstScene.hookAnimation = hookAnimation;
+        }
+        if (hookTypography) {
+          firstScene.hookTypography = hookTypography;
         }
         if (!firstScene.source && clipEnd > clipStart) {
           firstScene.source = {

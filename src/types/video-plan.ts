@@ -39,10 +39,24 @@ export interface PlanScene {
   highlightWords?: string[];
   /** Visual preset id for the hook headline. */
   visualPreset?: string;
-  /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
-  hookBadgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  /** Badge pill preset id */
+  hookBadgePresetId?:
+    | 'neon-outline'
+    | 'solid-impact'
+    | 'highlight-chip'
+    | 'editorial-label'
+    | 'price-tag'
+    | 'speech-bubble'
+    | 'burst-stamp'
+    | 'diagonal-slash';
   /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
   hookBadgeColor?: string;
+  /** Composition layout override */
+  hookLayout?: string;
+  /** Entrance animation override */
+  hookAnimation?: string;
+  /** Typography variant override */
+  hookTypography?: string;
 }
 
 /** A caption event with word-level timing for the composition engines. */

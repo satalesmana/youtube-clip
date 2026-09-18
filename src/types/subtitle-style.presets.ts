@@ -59,8 +59,9 @@ export const SUBTITLE_STYLE_PRESETS: Record<SubtitleStyleId, AssStyleConfig> = {
 
 /** Returns the preset for the given style id, falling back to 'beast'. */
 export function resolveSubtitleStyle(styleId?: string | null): AssStyleConfig {
-  if (styleId && styleId in SUBTITLE_STYLE_PRESETS) {
-    return SUBTITLE_STYLE_PRESETS[styleId as SubtitleStyleId];
+  const normalized = styleId === 'mrbeast' ? 'beast' : styleId;
+  if (normalized && normalized in SUBTITLE_STYLE_PRESETS) {
+    return SUBTITLE_STYLE_PRESETS[normalized as SubtitleStyleId];
   }
   return SUBTITLE_STYLE_PRESETS.beast;
 }

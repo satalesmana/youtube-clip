@@ -288,22 +288,33 @@ test('Viral Hook Text Style System — Visual Preset Resolver Suite', async (sui
     const { transformRequestSchema } = await import('../src/schemas/transform.schema.js');
     const { resolveBadgeStyle, BADGE_PRESETS } = await import('../client/src/lib/hook-tags.js');
 
-    // 1. Check all 4 badge presets exist
-    assert.equal(BADGE_PRESETS.length, 4);
+    // 1. Check all 8 badge presets exist
+    assert.equal(BADGE_PRESETS.length, 8);
     const presetIds = BADGE_PRESETS.map((p) => p.id);
-    assert.deepEqual(presetIds, ['neon-outline', 'solid-impact', 'highlight-chip', 'editorial-label']);
+    assert.deepEqual(presetIds, [
+      'neon-outline',
+      'solid-impact',
+      'highlight-chip',
+      'editorial-label',
+      'price-tag',
+      'speech-bubble',
+      'burst-stamp',
+      'diagonal-slash',
+    ]);
 
     // 2. Validate Schema acceptance & rejection
-    const validRequest = transformRequestSchema.safeParse({
-      youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
-      outputMode: 'narration',
-      hookBadgePreset: 'solid-impact',
-      hookBadgeColor: 'yellow',
-    });
-    assert.equal(validRequest.success, true);
-    if (validRequest.success) {
-      assert.equal(validRequest.data.hookBadgePreset, 'solid-impact');
-      assert.equal(validRequest.data.hookBadgeColor, 'yellow');
+    for (const preset of BADGE_PRESETS) {
+      const valid = transformRequestSchema.safeParse({
+        youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+        outputMode: 'narration',
+        hookBadgePreset: preset.id,
+        hookBadgeColor: 'yellow',
+      });
+      assert.equal(valid.success, true, `Preset ${preset.id} should be valid in transformRequestSchema`);
+      if (valid.success) {
+        assert.equal(valid.data.hookBadgePreset, preset.id);
+        assert.equal(valid.data.hookBadgeColor, 'yellow');
+      }
     }
 
     const invalidBadge = transformRequestSchema.safeParse({

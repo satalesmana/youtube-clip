@@ -39,12 +39,27 @@ export const planSceneSchema = z.object({
   visualPreset: z.string().optional(),
   /** Badge pill preset id */
   hookBadgePresetId: z
-    .enum(['neon-outline', 'solid-impact', 'highlight-chip', 'editorial-label'])
+    .enum([
+      'neon-outline',
+      'solid-impact',
+      'highlight-chip',
+      'editorial-label',
+      'price-tag',
+      'speech-bubble',
+      'burst-stamp',
+      'diagonal-slash',
+    ])
     .optional(),
   /** Badge pill color variant */
   hookBadgeColor: z
     .enum(['cyan', 'magenta', 'red', 'yellow', 'green', 'purple', 'gold', 'auto'])
     .optional(),
+  /** Composition layout override */
+  hookLayout: z.string().optional(),
+  /** Entrance animation override */
+  hookAnimation: z.string().optional(),
+  /** Typography variant override */
+  hookTypography: z.string().optional(),
 });
 
 /** A caption event with word-level timing. */

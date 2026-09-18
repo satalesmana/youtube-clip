@@ -168,13 +168,17 @@ export const transformRequestSchema = z.object({
 
   /**
    * Badge pill design system preset:
-   * 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label'
+   * 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' | 'price-tag' | 'speech-bubble' | 'burst-stamp' | 'diagonal-slash'
    */
   hookBadgePreset: z.enum([
     'neon-outline',
     'solid-impact',
     'highlight-chip',
     'editorial-label',
+    'price-tag',
+    'speech-bubble',
+    'burst-stamp',
+    'diagonal-slash',
   ] as const).optional(),
 
   /**

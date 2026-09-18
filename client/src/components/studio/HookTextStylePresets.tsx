@@ -16,7 +16,9 @@ import {
   BADGE_PRESETS,
   resolveTagVisual,
   resolveBadgeStyle,
+  parseHookTag,
 } from '../../lib/hook-tags';
+import { HookIcon, type HookIconName } from './HookIcon';
 import { HookPresetLivePreview } from './HookPresetLivePreview';
 
 export interface HookTextStylePresetsProps {
@@ -90,42 +92,50 @@ const TYPOGRAPHY_MAP: Record<TypographyVariant, { label: string; font: string }>
   'barlow-condensed': { label: 'Barlow Condensed', font: 'Barlow Condensed' },
 };
 
-const LAYOUT_OPTIONS: Array<{ id: CompositionLayout; label: string; icon: string; desc: string }> = [
-  { id: 'centered', label: 'Centered', icon: '🎯', desc: 'Tengah seimbang' },
-  { id: 'top-heavy', label: 'Top-Heavy', icon: '⬆️', desc: 'Atas (0–35%)' },
-  { id: 'split-proof', label: 'Split-Proof', icon: '⚖️', desc: 'Bagi dua kolom' },
-  { id: 'full-screen-text', label: 'Full-Screen', icon: '📺', desc: 'Layar penuh' },
-  { id: 'subject-first', label: 'Subject-First', icon: '👤', desc: 'Fokus orang' },
-  { id: 'data-focus', label: 'Data-Focus', icon: '📊', desc: 'Fokus angka' },
-  { id: 'question-focus', label: 'Question-Focus', icon: '❓', desc: 'Fokus tanya' },
+const LAYOUT_OPTIONS: Array<{ id: CompositionLayout; label: string; iconName: HookIconName; desc: string }> = [
+  { id: 'centered', label: 'Centered', iconName: 'target', desc: 'Tengah seimbang' },
+  { id: 'top-heavy', label: 'Top-Heavy', iconName: 'rocket', desc: 'Atas (0–35%)' },
+  { id: 'split-proof', label: 'Split-Proof', iconName: 'gem', desc: 'Bagi dua kolom' },
+  { id: 'full-screen-text', label: 'Full-Screen', iconName: 'star', desc: 'Layar penuh' },
+  { id: 'subject-first', label: 'Subject-First', iconName: 'eye', desc: 'Fokus orang' },
+  { id: 'data-focus', label: 'Data-Focus', iconName: 'trending-up', desc: 'Fokus angka' },
+  { id: 'question-focus', label: 'Question-Focus', iconName: 'help-circle', desc: 'Fokus tanya' },
 ];
 
-const ANIMATION_OPTIONS: Array<{ id: AnimationPreset; label: string; icon: string; desc: string }> = [
-  { id: 'spring-punch', label: 'Spring Punch', icon: '⚡', desc: 'Pantulan elastis' },
-  { id: 'word-cascade', label: 'Word Cascade', icon: '🌊', desc: 'Muncul bertahap' },
-  { id: 'slide-up', label: 'Slide Up', icon: '⬆️', desc: 'Meluncur ke atas' },
-  { id: 'scale-burst', label: 'Scale Burst', icon: '💥', desc: 'Meledak lalu stabil' },
-  { id: 'fade', label: 'Clean Fade', icon: '✨', desc: 'Transisi halus' },
+const ANIMATION_OPTIONS: Array<{ id: AnimationPreset; label: string; iconName: HookIconName; desc: string }> = [
+  { id: 'spring-punch', label: 'Spring Punch', iconName: 'zap', desc: 'Pantulan elastis' },
+  { id: 'word-cascade', label: 'Word Cascade', iconName: 'sparkles', desc: 'Muncul bertahap' },
+  { id: 'slide-up', label: 'Slide Up', iconName: 'rocket', desc: 'Meluncur ke atas' },
+  { id: 'scale-burst', label: 'Scale Burst', iconName: 'flame', desc: 'Meledak lalu stabil' },
+  { id: 'fade', label: 'Clean Fade', iconName: 'star', desc: 'Transisi halus' },
 ];
+
+const PRESET_ICON_MAP: Record<string, HookIconName> = {
+  'kinetic-punch': 'zap',
+  'curiosity-stack': 'help-circle',
+  'story-slide': 'compass',
+  'minimal-question': 'help-circle',
+  'bold-impact': 'flame',
+  'data-punch': 'trending-up',
+  'opportunity-glow': 'lightbulb',
+  'focus-brush': 'sparkles',
+  'clean-fade': 'star',
+  'scribble-quote': 'message-circle',
+  'action-pointer': 'target',
+  'burst-stat': 'bomb',
+};
 
 /**
- * Parses emoji prefix and text title cleanly from preset labels (e.g. "⚡ Kinetic Punch" -> icon: "⚡", title: "Kinetic Punch")
- * Prevents duplicate emoji rendering.
+ * Parses preset label and maps it to a modern Lucide icon name and clean text title.
  */
-function parsePresetLabel(fullLabel: string, fallbackIcon = '🎨'): { icon: string; title: string } {
+function parsePresetLabel(fullLabel: string, presetId?: string): { iconName: HookIconName; title: string } {
   const match = fullLabel.match(/^(\S+)\s+(.+)$/);
-  if (match) {
-    return { icon: match[1], title: match[2] };
+  const title = match ? match[2] : fullLabel;
+  if (presetId && PRESET_ICON_MAP[presetId]) {
+    return { iconName: PRESET_ICON_MAP[presetId], title };
   }
-  return { icon: fallbackIcon, title: fullLabel };
-}
-
-function splitTagEmoji(tag: string): { emoji: string; text: string } {
-  const match = tag.match(/^(\p{Extended_Pictographic}+|\p{Emoji}+)\s*(.*)$/u);
-  if (match) {
-    return { emoji: match[1], text: match[2] || tag };
-  }
-  return { emoji: '🏷️', text: tag };
+  const parsed = parseHookTag(fullLabel);
+  return { iconName: parsed.iconName, title };
 }
 
 export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
@@ -316,7 +326,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
           <div className="hts-control-group">
             <div className="hts-group-header">
               <div className="hts-group-title-row">
-                <span className="hts-group-title">1. Gaya Visual Preset</span>
+                <span className="hts-group-title">1. Gaya Visual Hook (Preset Rekomendasi)</span>
                 <span className="hts-group-badge">12 Presets</span>
               </div>
               <span className="hts-group-hint">
@@ -328,7 +338,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
             <div className="hts-compact-grid" role="group" aria-label="Visual style presets">
               {CLIENT_VISUAL_PRESETS.map((preset) => {
                 const isSelected = effectivePresetId === preset.id;
-                const { icon, title } = parsePresetLabel(preset.label);
+                const { iconName, title } = parsePresetLabel(preset.label, preset.id);
                 return (
                   <button
                     key={preset.id}
@@ -350,7 +360,13 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                     title={preset.description}
                   >
                     <div className="hts-compact-top">
-                      <span className="hts-compact-icon">{icon}</span>
+                      <HookIcon
+                        name={iconName}
+                        size={15}
+                        color={isSelected ? '#00F0FF' : '#94A3B8'}
+                        glow={isSelected}
+                        style={{ marginRight: 6 }}
+                      />
                       <span className="hts-compact-label">{title}</span>
                       {isSelected && <span className="hts-compact-check">✓</span>}
                     </div>
@@ -444,7 +460,9 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                     aria-checked={isSelected}
                     role="radio"
                   >
-                    <span className="hts-btn-icon">{opt.icon}</span>
+                    <span className="hts-btn-icon">
+                      <HookIcon name={opt.iconName} size={15} color={isSelected ? '#00F0FF' : '#94A3B8'} />
+                    </span>
                     <span className="hts-btn-text">{opt.label}</span>
                     {isSelected && <span className="hts-btn-check-inline">✓</span>}
                   </button>
@@ -486,7 +504,9 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                     aria-checked={isSelected}
                     role="radio"
                   >
-                    <span className="hts-btn-icon">{opt.icon}</span>
+                    <span className="hts-btn-icon">
+                      <HookIcon name={opt.iconName} size={15} color={isSelected ? '#00F0FF' : '#94A3B8'} />
+                    </span>
                     <span className="hts-btn-text">{opt.label}</span>
                     {isSelected && <span className="hts-btn-check-inline">✓</span>}
                   </button>
@@ -552,7 +572,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                       className={`hts-tag-cat-btn ${tagCategoryFilter === 'all' ? 'active' : ''}`}
                       onClick={() => setTagCategoryFilter('all')}
                     >
-                      <span className="hts-cat-icon">✨</span>
+                      <HookIcon name="sparkles" size={13} style={{ marginRight: 5 }} />
                       <span className="hts-cat-label">Semua</span>
                       <span className="hts-cat-count">{categoryCounts.all}</span>
                     </button>
@@ -565,7 +585,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                         className={`hts-tag-cat-btn ${tagCategoryFilter === cat.id ? 'active' : ''}`}
                         onClick={() => setTagCategoryFilter(cat.id)}
                       >
-                        <span className="hts-cat-icon">{cat.icon}</span>
+                        <HookIcon name={cat.iconName} size={13} style={{ marginRight: 5 }} />
                         <span className="hts-cat-label">{cat.label}</span>
                         <span className="hts-cat-count">{categoryCounts[cat.id] || 0}</span>
                       </button>
@@ -582,7 +602,9 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                         onClick={() => setCustomHookTag('')}
                         title="Tanpa badge: hook langsung mulai dari kalimat pembuka"
                       >
-                        <div className="hts-tag-icon-box">🚫</div>
+                        <div className="hts-tag-icon-box">
+                          <HookIcon name="sparkles" size={14} color="#64748B" />
+                        </div>
                         <div className="hts-tag-text-wrap">
                           <span className="hts-tag-name">TANPA BADGE</span>
                           <span className="hts-tag-sub">Mulai langsung kalimat hook</span>
@@ -593,7 +615,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                       {displayedTags.map((item) => {
                         const visual = resolveTagVisual(item.tag);
                         const isActive = customHookTag === item.tag;
-                        const { emoji, text } = splitTagEmoji(item.tag);
+                        const { iconName, cleanText } = parseHookTag(item.tag);
 
                         return (
                           <button
@@ -623,14 +645,20 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                                   : undefined
                               }
                             >
-                              {emoji}
+                              <HookIcon
+                                name={iconName}
+                                size={15}
+                                color={isActive ? visual.textColor : '#94A3B8'}
+                                glow={isActive}
+                                glowColor={visual.glowColor}
+                              />
                             </div>
                             <div className="hts-tag-text-wrap">
                               <span
                                 className="hts-tag-name"
                                 style={isActive ? { color: '#FFFFFF' } : undefined}
                               >
-                                {text}
+                                {cleanText}
                               </span>
                               <span className="hts-tag-sub">{item.description}</span>
                             </div>
@@ -651,7 +679,9 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                   {/* Custom Tag Input & Live Status Bar */}
                   <div className="hts-tag-input-section">
                     <div className="hts-tag-input-bar">
-                      <span className="hts-tag-input-icon">🏷️</span>
+                      <span className="hts-tag-input-icon">
+                        <HookIcon name="key" size={13} color="#94A3B8" />
+                      </span>
                       <input
                         type="text"
                         value={customHookTag ?? ''}
@@ -721,6 +751,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                 const isSelected = selectedBadgePreset === bp.id;
                 const sampleTag = customHookTag && customHookTag.trim() ? customHookTag : bp.defaultTag;
                 const sampleStyle = resolveBadgeStyle(bp.id, isSelected ? selectedBadgeColor : bp.defaultColor, sampleTag);
+                const { iconName, cleanText } = parseHookTag(sampleTag);
 
                 return (
                   <div
@@ -751,27 +782,349 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
 
                     {/* Miniature Live Badge Pill Preview */}
                     <div className="hts-badge-preview-box">
-                      <div
-                        className="hts-badge-mini-pill"
-                        style={{
-                          backgroundColor: sampleStyle.bgColor,
-                          borderColor: sampleStyle.borderColor,
-                          borderWidth: `${sampleStyle.borderWidth}px`,
-                          borderStyle: sampleStyle.borderWidth > 0 ? 'solid' : 'none',
-                          borderRadius: sampleStyle.borderRadius > 100 ? 9999 : `${sampleStyle.borderRadius}px`,
-                          boxShadow: sampleStyle.boxShadow,
-                        }}
-                      >
-                        <span
+                      {bp.id === 'solid-impact' ? (() => {
+                        const activeColor = isSelected ? selectedBadgeColor : bp.defaultColor;
+                        let bgHex = '#E11D48';
+                        if (activeColor === 'yellow') bgHex = '#D97706';
+                        else if (activeColor === 'green') bgHex = '#16A34A';
+                        else if (activeColor === 'auto') bgHex = sampleStyle.bgColor;
+
+                        const StrokeSide = ({ side }: { side: 'left' | 'right' }) => (
+                          <svg
+                            width="10"
+                            height="12"
+                            viewBox="0 0 10 12"
+                            style={{
+                              flexShrink: 0,
+                              transform: side === 'left' ? 'none' : 'scaleX(-1)',
+                              marginRight: side === 'left' ? 3 : 0,
+                              marginLeft: side === 'right' ? 3 : 0,
+                            }}
+                          >
+                            <path d="M1 2 L8 2" stroke={bgHex} strokeWidth="1.8" strokeLinecap="round" />
+                            <path d="M3 6 L9 6" stroke={bgHex} strokeWidth="1.8" strokeLinecap="round" />
+                            <path d="M1 10 L7 10" stroke={bgHex} strokeWidth="1.8" strokeLinecap="round" />
+                          </svg>
+                        );
+
+                        return (
+                          <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            <StrokeSide side="left" />
+                            <div style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              backgroundColor: bgHex,
+                              borderRadius: 4,
+                              padding: '2.5px 8px',
+                              boxShadow: `0 0 0 1px rgba(255,255,255,0.22), 0 2px 6px rgba(0,0,0,0.4), 0 0 8px ${bgHex}88`,
+                              position: 'relative',
+                              overflow: 'hidden',
+                            }}>
+                              <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '45%',
+                                background: 'linear-gradient(to bottom, rgba(255,255,255,0.25), transparent)',
+                                pointerEvents: 'none',
+                              }} />
+                              <HookIcon
+                                name={iconName}
+                                size={10}
+                                color="#FFFFFF"
+                                glow
+                                glowColor="rgba(255,255,255,0.7)"
+                                style={{ position: 'relative', zIndex: 1 }}
+                              />
+                              <span style={{
+                                position: 'relative',
+                                zIndex: 1,
+                                fontSize: 9.5,
+                                fontWeight: 900,
+                                letterSpacing: '0.6px',
+                                color: '#FFFFFF',
+                                textTransform: 'uppercase',
+                                lineHeight: 1.1,
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {cleanText}
+                              </span>
+                            </div>
+                            <StrokeSide side="right" />
+                          </div>
+                        );
+                      })() : bp.id === 'price-tag' ? (
+                        <div
                           style={{
-                            color: sampleStyle.textColor,
-                            letterSpacing: sampleStyle.letterSpacing,
-                            fontWeight: sampleStyle.fontWeight,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            filter: `drop-shadow(0 2px 4px rgba(0,0,0,0.65)) drop-shadow(0 0 6px ${sampleStyle.bgColor}80)`,
                           }}
                         >
-                          {sampleTag}
-                        </span>
-                      </div>
+                          <div
+                            style={{
+                              position: 'relative',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              backgroundColor: sampleStyle.bgColor,
+                              clipPath: 'polygon(0% 0%, calc(100% - 8px) 0%, 100% 50%, calc(100% - 8px) 100%, 0% 100%, 0% 0%)',
+                              borderRadius: '3px 0 0 3px',
+                              padding: '2.5px 11px 2.5px 14px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: 4,
+                                width: 4,
+                                height: 4,
+                                borderRadius: '50%',
+                                backgroundColor: 'rgba(8, 14, 26, 0.95)',
+                                boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.4)',
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '45%',
+                                background: 'linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)',
+                                pointerEvents: 'none',
+                              }}
+                            />
+                            <HookIcon
+                              name={iconName}
+                              size={9}
+                              color={sampleStyle.textColor}
+                              style={{ marginRight: 3.5, position: 'relative', zIndex: 1 }}
+                            />
+                            <span
+                              style={{
+                                position: 'relative',
+                                zIndex: 1,
+                                fontSize: 9.5,
+                                fontWeight: 900,
+                                letterSpacing: sampleStyle.letterSpacing,
+                                color: sampleStyle.textColor,
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {cleanText}
+                            </span>
+                          </div>
+                        </div>
+                      ) : bp.id === 'speech-bubble' ? (
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            filter: `drop-shadow(0 2px 4px rgba(0,0,0,0.65)) drop-shadow(0 0 6px ${sampleStyle.bgColor}80)`,
+                            marginBottom: 3,
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: 'relative',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              backgroundColor: sampleStyle.bgColor,
+                              borderRadius: 6,
+                              border: '1px solid rgba(255,255,255,0.35)',
+                              padding: '2.5px 9px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '45%',
+                                borderRadius: '6px 6px 0 0',
+                                background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)',
+                                pointerEvents: 'none',
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: 'absolute',
+                                bottom: -4,
+                                left: 10,
+                                width: 0,
+                                height: 0,
+                                borderLeft: '3px solid transparent',
+                                borderRight: '3px solid transparent',
+                                borderTop: `5px solid ${sampleStyle.bgColor}`,
+                              }}
+                            />
+                            <HookIcon
+                              name={iconName}
+                              size={9}
+                              color={sampleStyle.textColor}
+                              style={{ marginRight: 3.5, position: 'relative', zIndex: 1 }}
+                            />
+                            <span
+                              style={{
+                                position: 'relative',
+                                zIndex: 1,
+                                fontSize: 9.5,
+                                fontWeight: 800,
+                                letterSpacing: sampleStyle.letterSpacing,
+                                color: sampleStyle.textColor,
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {cleanText}
+                            </span>
+                          </div>
+                        </div>
+                      ) : bp.id === 'burst-stamp' ? (() => {
+                        const burstPolygon =
+                          'polygon(50% 0%, 56% 12%, 63% 2%, 69% 14%, 77% 4%, 82% 16%, 92% 10%, 90% 24%, 100% 25%, 93% 40%, 100% 50%, 93% 60%, 100% 75%, 90% 76%, 92% 90%, 82% 84%, 77% 96%, 69% 86%, 63% 98%, 56% 88%, 50% 100%, 44% 88%, 37% 98%, 31% 86%, 23% 96%, 18% 84%, 8% 90%, 10% 76%, 0% 75%, 7% 60%, 0% 50%, 7% 40%, 0% 25%, 10% 24%, 8% 10%, 18% 16%, 23% 4%, 31% 14%, 37% 2%, 44% 12%)';
+                        return (
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              transform: 'rotate(-1.5deg)',
+                              filter: `drop-shadow(0 2px 6px rgba(0,0,0,0.75)) drop-shadow(0 0 8px ${sampleStyle.bgColor}80)`,
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: 'relative',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                backgroundColor: sampleStyle.bgColor,
+                                clipPath: burstPolygon,
+                                padding: '3.5px 12px',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  height: '45%',
+                                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)',
+                                  pointerEvents: 'none',
+                                }}
+                              />
+                              <HookIcon
+                                name={iconName}
+                                size={9}
+                                color={sampleStyle.textColor}
+                                style={{ marginRight: 3.5, position: 'relative', zIndex: 1 }}
+                              />
+                              <span
+                                style={{
+                                  position: 'relative',
+                                  zIndex: 1,
+                                  fontSize: 9.5,
+                                  fontWeight: 900,
+                                  letterSpacing: sampleStyle.letterSpacing,
+                                  color: sampleStyle.textColor,
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                {cleanText}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })() : bp.id === 'diagonal-slash' ? (
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            filter: `drop-shadow(0 2px 4px rgba(0,0,0,0.6)) drop-shadow(0 0 6px ${sampleStyle.bgColor}70)`,
+                          }}
+                        >
+                          <div style={{ display: 'inline-flex', gap: 2.5, marginRight: 4, transform: 'skewX(-16deg)' }}>
+                            <div style={{ width: 2.5, height: 13, backgroundColor: sampleStyle.bgColor, borderRadius: 1, boxShadow: `0 0 4px ${sampleStyle.bgColor}` }} />
+                            <div style={{ width: 1.8, height: 13, backgroundColor: sampleStyle.bgColor, opacity: 0.65, borderRadius: 1, boxShadow: `0 0 2px ${sampleStyle.bgColor}` }} />
+                          </div>
+                          <div
+                            style={{
+                              position: 'relative',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              backgroundColor: sampleStyle.bgColor,
+                              clipPath: 'polygon(7px 0%, 100% 0%, calc(100% - 7px) 100%, 0% 100%)',
+                              padding: '2.5px 10px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '45%',
+                                background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)',
+                                pointerEvents: 'none',
+                              }}
+                            />
+                            <HookIcon
+                              name={iconName}
+                              size={9}
+                              color={sampleStyle.textColor}
+                              style={{ marginRight: 3.5, position: 'relative', zIndex: 1 }}
+                            />
+                            <span
+                              style={{
+                                position: 'relative',
+                                zIndex: 1,
+                                fontSize: 9.5,
+                                fontWeight: 900,
+                                fontStyle: 'italic',
+                                letterSpacing: sampleStyle.letterSpacing,
+                                color: sampleStyle.textColor,
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {cleanText}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="hts-badge-mini-pill"
+                          style={{
+                            backgroundColor: sampleStyle.bgColor,
+                            borderColor: sampleStyle.borderColor,
+                            borderWidth: `${sampleStyle.borderWidth}px`,
+                            borderStyle: sampleStyle.borderWidth > 0 ? 'solid' : 'none',
+                            borderRadius: sampleStyle.borderRadius > 100 ? 9999 : `${sampleStyle.borderRadius}px`,
+                            boxShadow: sampleStyle.boxShadow,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <HookIcon
+                            name={iconName}
+                            size={9}
+                            color={sampleStyle.textColor}
+                            glow={bp.id === 'neon-outline' || bp.id === 'highlight-chip'}
+                            glowColor={`${sampleStyle.textColor}80`}
+                            style={{ marginRight: 3.5 }}
+                          />
+                          <span
+                            style={{
+                              color: sampleStyle.textColor,
+                              letterSpacing: sampleStyle.letterSpacing,
+                              fontWeight: sampleStyle.fontWeight,
+                            }}
+                          >
+                            {cleanText}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <p className="hts-badge-desc">{bp.description}</p>

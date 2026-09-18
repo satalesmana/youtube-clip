@@ -23,13 +23,14 @@ import { WordCascadeRenderer } from './headline-renderers/WordCascadeRenderer';
 import { SlideUpRenderer } from './headline-renderers/SlideUpRenderer';
 import { BoldCapsRenderer } from './headline-renderers/BoldCapsRenderer';
 import { FadeRenderer } from './headline-renderers/FadeRenderer';
+import { HookTagPill, type BadgePresetId } from './headline-renderers/HookTagPill';
 import { VISUAL_PRESET_REGISTRY } from './visual-preset/index';
 
 interface HookHeadlineProps {
   text: string;
   theme: Theme;
   tag?: string;
-  badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  badgePresetId?: BadgePresetId;
   badgeColor?: string;
   highlightWords?: string[];
   /** Resolved visual preset. When absent, kinetic-punch is used. */

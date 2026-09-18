@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { ClientVisualPreset } from '../../lib/visual-presets';
 import { CLIENT_PRESET_MAP } from '../../lib/visual-presets';
-import { resolveBadgeStyle } from '../../lib/hook-tags';
+import { resolveBadgeStyle, parseHookTag } from '../../lib/hook-tags';
+import { HookIcon } from './HookIcon';
 import type {
   VisualPresetSelection,
   VisualPresetId,
@@ -177,99 +178,369 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
               {/* Tag Pill with Badge Design System */}
               {tagText && (() => {
                 const badge = resolveBadgeStyle(selectedBadgePreset, selectedBadgeColor, tagText);
+                const { iconName, cleanText } = parseHookTag(tagText);
 
-                // ── Solid Impact: 2-line layout with icon + accent strokes ──
+                // ── 1. Solid Impact: Compact Single-Line SVG Sticker ──
                 if (selectedBadgePreset === 'solid-impact') {
-                  const parts = tagText.trim().split(/\s+/);
-                  const emojiMatch = parts[0]?.match(/^\p{Emoji}/u);
-                  let iconEmoji = '';
-                  let topText = '';
-                  let bottomText = '';
+                  let bgHex = '#FF1744';
+                  if (selectedBadgeColor === 'yellow') bgHex = '#B45309';
+                  else if (selectedBadgeColor === 'green') bgHex = '#15803D';
+                  else if (selectedBadgeColor === 'auto') bgHex = badge.bgColor;
 
-                  if (emojiMatch) {
-                    iconEmoji = parts[0];
-                    topText = parts.slice(1, 2).join(' ');
-                    bottomText = parts.slice(2).join(' ');
-                  } else {
-                    topText = parts.slice(0, 1).join(' ');
-                    bottomText = parts.slice(1).join(' ');
-                  }
-
-                  const accentYellow =
-                    selectedBadgeColor === 'yellow' ? '#FEF08A'
-                    : selectedBadgeColor === 'green' ? '#BBF7D0'
-                    : '#FACC15';
-
-                  const AccentStrokes = ({ side }: { side: 'left' | 'right' }) => (
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 3,
-                      marginLeft: side === 'right' ? 6 : 0,
-                      marginRight: side === 'left' ? 6 : 0,
+                  const SvgStrokes = ({ side }: { side: 'left' | 'right' }) => (
+                    <svg width={10} height={12} viewBox="0 0 10 12" style={{
+                      flexShrink: 0,
+                      marginLeft: side === 'right' ? 3 : 0,
+                      marginRight: side === 'left' ? 3 : 0,
+                      transform: side === 'left' ? 'scaleX(-1)' : undefined,
+                      overflow: 'visible',
                     }}>
-                      {[12, 9, 5].map((w, i) => (
-                        <div key={i} style={{
-                          width: w,
-                          height: 3,
-                          borderRadius: 2,
-                          backgroundColor: badge.bgColor,
-                          boxShadow: `0 0 4px ${badge.bgColor}CC`,
-                        }} />
+                      {[{ w: 8, y: 2 }, { w: 5, y: 6 }, { w: 3, y: 10 }].map(({ w, y }, i) => (
+                        <line
+                          key={i}
+                          x1={10 - w} y1={y}
+                          x2={10} y2={y}
+                          stroke={bgHex} strokeWidth={1.8} strokeLinecap="round"
+                          filter={`drop-shadow(0 0 2px ${bgHex})`}
+                        />
                       ))}
-                    </div>
+                    </svg>
                   );
 
                   return (
-                    <div className="hpl-tag-pill" style={{ background: 'none', border: 'none', boxShadow: 'none', padding: 0 }}>
+                    <div className="hpl-tag-pill" style={{ background: 'none', border: 'none', boxShadow: 'none', padding: 0, marginBottom: 6 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                        <AccentStrokes side="left" />
-                        <div style={{
+                        <SvgStrokes side="left" />
+
+                        <div
+                          style={{
+                            position: 'relative',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: bgHex,
+                            borderRadius: 5,
+                            border: '1px solid rgba(255,255,255,0.25)',
+                            padding: '2px 8px',
+                            boxShadow: `0 2px 6px rgba(0,0,0,0.65), 0 0 8px ${bgHex}75`,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              height: '45%',
+                              background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                          <HookIcon
+                            name={iconName}
+                            size={8}
+                            color="#FFFFFF"
+                            glow
+                            glowColor="rgba(255,255,255,0.7)"
+                            style={{ marginRight: 3, position: 'relative', zIndex: 1 }}
+                          />
+                          <span
+                            style={{
+                              position: 'relative',
+                              zIndex: 1,
+                              fontSize: 7.5,
+                              fontWeight: 900,
+                              letterSpacing: '0.4px',
+                              color: '#FFFFFF',
+                              textTransform: 'uppercase',
+                              textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                            }}
+                          >
+                            {cleanText}
+                          </span>
+                        </div>
+
+                        <SvgStrokes side="right" />
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ── 2. Price Tag: ticket shape with hole punch ──
+                if (selectedBadgePreset === 'price-tag') {
+                  const bgHex = badge.bgColor;
+                  const textHex = badge.textColor;
+                  return (
+                    <div
+                      className="hpl-tag-pill"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        marginBottom: 6,
+                        filter: `drop-shadow(0 2px 6px rgba(0,0,0,0.65)) drop-shadow(0 0 8px ${bgHex}80)`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'relative',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 7,
-                          backgroundColor: badge.bgColor,
-                          borderRadius: 10,
-                          padding: '6px 13px 6px 8px',
-                          boxShadow: `0 0 0 1.5px rgba(255,255,255,0.2), 0 6px 20px rgba(0,0,0,0.7), 0 0 20px ${badge.bgColor}99`,
+                          backgroundColor: bgHex,
+                          clipPath: 'polygon(0% 0%, calc(100% - 7px) 0%, 100% 50%, calc(100% - 7px) 100%, 0% 100%, 0% 0%)',
+                          borderRadius: '3px 0 0 3px',
+                          padding: '2px 8px 2px 12px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 4,
+                            width: 3.5,
+                            height: 3.5,
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(8, 14, 26, 0.95)',
+                            boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.4)',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '45%',
+                            background: 'linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        <HookIcon
+                          name={iconName}
+                          size={8}
+                          color={textHex}
+                          style={{ marginRight: 3, position: 'relative', zIndex: 1 }}
+                        />
+                        <span
+                          style={{
+                            position: 'relative',
+                            zIndex: 1,
+                            fontSize: 7.5,
+                            fontWeight: 900,
+                            letterSpacing: '0.4px',
+                            color: textHex,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {cleanText}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ── 3. Speech Bubble: bubble with dialog tail ──
+                if (selectedBadgePreset === 'speech-bubble') {
+                  const bgHex = badge.bgColor;
+                  const textHex = badge.textColor;
+                  return (
+                    <div
+                      className="hpl-tag-pill"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        marginBottom: 8,
+                        filter: `drop-shadow(0 2px 6px rgba(0,0,0,0.65)) drop-shadow(0 0 8px ${bgHex}80)`,
+                      }}
+                    >
+                      <div
+                        style={{
                           position: 'relative',
-                          overflow: 'hidden',
-                        }}>
-                          {/* Inner highlight */}
-                          <div style={{
-                            position: 'absolute', top: 0, left: 0, right: 0, height: '45%',
-                            background: 'linear-gradient(to bottom, rgba(255,255,255,0.15), transparent)',
-                            borderRadius: '10px 10px 0 0', pointerEvents: 'none',
-                          }} />
-                          {/* Icon block */}
-                          {iconEmoji && (
-                            <div style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              width: 28, height: 28, backgroundColor: accentYellow,
-                              borderRadius: 6, flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
-                            }}>
-                              <span style={{ fontSize: 16, lineHeight: 1 }}>{iconEmoji}</span>
-                            </div>
-                          )}
-                          {/* Text stack */}
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
-                            {topText && (
-                              <span style={{
-                                fontSize: 11, fontWeight: 900, letterSpacing: '0.6px',
-                                color: '#FFFFFF', textTransform: 'uppercase', lineHeight: 1.15,
-                                textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                              }}>{topText}</span>
-                            )}
-                            {bottomText && (
-                              <span style={{
-                                fontSize: 13, fontWeight: 900, letterSpacing: '0.3px',
-                                color: accentYellow, textTransform: 'uppercase', lineHeight: 1.15,
-                                textShadow: `0 0 8px ${accentYellow}80, 0 1px 4px rgba(0,0,0,0.6)`,
-                              }}>{bottomText}</span>
-                            )}
-                          </div>
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          backgroundColor: bgHex,
+                          borderRadius: 6,
+                          border: '1px solid rgba(255,255,255,0.35)',
+                          padding: '2px 8px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '45%',
+                            borderRadius: '6px 6px 0 0',
+                            background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: -4,
+                            left: 10,
+                            width: 0,
+                            height: 0,
+                            borderLeft: '3px solid transparent',
+                            borderRight: '3px solid transparent',
+                            borderTop: `4px solid ${bgHex}`,
+                          }}
+                        />
+                        <HookIcon
+                          name={iconName}
+                          size={8}
+                          color={textHex}
+                          style={{ marginRight: 3, position: 'relative', zIndex: 1 }}
+                        />
+                        <span
+                          style={{
+                            position: 'relative',
+                            zIndex: 1,
+                            fontSize: 7.5,
+                            fontWeight: 800,
+                            letterSpacing: '0.4px',
+                            color: textHex,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {cleanText}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ── 4. Burst Stamp: multi-point jagged burst ──
+                if (selectedBadgePreset === 'burst-stamp') {
+                  const bgHex = badge.bgColor;
+                  const textHex = badge.textColor;
+                  const burstPolygon =
+                    'polygon(50% 0%, 56% 12%, 63% 2%, 69% 14%, 77% 4%, 82% 16%, 92% 10%, 90% 24%, 100% 25%, 93% 40%, 100% 50%, 93% 60%, 100% 75%, 90% 76%, 92% 90%, 82% 84%, 77% 96%, 69% 86%, 63% 98%, 56% 88%, 50% 100%, 44% 88%, 37% 98%, 31% 86%, 23% 96%, 18% 84%, 8% 90%, 10% 76%, 0% 75%, 7% 60%, 0% 50%, 7% 40%, 0% 25%, 10% 24%, 8% 10%, 18% 16%, 23% 4%, 31% 14%, 37% 2%, 44% 12%)';
+                  return (
+                    <div
+                      className="hpl-tag-pill"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        marginBottom: 6,
+                        transform: 'rotate(-1.5deg)',
+                        filter: `drop-shadow(0 2px 8px rgba(0,0,0,0.75)) drop-shadow(0 0 8px ${bgHex}80)`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'relative',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          backgroundColor: bgHex,
+                          clipPath: burstPolygon,
+                          padding: '3px 9px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '45%',
+                            background: 'linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        <HookIcon
+                          name={iconName}
+                          size={8}
+                          color={textHex}
+                          style={{ marginRight: 3, position: 'relative', zIndex: 1 }}
+                        />
+                        <span
+                          style={{
+                            position: 'relative',
+                            zIndex: 1,
+                            fontSize: 7.5,
+                            fontWeight: 900,
+                            letterSpacing: '0.4px',
+                            color: textHex,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {cleanText}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ── 5. Diagonal Slash: sporty parallelogram with speed bars ──
+                if (selectedBadgePreset === 'diagonal-slash') {
+                  const bgHex = badge.bgColor;
+                  const textHex = badge.textColor;
+                  return (
+                    <div
+                      className="hpl-tag-pill"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        marginBottom: 6,
+                        filter: `drop-shadow(0 2px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 6px ${bgHex}70)`,
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <div style={{ display: 'inline-flex', gap: 2, marginRight: 3, transform: 'skewX(-16deg)' }}>
+                          <div style={{ width: 2, height: 11, backgroundColor: bgHex, borderRadius: 1, boxShadow: `0 0 4px ${bgHex}` }} />
+                          <div style={{ width: 1.5, height: 11, backgroundColor: bgHex, opacity: 0.65, borderRadius: 1, boxShadow: `0 0 2px ${bgHex}` }} />
                         </div>
-                        <AccentStrokes side="right" />
+                        <div
+                          style={{
+                            position: 'relative',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: bgHex,
+                            clipPath: 'polygon(7px 0%, 100% 0%, calc(100% - 7px) 100%, 0% 100%)',
+                            padding: '2px 9px',
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              height: '45%',
+                              background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                          <HookIcon
+                            name={iconName}
+                            size={8}
+                            color={textHex}
+                            style={{ marginRight: 3, position: 'relative', zIndex: 1 }}
+                          />
+                          <span
+                            style={{
+                              position: 'relative',
+                              zIndex: 1,
+                              fontSize: 7.5,
+                              fontWeight: 900,
+                              fontStyle: 'italic',
+                              letterSpacing: '0.6px',
+                              color: textHex,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {cleanText}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -286,16 +557,27 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
                       borderWidth: `${badge.borderWidth}px`,
                       borderStyle: badge.borderWidth > 0 ? 'solid' : 'none',
                       boxShadow: badge.boxShadow,
+                      padding: '2px 8px',
+                      marginBottom: 6,
                     }}
                   >
+                    <HookIcon
+                      name={iconName}
+                      size={8}
+                      color={badge.textColor}
+                      glow={selectedBadgePreset === 'neon-outline' || selectedBadgePreset === 'highlight-chip'}
+                      glowColor={`${badge.textColor}80`}
+                      style={{ marginRight: 3 }}
+                    />
                     <span
                       style={{
                         color: badge.textColor,
                         letterSpacing: badge.letterSpacing,
                         fontWeight: badge.fontWeight,
+                        fontSize: 7.5,
                       }}
                     >
-                      {tagText}
+                      {cleanText}
                     </span>
                   </div>
                 );

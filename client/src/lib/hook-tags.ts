@@ -3,11 +3,15 @@
  * Based on short-form video retention research (TikTok, Shorts, Reels).
  */
 
+import type { HookIconName } from '../components/studio/HookIcon';
+export type { HookIconName } from '../components/studio/HookIcon';
+
 export interface HookTagItem {
   id: string;
   tag: string;
   category: HookTagCategory;
   description: string;
+  iconName?: HookIconName;
 }
 
 export type HookTagCategory =
@@ -22,49 +26,127 @@ export interface HookTagCategoryInfo {
   id: HookTagCategory;
   label: string;
   icon: string;
+  iconName: HookIconName;
 }
 
 export const HOOK_TAG_CATEGORIES: HookTagCategoryInfo[] = [
-  { id: 'scroll-stopper', label: 'Scroll Stopper', icon: '👀' },
-  { id: 'urgency', label: 'Peringatan', icon: '⚠️' },
-  { id: 'curiosity', label: 'Rahasia & Teka-teki', icon: '💡' },
-  { id: 'proof', label: 'Data & Bukti', icon: '📊' },
-  { id: 'relatable', label: 'POV & Curhat', icon: '🤔' },
-  { id: 'action', label: 'Solusi Cepat', icon: '🚀' },
+  { id: 'scroll-stopper', label: 'Scroll Stopper', icon: '👀', iconName: 'eye' },
+  { id: 'urgency', label: 'Peringatan', icon: '⚠️', iconName: 'alert-triangle' },
+  { id: 'curiosity', label: 'Rahasia & Teka-teki', icon: '💡', iconName: 'lightbulb' },
+  { id: 'proof', label: 'Data & Bukti', icon: '📊', iconName: 'trending-up' },
+  { id: 'relatable', label: 'POV & Curhat', icon: '🤔', iconName: 'message-circle' },
+  { id: 'action', label: 'Solusi Cepat', icon: '🚀', iconName: 'rocket' },
 ];
+
+export const EMOJI_TO_ICON_MAP: Record<string, HookIconName> = {
+  '👀': 'eye',
+  '🛑': 'octagon-alert',
+  '⏳': 'hourglass',
+  '⚠️': 'alert-triangle',
+  '🚨': 'siren',
+  '💣': 'bomb',
+  '💡': 'lightbulb',
+  '🤫': 'key',
+  '🔒': 'lock',
+  '❓': 'help-circle',
+  '🔥': 'flame',
+  '⚡': 'zap',
+  '📊': 'trending-up',
+  '📈': 'trending-up',
+  '🎯': 'target',
+  '🤔': 'message-circle',
+  '🚩': 'flag',
+  '💔': 'heart-crack',
+  '🚀': 'rocket',
+  '💎': 'gem',
+  '🛠️': 'wrench',
+  '🛠': 'wrench',
+  '✨': 'sparkles',
+  '⭐': 'star',
+  '🏆': 'trophy',
+  '🧭': 'compass',
+  '😲': 'message-circle',
+};
+
+/**
+ * Parses any tag string, extracting leading emoji or resolving keyword to a Lucide icon.
+ * Guarantees backward compatibility with existing legacy emoji tags.
+ */
+export function parseHookTag(tag?: string): {
+  iconName: HookIconName;
+  cleanText: string;
+  rawTag: string;
+} {
+  if (!tag || !tag.trim()) {
+    return { iconName: 'sparkles', cleanText: '', rawTag: '' };
+  }
+  const rawTag = tag.trim();
+  const emojiMatch = rawTag.match(/^(\p{Extended_Pictographic}+|\p{Emoji}+)\s*(.*)$/u);
+  if (emojiMatch) {
+    const emoji = emojiMatch[1];
+    const cleanText = emojiMatch[2] || rawTag;
+    const mappedIcon = EMOJI_TO_ICON_MAP[emoji];
+    if (mappedIcon) {
+      return { iconName: mappedIcon, cleanText, rawTag };
+    }
+    const upper = cleanText.toUpperCase();
+    if (upper.includes('VIRAL') || upper.includes('MOMEN')) return { iconName: 'flame', cleanText, rawTag };
+    if (upper.includes('KRUSIAL') || upper.includes('KILAT') || upper.includes('FAKTA')) return { iconName: 'zap', cleanText, rawTag };
+    if (upper.includes('SALAH') || upper.includes('AWAS') || upper.includes('FATAL')) return { iconName: 'alert-triangle', cleanText, rawTag };
+    if (upper.includes('PERINGATAN') || upper.includes('BAHAYA')) return { iconName: 'siren', cleanText, rawTag };
+    if (upper.includes('SKIP') || upper.includes('STOP') || upper.includes('LIHAT')) return { iconName: 'eye', cleanText, rawTag };
+    if (upper.includes('TIPS') || upper.includes('RAHASIA') || upper.includes('TRIK')) return { iconName: 'lightbulb', cleanText, rawTag };
+    if (upper.includes('DATA') || upper.includes('BUKTI') || upper.includes('STATISTIK') || upper.includes('%')) return { iconName: 'trending-up', cleanText, rawTag };
+    return { iconName: 'sparkles', cleanText, rawTag };
+  }
+
+  const upper = rawTag.toUpperCase();
+  if (upper.includes('VIRAL') || upper.includes('MOMEN') || upper.includes('HOT')) return { iconName: 'flame', cleanText: rawTag, rawTag };
+  if (upper.includes('KRUSIAL') || upper.includes('KILAT') || upper.includes('FAKTA') || upper.includes('MENARIK')) return { iconName: 'zap', cleanText: rawTag, rawTag };
+  if (upper.includes('SALAH') || upper.includes('AWAS') || upper.includes('FATAL') || upper.includes('BAHAYA')) return { iconName: 'alert-triangle', cleanText: rawTag, rawTag };
+  if (upper.includes('PERINGATAN') || upper.includes('DARURAT')) return { iconName: 'siren', cleanText: rawTag, rawTag };
+  if (upper.includes('SKIP') || upper.includes('STOP') || upper.includes('LIHAT') || upper.includes('TUNGGU')) return { iconName: 'eye', cleanText: rawTag, rawTag };
+  if (upper.includes('TIPS') || upper.includes('RAHASIA') || upper.includes('TRIK') || upper.includes('HACK')) return { iconName: 'lightbulb', cleanText: rawTag, rawTag };
+  if (upper.includes('DATA') || upper.includes('BUKTI') || upper.includes('STATISTIK') || upper.includes('%')) return { iconName: 'trending-up', cleanText: rawTag, rawTag };
+  if (upper.includes('TARGET') || upper.includes('FOKUS')) return { iconName: 'target', cleanText: rawTag, rawTag };
+  if (upper.includes('POV') || upper.includes('KATA') || upper.includes('TANYA') || upper.includes('PERNAH')) return { iconName: 'message-circle', cleanText: rawTag, rawTag };
+  if (upper.includes('CEPAT') || upper.includes('SOLUSI')) return { iconName: 'rocket', cleanText: rawTag, rawTag };
+
+  return { iconName: 'sparkles', cleanText: rawTag, rawTag };
+}
 
 export const RESEARCH_HOOK_TAGS: HookTagItem[] = [
   // Scroll Stopper
-  { id: 'jangan-di-skip', tag: '👀 JANGAN DI-SKIP', category: 'scroll-stopper', description: 'Pattern interrupt terkuat untuk menghentikan refleks scrolling penonton' },
-  { id: 'stop-scrolling', tag: '🛑 STOP SCROLLING', category: 'scroll-stopper', description: 'Perintah tegas langsung yang menarik perhatian mata seketika' },
-  { id: 'tunggu-sebentar', tag: '⏳ TUNGGU SEBENTAR', category: 'scroll-stopper', description: 'Permintaan jeda singkat yang memicu rasa ingin tahu' },
+  { id: 'jangan-di-skip', tag: '👀 JANGAN DI-SKIP', category: 'scroll-stopper', iconName: 'eye', description: 'Pattern interrupt terkuat untuk menghentikan refleks scrolling penonton' },
+  { id: 'stop-scrolling', tag: '🛑 STOP SCROLLING', category: 'scroll-stopper', iconName: 'octagon-alert', description: 'Perintah tegas langsung yang menarik perhatian mata seketika' },
+  { id: 'tunggu-sebentar', tag: '⏳ TUNGGU SEBENTAR', category: 'scroll-stopper', iconName: 'hourglass', description: 'Permintaan jeda singkat yang memicu rasa ingin tahu' },
 
   // Urgency & Warning
-  { id: 'awas-salah', tag: '⚠️ AWAS SALAH', category: 'urgency', description: 'Memicu loss aversion: ketakutan melakukan kesalahan umum' },
-  { id: 'peringatan-keras', tag: '🚨 PERINGATAN KERAS', category: 'urgency', description: 'Sensasi bahaya tinggi yang memaksa penonton menyimak' },
-  { id: 'kesalahan-fatal', tag: '💣 KESALAHAN FATAL', category: 'urgency', description: 'Menyorot risiko besar yang ingin dihindari semua orang' },
+  { id: 'awas-salah', tag: '⚠️ AWAS SALAH', category: 'urgency', iconName: 'alert-triangle', description: 'Memicu loss aversion: ketakutan melakukan kesalahan umum' },
+  { id: 'peringatan-keras', tag: '🚨 PERINGATAN KERAS', category: 'urgency', iconName: 'siren', description: 'Sensasi bahaya tinggi yang memaksa penonton menyimak' },
+  { id: 'kesalahan-fatal', tag: '💣 KESALAHAN FATAL', category: 'urgency', iconName: 'bomb', description: 'Menyorot risiko besar yang ingin dihindari semua orang' },
 
   // Curiosity & Secrets
-  { id: 'rahasia-sukses', tag: '💡 RAHASIA SUKSES', category: 'curiosity', description: 'Janji insight eksklusif yang belum diketahui orang banyak' },
-  { id: 'jarang-orang-tahu', tag: '🤫 JARANG ORANG TAHU', category: 'curiosity', description: 'Membuka information gap tentang fakta/trik rahasia' },
-  { id: 'bukan-untuk-semua', tag: '🔒 BUKAN UNTUK SEMUA', category: 'curiosity', description: 'Eksklusivitas tinggi yang memicu ego penonton' },
-  { id: 'tahukah-kamu', tag: '❓ TAHUKAH KAMU?', category: 'curiosity', description: 'Pertanyaan pembuka klasik untuk memancing rasa ingin tahu' },
+  { id: 'rahasia-sukses', tag: '💡 RAHASIA SUKSES', category: 'curiosity', iconName: 'lightbulb', description: 'Janji insight eksklusif yang belum diketahui orang banyak' },
+  { id: 'jarang-orang-tahu', tag: '🤫 JARANG ORANG TAHU', category: 'curiosity', iconName: 'key', description: 'Membuka information gap tentang fakta/trik rahasia' },
+  { id: 'bukan-untuk-semua', tag: '🔒 BUKAN UNTUK SEMUA', category: 'curiosity', iconName: 'lock', description: 'Eksklusivitas tinggi yang memicu ego penonton' },
+  { id: 'tahukah-kamu', tag: '❓ TAHUKAH KAMU?', category: 'curiosity', iconName: 'help-circle', description: 'Pertanyaan pembuka klasik untuk memancing rasa ingin tahu' },
 
   // Proof & Viral Data
-  { id: 'momen-viral', tag: '🔥 MOMEN VIRAL', category: 'proof', description: 'Social proof bahwa momen ini telah divalidasi ribuan orang' },
-  { id: 'fakta-mengejutkan', tag: '⚡ FAKTA MENGEJUTKAN', category: 'proof', description: 'Klaim tak terduga yang mendobrak asumsi umum' },
-  { id: '99-persen-salah', tag: '📊 99% ORANG SALAH', category: 'proof', description: 'Statistik kontra-intuitif yang menguji keyakinan penonton' },
-  { id: 'detik-krusial', tag: '🎯 DETIK KRUSIAL', category: 'proof', description: 'Pemberitahuan titik balik penting dalam cerita' },
+  { id: 'momen-viral', tag: '🔥 MOMEN VIRAL', category: 'proof', iconName: 'flame', description: 'Social proof bahwa momen ini telah divalidasi ribuan orang' },
+  { id: 'fakta-mengejutkan', tag: '⚡ FAKTA MENGEJUTKAN', category: 'proof', iconName: 'zap', description: 'Klaim tak terduga yang mendobrak asumsi umum' },
+  { id: '99-persen-salah', tag: '📊 99% ORANG SALAH', category: 'proof', iconName: 'trending-up', description: 'Statistik kontra-intuitif yang menguji keyakinan penonton' },
+  { id: 'detik-krusial', tag: '🎯 DETIK KRUSIAL', category: 'proof', iconName: 'target', description: 'Pemberitahuan titik balik penting dalam cerita' },
 
   // Relatability & POV
-  { id: 'pernah-gini-gak', tag: '🤔 PERNAH GINI GAK?', category: 'relatable', description: 'Pertanyaan empati yang membuat penonton merasa relate' },
-  { id: 'red-flag-besar', tag: '🚩 RED FLAG BESAR', category: 'relatable', description: 'Peringatan sosial/hubungan yang sangat populer di Gen-Z' },
-  { id: 'realita-nyesek', tag: '💔 REALITA NYESEK', category: 'relatable', description: 'Sentuhan emosional tentang kenyataan yang sering dialami' },
+  { id: 'pernah-gini-gak', tag: '🤔 PERNAH GINI GAK?', category: 'relatable', iconName: 'message-circle', description: 'Pertanyaan empati yang membuat penonton merasa relate' },
+  { id: 'red-flag-besar', tag: '🚩 RED FLAG BESAR', category: 'relatable', iconName: 'flag', description: 'Peringatan sosial/hubungan yang sangat populer di Gen-Z' },
+  { id: 'realita-nyesek', tag: '💔 REALITA NYESEK', category: 'relatable', iconName: 'heart-crack', description: 'Sentuhan emosional tentang kenyataan yang sering dialami' },
 
   // Actionable Hack
-  { id: '1-trik-cepat', tag: '🚀 1 TRIK CEPAT', category: 'action', description: 'Janji solusi instan tanpa buang-buang waktu' },
-  { id: 'life-hack-mahal', tag: '💎 LIFE HACK MAHAL', category: 'action', description: 'Kiat bernilai tinggi yang bisa langsung dipraktekkan' },
-  { id: 'cara-tercepat', tag: '🛠️ CARA TERCEPAT', category: 'action', description: 'Framework atau metode paling efisien untuk hasil nyata' },
+  { id: '1-trik-cepat', tag: '🚀 1 TRIK CEPAT', category: 'action', iconName: 'rocket', description: 'Janji solusi instan tanpa buang-buang waktu' },
+  { id: 'life-hack-mahal', tag: '💎 LIFE HACK MAHAL', category: 'action', iconName: 'gem', description: 'Kiat bernilai tinggi yang bisa langsung dipraktekkan' },
+  { id: 'cara-tercepat', tag: '🛠️ CARA TERCEPAT', category: 'action', iconName: 'wrench', description: 'Framework atau metode paling efisien untuk hasil nyata' },
 ];
 
 /** Fast lookup array of strings for simple picker lists. */
@@ -228,6 +310,7 @@ export interface BadgePresetItem {
   colorOptions: Array<{ id: BadgeColorVariant; label: string; hex: string }>;
   defaultColor: BadgeColorVariant;
   defaultTag: string;
+  iconName: HookIconName;
 }
 
 export const BADGE_PRESETS: BadgePresetItem[] = [
@@ -244,6 +327,7 @@ export const BADGE_PRESETS: BadgePresetItem[] = [
     ],
     defaultColor: 'cyan',
     defaultTag: '👀 JANGAN DI-SKIP',
+    iconName: 'eye',
   },
   {
     id: 'solid-impact',
@@ -258,6 +342,7 @@ export const BADGE_PRESETS: BadgePresetItem[] = [
     ],
     defaultColor: 'red',
     defaultTag: '⚠️ JANGAN SALAH PILIH',
+    iconName: 'alert-triangle',
   },
   {
     id: 'highlight-chip',
@@ -272,6 +357,7 @@ export const BADGE_PRESETS: BadgePresetItem[] = [
     ],
     defaultColor: 'purple',
     defaultTag: '⚡ MENARIK',
+    iconName: 'zap',
   },
   {
     id: 'editorial-label',
@@ -286,6 +372,67 @@ export const BADGE_PRESETS: BadgePresetItem[] = [
     ],
     defaultColor: 'gold',
     defaultTag: '💡 1 TIPS PENTING',
+    iconName: 'lightbulb',
+  },
+  {
+    id: 'price-tag',
+    label: 'Price Tag',
+    category: 'Emphasis',
+    description: 'Bentuk label tiket dengan sudut miring berlubang di sisi samping. Memberikan kesan promo, tips rahasia, atau eksklusif.',
+    bestFor: ['Tip', 'Rahasia', 'Exclusive', 'Hacks'],
+    colorOptions: [
+      { id: 'gold', label: 'Gold', hex: '#FACC15' },
+      { id: 'cyan', label: 'Cyan', hex: '#00F0FF' },
+      { id: 'green', label: 'Green', hex: '#10B981' },
+    ],
+    defaultColor: 'gold',
+    defaultTag: '💡 TIPS RAHASIA',
+    iconName: 'key',
+  },
+  {
+    id: 'speech-bubble',
+    label: 'Speech Bubble',
+    category: 'Context',
+    description: 'Bentuk balon ucapan dengan ekor percakapan. Sangat kuat untuk hook opini, kutipan viral, atau POV.',
+    bestFor: ['Quote', 'POV', 'Testimoni', 'Kata Orang'],
+    colorOptions: [
+      { id: 'cyan', label: 'Cyan', hex: '#00F0FF' },
+      { id: 'magenta', label: 'Magenta', hex: '#EC4899' },
+      { id: 'gold', label: 'Gold', hex: '#FACC15' },
+    ],
+    defaultColor: 'cyan',
+    defaultTag: '😲 KATA MEREKA',
+    iconName: 'message-circle',
+  },
+  {
+    id: 'burst-stamp',
+    label: 'Burst Stamp',
+    category: 'Attention',
+    description: 'Bentuk ledakan bintang (starburst) dinamis. Efek heboh, heboh diskon, viralitas, atau pengumuman breaking news.',
+    bestFor: ['Viral', 'Hot', 'Breaking', 'Shock'],
+    colorOptions: [
+      { id: 'red', label: 'Red', hex: '#FF1744' },
+      { id: 'yellow', label: 'Yellow', hex: '#FACC15' },
+      { id: 'green', label: 'Green', hex: '#22C55E' },
+    ],
+    defaultColor: 'red',
+    defaultTag: '🔥 VIRAL BANGET',
+    iconName: 'flame',
+  },
+  {
+    id: 'diagonal-slash',
+    label: 'Diagonal Slash',
+    category: 'Urgency',
+    description: 'Bentuk jajaran genjang bergaris miring agresif dengan aksen kecepatan. Terasa dinamis, sporty, dan serba cepat.',
+    bestFor: ['Sport', 'Speed', 'Impact', 'Urgency'],
+    colorOptions: [
+      { id: 'cyan', label: 'Cyan', hex: '#00F0FF' },
+      { id: 'red', label: 'Red', hex: '#FF1744' },
+      { id: 'yellow', label: 'Yellow', hex: '#FACC15' },
+    ],
+    defaultColor: 'cyan',
+    defaultTag: '⚡ KILAT CEPAT',
+    iconName: 'zap',
   },
 ];
 
@@ -387,23 +534,135 @@ export function resolveBadgeStyle(
   }
 
   // 4. Editorial Label
-  let accentHex = '#FACC15';
-  if (colorVariant === 'cyan') accentHex = '#38BDF8';
-  else if (colorVariant === 'green') accentHex = '#10B981';
-  else if (colorVariant === 'auto') {
-    accentHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+  if (presetId === 'editorial-label') {
+    let accentHex = '#FACC15';
+    if (colorVariant === 'cyan') accentHex = '#38BDF8';
+    else if (colorVariant === 'green') accentHex = '#10B981';
+    else if (colorVariant === 'auto') {
+      accentHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+    }
+
+    return {
+      presetId: 'editorial-label',
+      bgColor: 'rgba(255, 255, 255, 0.08)',
+      borderColor: `${accentHex}D0`,
+      textColor: accentHex,
+      borderRadius: 9999,
+      borderWidth: 1.2,
+      boxShadow: '0 2px 10px rgba(0,0,0,0.45)',
+      letterSpacing: '1.5px',
+      fontWeight: 700,
+    };
+  }
+
+  // 5. Price Tag
+  if (presetId === 'price-tag') {
+    let bgHex = '#FACC15';
+    let textHex = '#000000';
+    if (colorVariant === 'cyan') {
+      bgHex = '#00F0FF';
+      textHex = '#000000';
+    } else if (colorVariant === 'green') {
+      bgHex = '#10B981';
+      textHex = '#FFFFFF';
+    } else if (colorVariant === 'auto') {
+      bgHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+      textHex = (bgHex === '#FBBF24' || bgHex === '#FACC15' || bgHex === '#00F0FF') ? '#000000' : '#FFFFFF';
+    }
+
+    return {
+      presetId,
+      bgColor: bgHex,
+      borderColor: 'transparent',
+      textColor: textHex,
+      borderRadius: 8,
+      borderWidth: 0,
+      boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 14px ${bgHex}70`,
+      letterSpacing: '0.8px',
+      fontWeight: 900,
+    };
+  }
+
+  // 6. Speech Bubble
+  if (presetId === 'speech-bubble') {
+    let bgHex = '#00F0FF';
+    let textHex = '#000000';
+    if (colorVariant === 'magenta') {
+      bgHex = '#EC4899';
+      textHex = '#FFFFFF';
+    } else if (colorVariant === 'gold') {
+      bgHex = '#FACC15';
+      textHex = '#000000';
+    } else if (colorVariant === 'auto') {
+      bgHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+      textHex = (bgHex === '#FBBF24' || bgHex === '#FACC15' || bgHex === '#00F0FF') ? '#000000' : '#FFFFFF';
+    }
+
+    return {
+      presetId,
+      bgColor: bgHex,
+      borderColor: 'transparent',
+      textColor: textHex,
+      borderRadius: 14,
+      borderWidth: 0,
+      boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 14px ${bgHex}70`,
+      letterSpacing: '0.6px',
+      fontWeight: 800,
+    };
+  }
+
+  // 7. Burst Stamp
+  if (presetId === 'burst-stamp') {
+    let bgHex = '#FF1744';
+    let textHex = '#FFFFFF';
+    if (colorVariant === 'yellow') {
+      bgHex = '#FACC15';
+      textHex = '#000000';
+    } else if (colorVariant === 'green') {
+      bgHex = '#22C55E';
+      textHex = '#FFFFFF';
+    } else if (colorVariant === 'auto') {
+      bgHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+      textHex = (bgHex === '#FBBF24' || bgHex === '#FACC15' || bgHex === '#00F0FF') ? '#000000' : '#FFFFFF';
+    }
+
+    return {
+      presetId,
+      bgColor: bgHex,
+      borderColor: 'transparent',
+      textColor: textHex,
+      borderRadius: 6,
+      borderWidth: 0,
+      boxShadow: `0 4px 20px rgba(0,0,0,0.7), 0 0 16px ${bgHex}80`,
+      letterSpacing: '0.7px',
+      fontWeight: 900,
+    };
+  }
+
+  // 8. Diagonal Slash (default fallback)
+  let bgHex = '#00F0FF';
+  let textHex = '#000000';
+  if (colorVariant === 'red') {
+    bgHex = '#FF1744';
+    textHex = '#FFFFFF';
+  } else if (colorVariant === 'yellow') {
+    bgHex = '#FACC15';
+    textHex = '#000000';
+  } else if (colorVariant === 'auto') {
+    bgHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+    textHex = (bgHex === '#FBBF24' || bgHex === '#FACC15' || bgHex === '#00F0FF') ? '#000000' : '#FFFFFF';
   }
 
   return {
-    presetId: 'editorial-label',
-    bgColor: 'rgba(255, 255, 255, 0.08)',
-    borderColor: `${accentHex}D0`,
-    textColor: accentHex,
-    borderRadius: 9999,
-    borderWidth: 1.2,
-    boxShadow: '0 2px 10px rgba(0,0,0,0.45)',
-    letterSpacing: '1.5px',
-    fontWeight: 700,
+    presetId: 'diagonal-slash',
+    bgColor: bgHex,
+    borderColor: 'transparent',
+    textColor: textHex,
+    borderRadius: 4,
+    borderWidth: 0,
+    boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 14px ${bgHex}60`,
+    letterSpacing: '1px',
+    fontWeight: 900,
   };
 }
 

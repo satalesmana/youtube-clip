@@ -827,6 +827,9 @@ export class TransformController {
         visualPreset: request.visualPreset,
         hookBadgePresetId: request.hookBadgePreset,
         hookBadgeColor: request.hookBadgeColor,
+        hookLayout: request.hookLayout,
+        hookAnimation: request.hookAnimation,
+        hookTypography: request.hookTypography,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
     } catch (err) {

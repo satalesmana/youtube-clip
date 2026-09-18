@@ -6,7 +6,7 @@ import { slideUpProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
-import { HookTagPill } from './HookTagPill';
+import { HookTagPill, type BadgePresetId } from './HookTagPill';
 
 const MAX_WORDS = 12;
 
@@ -14,7 +14,7 @@ interface SlideUpRendererProps {
   text: string;
   theme: Theme;
   tag?: string;
-  badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  badgePresetId?: BadgePresetId;
   badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;

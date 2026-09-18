@@ -23,10 +23,24 @@ export type PlanScene = {
   highlightWords?: string[];
   /** Visual preset id for the hook intro headline. */
   visualPreset?: string;
-  /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
-  hookBadgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  /** Badge pill preset id */
+  hookBadgePresetId?:
+    | 'neon-outline'
+    | 'solid-impact'
+    | 'highlight-chip'
+    | 'editorial-label'
+    | 'price-tag'
+    | 'speech-bubble'
+    | 'burst-stamp'
+    | 'diagonal-slash';
   /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
   hookBadgeColor?: string;
+  /** Composition layout mode override from Hook Klip design system */
+  hookLayout?: string;
+  /** Motion animation override from Hook Klip design system */
+  hookAnimation?: string;
+  /** Typography variant override from Hook Klip design system */
+  hookTypography?: string;
 };
 
 export type PlanCaption = {
@@ -95,8 +109,16 @@ export type HookIntroProps = {
     animation?: string;
     /** Typography variant override from the Hook Klip design system. */
     typography?: string;
-    /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
-    badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+    /** Badge pill preset id */
+    badgePresetId?:
+      | 'neon-outline'
+      | 'solid-impact'
+      | 'highlight-chip'
+      | 'editorial-label'
+      | 'price-tag'
+      | 'speech-bubble'
+      | 'burst-stamp'
+      | 'diagonal-slash';
     /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
     badgeColor?: string;
   };
