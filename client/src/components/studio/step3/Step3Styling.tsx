@@ -10,6 +10,8 @@ import type {
   CompositionLayout,
   AnimationPreset,
   TypographyVariant,
+  BadgePresetId,
+  BadgeColorVariant,
 } from '../../../types';
 import { ScriptEditorPanel } from './ScriptEditorPanel';
 import { SubtitleTemplatePicker } from './SubtitleTemplatePicker';
@@ -50,6 +52,10 @@ interface Step3StylingProps {
   setSelectedHookAnimation: (anim: AnimationPreset | 'auto') => void;
   selectedHookTypography: TypographyVariant | 'auto';
   setSelectedHookTypography: (typography: TypographyVariant | 'auto') => void;
+  selectedHookBadgePreset: BadgePresetId;
+  setSelectedHookBadgePreset: (preset: BadgePresetId) => void;
+  selectedHookBadgeColor: BadgeColorVariant;
+  setSelectedHookBadgeColor: (color: BadgeColorVariant) => void;
   runningTransform: boolean;
   selectedHookIndex: number | null;
   hooks: ViralHook[];
@@ -102,6 +108,10 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   setSelectedHookAnimation,
   selectedHookTypography,
   setSelectedHookTypography,
+  selectedHookBadgePreset,
+  setSelectedHookBadgePreset,
+  selectedHookBadgeColor,
+  setSelectedHookBadgeColor,
   runningTransform,
   selectedHookIndex,
   hooks,
@@ -340,6 +350,10 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
                   onAnimationChange={setSelectedHookAnimation}
                   selectedTypography={selectedHookTypography}
                   onTypographyChange={setSelectedHookTypography}
+                  selectedBadgePreset={selectedHookBadgePreset}
+                  onBadgePresetChange={setSelectedHookBadgePreset}
+                  selectedBadgeColor={selectedHookBadgeColor}
+                  onBadgeColorChange={setSelectedHookBadgeColor}
                   disabled={runningTransform}
                   aiRecommendationLabel={aiLabel}
                   aiRecommendationId={aiRecId}

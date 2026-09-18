@@ -55,6 +55,25 @@ export type TypographyVariant =
   | 'barlow-condensed';
 
 /**
+ * 4 Badge Pill Presets according to the Badge Design System.
+ */
+export type BadgePresetId =
+  | 'neon-outline'
+  | 'solid-impact'
+  | 'highlight-chip'
+  | 'editorial-label';
+
+export type BadgeColorVariant =
+  | 'cyan'
+  | 'magenta'
+  | 'red'
+  | 'yellow'
+  | 'green'
+  | 'purple'
+  | 'gold'
+  | 'auto';
+
+/**
  * A user can either pick an explicit preset or let the AI auto-resolve.
  * 'auto' is a UI-only sentinel — it is NOT sent to the server.
  * When 'auto' is selected, `visualPreset` is omitted from the API payload.
@@ -184,6 +203,10 @@ export interface TransformRequest {
   hookAnimation?: AnimationPreset;
   /** Optional user override for typography variant. */
   hookTypography?: TypographyVariant;
+  /** Optional user override for badge pill design system preset. */
+  hookBadgePreset?: BadgePresetId;
+  /** Optional user override for badge pill color variant. */
+  hookBadgeColor?: BadgeColorVariant;
 }
 
 export interface TransformProgress {

@@ -71,6 +71,8 @@ export interface StyledHookPreviewInput {
   layout?: CompositionLayout;
   animation?: AnimationPreset;
   typography?: TypographyVariant;
+  badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  badgeColor?: string;
   /**
    * Legacy flat hook style string from the LLM pipeline.
    * Used only as a last-resort fallback via adaptLegacyHookStyle().
@@ -147,6 +149,8 @@ export class StyledHookPreviewService {
         layout: input.layout ?? resolvedPreset.layout ?? 'centered',
         ...(input.animation ? { animation: input.animation } : {}),
         ...(input.typography ? { typography: input.typography } : {}),
+        ...(input.badgePresetId ? { badgePresetId: input.badgePresetId } : {}),
+        ...(input.badgeColor ? { badgeColor: input.badgeColor } : {}),
       },
       sourceVideoPath: stagedVideoPath,
       sourceStart: input.start,

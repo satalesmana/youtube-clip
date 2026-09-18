@@ -28,6 +28,8 @@ export const SceneText: React.FC<{
       <HookHeadline
         text={scene.hookTitle || scene.quotableLine || scene.narration || ''}
         tag={scene.hookTag}
+        badgePresetId={scene.hookBadgePresetId}
+        badgeColor={scene.hookBadgeColor}
         highlightWords={scene.highlightWords}
         visualPreset={visualPreset}
         theme={theme}

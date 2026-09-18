@@ -456,6 +456,11 @@ export const api = {
         hookHighlightWords: payload.hookHighlightWords,
         hookPreviewPath: payload.hookPreviewPath,
         visualPreset: payload.visualPreset,
+        hookLayout: payload.hookLayout,
+        hookAnimation: payload.hookAnimation,
+        hookTypography: payload.hookTypography,
+        hookBadgePreset: payload.hookBadgePreset,
+        hookBadgeColor: payload.hookBadgeColor,
         enableBroll: payload.enableBroll,
         enableIntroOutro: payload.enableIntroOutro,
         sourceRange:

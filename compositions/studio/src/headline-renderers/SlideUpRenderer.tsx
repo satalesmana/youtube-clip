@@ -14,6 +14,8 @@ interface SlideUpRendererProps {
   text: string;
   theme: Theme;
   tag?: string;
+  badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
 }
@@ -22,6 +24,8 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
   text,
   theme,
   tag,
+  badgePresetId,
+  badgeColor,
   highlightWords,
   visualPreset,
 }) => {
@@ -140,8 +144,14 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
           background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
-        {/* Tag pill */}
-        <HookTagPill tag={tag} fontFamily={font} fallbackAccent={theme.accent} marginBottom={6} />
+        <HookTagPill
+          tag={tag}
+          presetId={badgePresetId}
+          colorVariant={badgeColor}
+          fontFamily={font}
+          fallbackAccent={theme.accent}
+          marginBottom={6}
+        />
 
         {/* Text block — 2 balanced stacked lines */}
         <div

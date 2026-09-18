@@ -214,3 +214,196 @@ export function resolveTagVisual(tag?: string, fallbackAccent = '#38BDF8'): TagV
     bgColor: 'rgba(8, 14, 26, 0.92)',
   };
 }
+
+// ─── 4 Presets Badge Design System ──────────────────────────────────────────
+
+import type { BadgePresetId, BadgeColorVariant } from '../types';
+
+export interface BadgePresetItem {
+  id: BadgePresetId;
+  label: string;
+  category: 'Attention' | 'Urgency' | 'Emphasis' | 'Context';
+  description: string;
+  bestFor: string[];
+  colorOptions: Array<{ id: BadgeColorVariant; label: string; hex: string }>;
+  defaultColor: BadgeColorVariant;
+  defaultTag: string;
+}
+
+export const BADGE_PRESETS: BadgePresetItem[] = [
+  {
+    id: 'neon-outline',
+    label: 'Neon Outline',
+    category: 'Attention',
+    description: 'Memberikan kesan modern dan futuristik dengan border neon yang menyala. Cocok untuk menarik perhatian di awal video.',
+    bestFor: ['Attention', 'Curiosity', 'Question'],
+    colorOptions: [
+      { id: 'cyan', label: 'Cyan', hex: '#00F0FF' },
+      { id: 'magenta', label: 'Magenta', hex: '#EC4899' },
+      { id: 'green', label: 'Green', hex: '#22C55E' },
+    ],
+    defaultColor: 'cyan',
+    defaultTag: '👀 JANGAN DI-SKIP',
+  },
+  {
+    id: 'solid-impact',
+    label: 'Solid Impact',
+    category: 'Urgency',
+    description: 'Tampil lebih tegas dengan background solid berwarna kontras. Sangat efektif untuk pesan urgent atau provokatif.',
+    bestFor: ['Shock', 'Urgency', 'Warning'],
+    colorOptions: [
+      { id: 'red', label: 'Red', hex: '#FF1744' },
+      { id: 'yellow', label: 'Yellow', hex: '#FACC15' },
+      { id: 'green', label: 'Green', hex: '#22C55E' },
+    ],
+    defaultColor: 'red',
+    defaultTag: '⚠️ JANGAN SALAH PILIH',
+  },
+  {
+    id: 'highlight-chip',
+    label: 'Highlight Chip',
+    category: 'Emphasis',
+    description: 'Menyoroti kata kunci penting dalam headline. Membuat pesan utama lebih cepat terbaca dan mudah diingat.',
+    bestFor: ['Contrarian', 'Controversial', 'Data'],
+    colorOptions: [
+      { id: 'purple', label: 'Purple', hex: '#8B5CF6' },
+      { id: 'yellow', label: 'Yellow', hex: '#FACC15' },
+      { id: 'green', label: 'Green', hex: '#10B981' },
+    ],
+    defaultColor: 'purple',
+    defaultTag: '⚡ MENARIK',
+  },
+  {
+    id: 'editorial-label',
+    label: 'Editorial Label',
+    category: 'Context',
+    description: 'Memberikan konteks tambahan tanpa mengganggu headline utama. Terlihat clean, profesional, dan tetap menarik.',
+    bestFor: ['Story', 'Tip', 'Insight', 'Authority'],
+    colorOptions: [
+      { id: 'gold', label: 'Gold', hex: '#FACC15' },
+      { id: 'cyan', label: 'Cyan', hex: '#38BDF8' },
+      { id: 'green', label: 'Green', hex: '#10B981' },
+    ],
+    defaultColor: 'gold',
+    defaultTag: '💡 1 TIPS PENTING',
+  },
+];
+
+export interface BadgeComputedStyle {
+  presetId: BadgePresetId;
+  bgColor: string;
+  borderColor: string;
+  textColor: string;
+  borderRadius: number;
+  boxShadow: string;
+  letterSpacing: string;
+  fontWeight: number;
+  borderWidth: number;
+}
+
+export function resolveBadgeStyle(
+  presetId: BadgePresetId = 'neon-outline',
+  colorVariant: BadgeColorVariant = 'auto',
+  tag?: string,
+  fallbackAccent = '#38BDF8'
+): BadgeComputedStyle {
+  // 1. Neon Outline
+  if (presetId === 'neon-outline') {
+    let accentHex = '#00F0FF';
+    if (colorVariant === 'magenta') accentHex = '#EC4899';
+    else if (colorVariant === 'green') accentHex = '#22C55E';
+    else if (colorVariant === 'auto') {
+      accentHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+    }
+
+    return {
+      presetId,
+      bgColor: 'rgba(8, 14, 26, 0.94)',
+      borderColor: accentHex,
+      textColor: accentHex,
+      borderRadius: 9999,
+      borderWidth: 1.5,
+      boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 12px ${accentHex}50`,
+      letterSpacing: '0.6px',
+      fontWeight: 800,
+    };
+  }
+
+  // 2. Solid Impact
+  if (presetId === 'solid-impact') {
+    let bgHex = '#FF1744';
+    let textHex = '#FFFFFF';
+    if (colorVariant === 'yellow') {
+      bgHex = '#FACC15';
+      textHex = '#000000';
+    } else if (colorVariant === 'green') {
+      bgHex = '#22C55E';
+      textHex = '#FFFFFF';
+    } else if (colorVariant === 'auto') {
+      const v = resolveTagVisual(tag, fallbackAccent);
+      bgHex = v.borderColor;
+      textHex = (bgHex === '#FBBF24' || bgHex === '#FACC15') ? '#000000' : '#FFFFFF';
+    }
+
+    return {
+      presetId,
+      bgColor: bgHex,
+      borderColor: 'transparent',
+      textColor: textHex,
+      borderRadius: 12,
+      borderWidth: 0,
+      boxShadow: '0 4px 18px rgba(0,0,0,0.6)',
+      letterSpacing: '0.5px',
+      fontWeight: 900,
+    };
+  }
+
+  // 3. Highlight Chip
+  if (presetId === 'highlight-chip') {
+    let accentHex = '#8B5CF6';
+    let bgTint = 'rgba(139, 92, 246, 0.2)';
+    if (colorVariant === 'yellow') {
+      accentHex = '#FACC15';
+      bgTint = 'rgba(250, 204, 21, 0.2)';
+    } else if (colorVariant === 'green') {
+      accentHex = '#10B981';
+      bgTint = 'rgba(16, 185, 129, 0.2)';
+    } else if (colorVariant === 'auto') {
+      accentHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+      bgTint = `${accentHex}25`;
+    }
+
+    return {
+      presetId,
+      bgColor: bgTint,
+      borderColor: accentHex,
+      textColor: accentHex,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 10px ${accentHex}40`,
+      letterSpacing: '0.8px',
+      fontWeight: 800,
+    };
+  }
+
+  // 4. Editorial Label
+  let accentHex = '#FACC15';
+  if (colorVariant === 'cyan') accentHex = '#38BDF8';
+  else if (colorVariant === 'green') accentHex = '#10B981';
+  else if (colorVariant === 'auto') {
+    accentHex = resolveTagVisual(tag, fallbackAccent).borderColor;
+  }
+
+  return {
+    presetId: 'editorial-label',
+    bgColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: `${accentHex}D0`,
+    textColor: accentHex,
+    borderRadius: 9999,
+    borderWidth: 1.2,
+    boxShadow: '0 2px 10px rgba(0,0,0,0.45)',
+    letterSpacing: '1.5px',
+    fontWeight: 700,
+  };
+}
+

@@ -165,6 +165,33 @@ export const transformRequestSchema = z.object({
     'oswald',
     'barlow-condensed',
   ] as const).optional(),
+
+  /**
+   * Badge pill design system preset:
+   * 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label'
+   */
+  hookBadgePreset: z.enum([
+    'neon-outline',
+    'solid-impact',
+    'highlight-chip',
+    'editorial-label',
+  ] as const).optional(),
+
+  /**
+   * Badge pill color variant:
+   * 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto'
+   */
+  hookBadgeColor: z.enum([
+    'cyan',
+    'magenta',
+    'red',
+    'yellow',
+    'green',
+    'purple',
+    'gold',
+    'auto',
+  ] as const).optional(),
+
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),
 

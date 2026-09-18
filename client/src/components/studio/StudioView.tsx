@@ -90,6 +90,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
     setSelectedHookAnimation,
     selectedHookTypography,
     setSelectedHookTypography,
+    selectedHookBadgePreset,
+    setSelectedHookBadgePreset,
+    selectedHookBadgeColor,
+    setSelectedHookBadgeColor,
     startGenerateClips,
     refreshClips,
     rerenderClipPreviews,
@@ -301,6 +305,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setSelectedHookAnimation={setSelectedHookAnimation}
         selectedHookTypography={selectedHookTypography}
         setSelectedHookTypography={setSelectedHookTypography}
+        selectedHookBadgePreset={selectedHookBadgePreset}
+        setSelectedHookBadgePreset={setSelectedHookBadgePreset}
+        selectedHookBadgeColor={selectedHookBadgeColor}
+        setSelectedHookBadgeColor={setSelectedHookBadgeColor}
         runningTransform={runningTransform}
         selectedHookIndex={selectedHookIndex}
         hooks={hooks}

@@ -29,6 +29,8 @@ interface HookHeadlineProps {
   text: string;
   theme: Theme;
   tag?: string;
+  badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  badgeColor?: string;
   highlightWords?: string[];
   /** Resolved visual preset. When absent, kinetic-punch is used. */
   visualPreset?: VisualPreset;
@@ -42,13 +44,15 @@ export const HookHeadline: React.FC<HookHeadlineProps> = ({
   text,
   theme,
   tag,
+  badgePresetId,
+  badgeColor,
   highlightWords,
   visualPreset,
 }) => {
   // Default to kinetic-punch when no preset is resolved (backward compat).
   const preset: VisualPreset = visualPreset ?? VISUAL_PRESET_REGISTRY['kinetic-punch'];
 
-  const commonProps = { text, theme, tag, highlightWords, visualPreset: preset };
+  const commonProps = { text, theme, tag, badgePresetId, badgeColor, highlightWords, visualPreset: preset };
 
   if (preset.animation === 'fade') {
     return <FadeRenderer {...commonProps} />;

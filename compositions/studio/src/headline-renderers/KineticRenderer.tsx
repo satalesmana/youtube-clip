@@ -22,6 +22,8 @@ interface KineticRendererProps {
   text: string;
   theme: Theme;
   tag?: string;
+  badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
 }
@@ -30,6 +32,8 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
   text,
   theme,
   tag,
+  badgePresetId,
+  badgeColor,
   highlightWords,
   visualPreset,
 }) => {
@@ -112,7 +116,14 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
         }}
       >
         {/* Floating Social Pill Tag */}
-        <HookTagPill tag={tag} fontFamily={font} fallbackAccent={theme.accent} marginBottom={6} />
+        <HookTagPill
+          tag={tag}
+          presetId={badgePresetId}
+          colorVariant={badgeColor}
+          fontFamily={font}
+          fallbackAccent={theme.accent}
+          marginBottom={6}
+        />
 
         {/* High-Impact Kinetic Headline */}
         <div

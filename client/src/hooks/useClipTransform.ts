@@ -10,6 +10,8 @@ import type {
   CompositionLayout,
   AnimationPreset,
   TypographyVariant,
+  BadgePresetId,
+  BadgeColorVariant,
 } from '../types';
 import { resolvePresetIdFromHook } from '../lib/visual-presets';
 
@@ -112,6 +114,16 @@ export function useClipTransform() {
    * Any TypographyVariant = explicit user override.
    */
   const [selectedHookTypography, setSelectedHookTypography] = useState<TypographyVariant | 'auto'>('auto');
+  /**
+   * Badge pill design preset:
+   * 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label'
+   */
+  const [selectedHookBadgePreset, setSelectedHookBadgePreset] = useState<BadgePresetId>('neon-outline');
+  /**
+   * Badge pill color variant:
+   * 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto'
+   */
+  const [selectedHookBadgeColor, setSelectedHookBadgeColor] = useState<BadgeColorVariant>('auto');
 
   // Full Transform
   const [runningTransform, setRunningTransform] = useState(false);
@@ -519,6 +531,8 @@ export function useClipTransform() {
         hookLayout: enableHookIntro && selectedHookLayout !== 'auto' ? selectedHookLayout : undefined,
         hookAnimation: enableHookIntro && selectedHookAnimation !== 'auto' ? selectedHookAnimation : undefined,
         hookTypography: enableHookIntro && selectedHookTypography !== 'auto' ? selectedHookTypography : undefined,
+        hookBadgePreset: enableHookIntro ? selectedHookBadgePreset : undefined,
+        hookBadgeColor: enableHookIntro && selectedHookBadgeColor !== 'auto' ? selectedHookBadgeColor : undefined,
       });
 
       setProgressPct(100);
@@ -642,6 +656,10 @@ export function useClipTransform() {
     setSelectedHookAnimation,
     selectedHookTypography,
     setSelectedHookTypography,
+    selectedHookBadgePreset,
+    setSelectedHookBadgePreset,
+    selectedHookBadgeColor,
+    setSelectedHookBadgeColor,
     startGenerateClips,
     refreshClips,
     rerenderClipPreviews,

@@ -283,5 +283,62 @@ test('Viral Hook Text Style System — Visual Preset Resolver Suite', async (sui
     const antonStyle = getTextOutlineStyle('Anton', 6, '#000000');
     assert.equal(antonStyle.WebkitTextStroke, '6px #000000');
   });
+
+  await suite.test('Badge Design System: Schema validation & preset resolutions', async () => {
+    const { transformRequestSchema } = await import('../src/schemas/transform.schema.js');
+    const { resolveBadgeStyle, BADGE_PRESETS } = await import('../client/src/lib/hook-tags.js');
+
+    // 1. Check all 4 badge presets exist
+    assert.equal(BADGE_PRESETS.length, 4);
+    const presetIds = BADGE_PRESETS.map((p) => p.id);
+    assert.deepEqual(presetIds, ['neon-outline', 'solid-impact', 'highlight-chip', 'editorial-label']);
+
+    // 2. Validate Schema acceptance & rejection
+    const validRequest = transformRequestSchema.safeParse({
+      youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+      outputMode: 'narration',
+      hookBadgePreset: 'solid-impact',
+      hookBadgeColor: 'yellow',
+    });
+    assert.equal(validRequest.success, true);
+    if (validRequest.success) {
+      assert.equal(validRequest.data.hookBadgePreset, 'solid-impact');
+      assert.equal(validRequest.data.hookBadgeColor, 'yellow');
+    }
+
+    const invalidBadge = transformRequestSchema.safeParse({
+      youtubeUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+      outputMode: 'narration',
+      hookBadgePreset: 'invalid-preset',
+    });
+    assert.equal(invalidBadge.success, false);
+
+    // 3. Verify resolveBadgeStyle calculations
+    // Neon Outline
+    const neon = resolveBadgeStyle('neon-outline', 'cyan', '👀 JANGAN DI-SKIP');
+    assert.equal(neon.borderRadius, 9999);
+    assert.equal(neon.borderWidth, 1.5);
+    assert.equal(neon.borderColor, '#00F0FF');
+
+    // Solid Impact (Boxy Rounded 12px, NOT 9999px capsule)
+    const solid = resolveBadgeStyle('solid-impact', 'red', '⚠️ AWAS SALAH');
+    assert.equal(solid.borderRadius, 12);
+    assert.equal(solid.borderWidth, 0);
+    assert.equal(solid.bgColor, '#FF1744');
+    assert.equal(solid.textColor, '#FFFFFF');
+
+    // Highlight Chip (Soft Rounded 10px)
+    const chip = resolveBadgeStyle('highlight-chip', 'purple', '⚡ MENARIK');
+    assert.equal(chip.borderRadius, 10);
+    assert.equal(chip.borderWidth, 1.5);
+    assert.equal(chip.borderColor, '#8B5CF6');
+
+    // Editorial Label (Thin border, capsule, wide letter spacing)
+    const editorial = resolveBadgeStyle('editorial-label', 'gold', '💡 TIPS PENTING');
+    assert.equal(editorial.borderRadius, 9999);
+    assert.equal(editorial.borderWidth, 1.2);
+    assert.equal(editorial.textColor, '#FACC15');
+    assert.equal(editorial.letterSpacing, '1.5px');
+  });
 });
 

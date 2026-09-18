@@ -5,10 +5,18 @@ import type {
   CompositionLayout,
   AnimationPreset,
   TypographyVariant,
+  BadgePresetId,
+  BadgeColorVariant,
   ViralHook,
 } from '../../types';
 import { CLIENT_VISUAL_PRESETS, CLIENT_PRESET_MAP } from '../../lib/visual-presets';
-import { HOOK_TAG_CATEGORIES, RESEARCH_HOOK_TAGS, resolveTagVisual } from '../../lib/hook-tags';
+import {
+  HOOK_TAG_CATEGORIES,
+  RESEARCH_HOOK_TAGS,
+  BADGE_PRESETS,
+  resolveTagVisual,
+  resolveBadgeStyle,
+} from '../../lib/hook-tags';
 import { HookPresetLivePreview } from './HookPresetLivePreview';
 
 export interface HookTextStylePresetsProps {
@@ -20,6 +28,10 @@ export interface HookTextStylePresetsProps {
   onAnimationChange: (a: AnimationPreset | 'auto') => void;
   selectedTypography: TypographyVariant | 'auto';
   onTypographyChange: (t: TypographyVariant | 'auto') => void;
+  selectedBadgePreset?: BadgePresetId;
+  onBadgePresetChange?: (p: BadgePresetId) => void;
+  selectedBadgeColor?: BadgeColorVariant;
+  onBadgeColorChange?: (c: BadgeColorVariant) => void;
   disabled?: boolean;
   aiRecommendationLabel?: string;
   aiRecommendationId?: VisualPresetId;
@@ -108,6 +120,14 @@ function parsePresetLabel(fullLabel: string, fallbackIcon = '🎨'): { icon: str
   return { icon: fallbackIcon, title: fullLabel };
 }
 
+function splitTagEmoji(tag: string): { emoji: string; text: string } {
+  const match = tag.match(/^(\p{Extended_Pictographic}+|\p{Emoji}+)\s*(.*)$/u);
+  if (match) {
+    return { emoji: match[1], text: match[2] || tag };
+  }
+  return { emoji: '🏷️', text: tag };
+}
+
 export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
   value,
   onChange,
@@ -117,6 +137,10 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
   onAnimationChange,
   selectedTypography,
   onTypographyChange,
+  selectedBadgePreset = 'neon-outline',
+  onBadgePresetChange,
+  selectedBadgeColor = 'auto',
+  onBadgeColorChange,
   disabled = false,
   aiRecommendationId = 'kinetic-punch',
   customHookText,
@@ -131,9 +155,19 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
   const [tagCategoryFilter, setTagCategoryFilter] = React.useState<string>('all');
   const aiPreset = CLIENT_PRESET_MAP[aiRecommendationId] || CLIENT_PRESET_MAP['kinetic-punch'];
 
+  const categoryCounts = React.useMemo(() => {
+    const counts: Record<string, number> = { all: RESEARCH_HOOK_TAGS.length };
+    for (const item of RESEARCH_HOOK_TAGS) {
+      counts[item.category] = (counts[item.category] || 0) + 1;
+    }
+    return counts;
+  }, []);
+
   const displayedTags = tagCategoryFilter === 'all'
     ? RESEARCH_HOOK_TAGS
     : RESEARCH_HOOK_TAGS.filter((t) => t.category === tagCategoryFilter);
+
+  const activeTagVisual = resolveTagVisual(customHookTag);
 
   // 1. Active visual preset (either user override or AI default)
   const isPresetCustom = value !== 'auto';
@@ -489,87 +523,307 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
 
               {setCustomHookTag && (
                 <div className="hts-tag-section">
-                  <div className="hts-tag-label-row">
-                    <span className="hts-tag-sublabel">Pill Tag Badge (0–3 Detik):</span>
-                    <span className="hts-tag-hint">Pilih tag retensi viral atau ketik kustom</span>
+                  {/* Header Row with retention badge and status */}
+                  <div className="hts-tag-header">
+                    <div className="hts-tag-title-wrap">
+                      <span className="hts-tag-sublabel">Pill Tag Badge (0–3 Detik):</span>
+                      <span className="hts-tag-badge-pill">Hook Retensi</span>
+                    </div>
+                    {customHookTag ? (
+                      <button
+                        type="button"
+                        className="hts-tag-quick-clear"
+                        onClick={() => setCustomHookTag('')}
+                        title="Hapus badge (jadikan video tanpa tag)"
+                      >
+                        ✕ Hapus Tag
+                      </button>
+                    ) : (
+                      <span className="hts-tag-no-badge-badge">Tanpa Tag</span>
+                    )}
                   </div>
 
                   {/* Category Filter Tabs */}
-                  <div className="hts-tag-cat-tabs">
+                  <div className="hts-tag-cat-tabs" role="tablist" aria-label="Kategori Tag Hook">
                     <button
                       type="button"
+                      role="tab"
+                      aria-selected={tagCategoryFilter === 'all'}
                       className={`hts-tag-cat-btn ${tagCategoryFilter === 'all' ? 'active' : ''}`}
                       onClick={() => setTagCategoryFilter('all')}
                     >
-                      ✨ Semua
+                      <span className="hts-cat-icon">✨</span>
+                      <span className="hts-cat-label">Semua</span>
+                      <span className="hts-cat-count">{categoryCounts.all}</span>
                     </button>
                     {HOOK_TAG_CATEGORIES.map((cat) => (
                       <button
                         key={cat.id}
                         type="button"
+                        role="tab"
+                        aria-selected={tagCategoryFilter === cat.id}
                         className={`hts-tag-cat-btn ${tagCategoryFilter === cat.id ? 'active' : ''}`}
                         onClick={() => setTagCategoryFilter(cat.id)}
                       >
-                        {cat.icon} {cat.label}
+                        <span className="hts-cat-icon">{cat.icon}</span>
+                        <span className="hts-cat-label">{cat.label}</span>
+                        <span className="hts-cat-count">{categoryCounts[cat.id] || 0}</span>
                       </button>
                     ))}
                   </div>
 
-                  {/* Research Tag Chips */}
-                  <div className="hts-tag-bar">
-                    <div className="hts-tag-pills">
+                  {/* Research Tag Cards Grid */}
+                  <div className="hts-tag-grid-container">
+                    <div className="hts-tag-grid" role="radiogroup" aria-label="Pilihan Tag Retensi">
+                      {/* Option: Tanpa Tag */}
+                      <button
+                        type="button"
+                        className={`hts-tag-card hts-tag-card-none ${!customHookTag ? 'active' : ''}`}
+                        onClick={() => setCustomHookTag('')}
+                        title="Tanpa badge: hook langsung mulai dari kalimat pembuka"
+                      >
+                        <div className="hts-tag-icon-box">🚫</div>
+                        <div className="hts-tag-text-wrap">
+                          <span className="hts-tag-name">TANPA BADGE</span>
+                          <span className="hts-tag-sub">Mulai langsung kalimat hook</span>
+                        </div>
+                        {!customHookTag && <span className="hts-tag-check">✓</span>}
+                      </button>
+
                       {displayedTags.map((item) => {
                         const visual = resolveTagVisual(item.tag);
                         const isActive = customHookTag === item.tag;
+                        const { emoji, text } = splitTagEmoji(item.tag);
+
                         return (
                           <button
                             key={item.id}
                             type="button"
-                            className={`hts-tag-chip ${isActive ? 'active' : ''}`}
+                            className={`hts-tag-card ${isActive ? 'active' : ''}`}
                             style={
                               isActive
                                 ? {
                                     borderColor: visual.borderColor,
-                                    color: visual.textColor,
-                                    backgroundColor: visual.bgColor,
-                                    boxShadow: `0 0 12px ${visual.glowColor}`,
+                                    boxShadow: `0 4px 16px ${visual.glowColor}, inset 0 0 0 1px ${visual.borderColor}`,
+                                    background: `linear-gradient(135deg, ${visual.glowColor}, rgba(15, 23, 42, 0.88))`,
                                   }
                                 : undefined
                             }
                             onClick={() => setCustomHookTag(item.tag)}
                             title={item.description}
                           >
-                            {item.tag}
+                            <div
+                              className="hts-tag-icon-box"
+                              style={
+                                isActive
+                                  ? {
+                                      background: 'rgba(255, 255, 255, 0.15)',
+                                      borderColor: visual.borderColor,
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {emoji}
+                            </div>
+                            <div className="hts-tag-text-wrap">
+                              <span
+                                className="hts-tag-name"
+                                style={isActive ? { color: '#FFFFFF' } : undefined}
+                              >
+                                {text}
+                              </span>
+                              <span className="hts-tag-sub">{item.description}</span>
+                            </div>
+                            {isActive && (
+                              <span
+                                className="hts-tag-check"
+                                style={{ color: visual.textColor, borderColor: visual.borderColor }}
+                              >
+                                ✓
+                              </span>
+                            )}
                           </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* Custom Tag Input with active pill preview */}
-                  <div className="hts-tag-custom-row">
-                    <input
-                      type="text"
-                      value={customHookTag ?? ''}
-                      onChange={(e) => setCustomHookTag(e.target.value)}
-                      placeholder="Ketik teks tag kustom (contoh: 👀 JANGAN DI-SKIP)..."
-                      className="hts-tag-input"
-                    />
-                    {customHookTag && (
-                      <button
-                        type="button"
-                        className="hts-tag-clear-btn"
-                        onClick={() => setCustomHookTag('')}
-                        title="Hapus tag (tanpa badge)"
-                      >
-                        ✕ Hapus Tag
-                      </button>
+                  {/* Custom Tag Input & Live Status Bar */}
+                  <div className="hts-tag-input-section">
+                    <div className="hts-tag-input-bar">
+                      <span className="hts-tag-input-icon">🏷️</span>
+                      <input
+                        type="text"
+                        value={customHookTag ?? ''}
+                        onChange={(e) => setCustomHookTag(e.target.value)}
+                        placeholder="Ketik teks tag kustom (contoh: 🔥 TIPS HARI INI)..."
+                        className="hts-tag-input-field"
+                      />
+                      {customHookTag && (
+                        <button
+                          type="button"
+                          className="hts-tag-input-clear-btn"
+                          onClick={() => setCustomHookTag('')}
+                          title="Hapus / Kosongkan Tag"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {customHookTag ? (
+                      <div className="hts-tag-status-bar">
+                        <span className="hts-tag-status-label">Badge Aktif:</span>
+                        <div
+                          className="hts-tag-status-pill"
+                          style={{
+                            borderColor: activeTagVisual.borderColor,
+                            color: activeTagVisual.textColor,
+                            boxShadow: `0 0 10px ${activeTagVisual.glowColor}`,
+                          }}
+                        >
+                          <span
+                            className="hts-tag-status-dot"
+                            style={{ background: activeTagVisual.borderColor }}
+                          />
+                          {customHookTag}
+                        </div>
+                        <span className="hts-tag-status-hint">Muncul detik 0–3 di hook pembuka</span>
+                      </div>
+                    ) : (
+                      <div className="hts-tag-status-bar muted">
+                        <span className="hts-tag-status-dot-off" />
+                        <span className="hts-tag-status-hint">
+                          Mode Tanpa Badge aktif: hook langsung dimulai dengan kalimat utama
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
               )}
             </div>
           )}
+
+          {/* Group 6: Desain Badge Pill (Badge Design System — 4 Presets) */}
+          <div className="hts-control-group">
+            <div className="hts-group-header">
+              <div className="hts-group-title-row">
+                <span className="hts-group-title">6. Desain Badge Pill (Badge Design System)</span>
+                <span className="hts-group-badge">4 Preset Visual</span>
+              </div>
+              <span className="hts-group-hint">
+                Pilih gaya visual badge &amp; variasi warna aksen (ukuran proporsional lebih kecil dari teks hook)
+              </span>
+            </div>
+
+            <div className="hts-badge-grid" role="radiogroup" aria-label="Badge Pill Presets">
+              {BADGE_PRESETS.map((bp) => {
+                const isSelected = selectedBadgePreset === bp.id;
+                const sampleTag = customHookTag && customHookTag.trim() ? customHookTag : bp.defaultTag;
+                const sampleStyle = resolveBadgeStyle(bp.id, isSelected ? selectedBadgeColor : bp.defaultColor, sampleTag);
+
+                return (
+                  <div
+                    key={bp.id}
+                    className={`hts-badge-card ${isSelected ? 'active' : ''}`}
+                    onClick={() => {
+                      if (!disabled && onBadgePresetChange) {
+                        onBadgePresetChange(bp.id);
+                      }
+                    }}
+                    role="radio"
+                    aria-checked={isSelected}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ' ') && !disabled && onBadgePresetChange) {
+                        e.preventDefault();
+                        onBadgePresetChange(bp.id);
+                      }
+                    }}
+                  >
+                    <div className="hts-badge-card-header">
+                      <div className="hts-badge-title-wrap">
+                        <span className="hts-badge-title">{bp.label}</span>
+                        <span className="hts-badge-cat-tag">{bp.category}</span>
+                      </div>
+                      {isSelected && <span className="hts-badge-check">✓ Aktif</span>}
+                    </div>
+
+                    {/* Miniature Live Badge Pill Preview */}
+                    <div className="hts-badge-preview-box">
+                      <div
+                        className="hts-badge-mini-pill"
+                        style={{
+                          backgroundColor: sampleStyle.bgColor,
+                          borderColor: sampleStyle.borderColor,
+                          borderWidth: `${sampleStyle.borderWidth}px`,
+                          borderStyle: sampleStyle.borderWidth > 0 ? 'solid' : 'none',
+                          borderRadius: sampleStyle.borderRadius > 100 ? 9999 : `${sampleStyle.borderRadius}px`,
+                          boxShadow: sampleStyle.boxShadow,
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: sampleStyle.textColor,
+                            letterSpacing: sampleStyle.letterSpacing,
+                            fontWeight: sampleStyle.fontWeight,
+                          }}
+                        >
+                          {sampleTag}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="hts-badge-desc">{bp.description}</p>
+
+                    <div className="hts-badge-bestfor">
+                      <span className="hts-badge-bestfor-label">Best for:</span>
+                      {bp.bestFor.map((item, idx) => (
+                        <span key={idx} className="hts-badge-tag">{item}</span>
+                      ))}
+                    </div>
+
+                    {/* Color Swatches for this preset */}
+                    <div className="hts-badge-colors" onClick={(e) => e.stopPropagation()}>
+                      <span className="hts-colors-label">Warna:</span>
+                      <button
+                        type="button"
+                        className={`hts-color-swatch-btn ${isSelected && selectedBadgeColor === 'auto' ? 'active' : ''}`}
+                        onClick={() => {
+                          if (!disabled) {
+                            if (onBadgePresetChange && !isSelected) onBadgePresetChange(bp.id);
+                            if (onBadgeColorChange) onBadgeColorChange('auto');
+                          }
+                        }}
+                        title="Auto (Warna semantik sesuai kategori hook)"
+                      >
+                        <span className="hts-swatch-auto">Auto</span>
+                      </button>
+
+                      {bp.colorOptions.map((c) => {
+                        const isColorActive = isSelected && selectedBadgeColor === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`hts-color-swatch-circle ${isColorActive ? 'active' : ''}`}
+                            style={{ backgroundColor: c.hex }}
+                            onClick={() => {
+                              if (!disabled) {
+                                if (onBadgePresetChange && !isSelected) onBadgePresetChange(bp.id);
+                                if (onBadgeColorChange) onBadgeColorChange(c.id as any);
+                              }
+                            }}
+                            title={`${c.label} (${c.hex})`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Right Column: Sticky Live Phone Preview */}
@@ -579,6 +833,8 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
             overrideLayout={selectedLayout}
             overrideAnimation={selectedAnimation}
             overrideTypography={selectedTypography}
+            selectedBadgePreset={selectedBadgePreset}
+            selectedBadgeColor={selectedBadgeColor}
             customText={customHookText}
             customTag={customHookTag}
             highlightWords={highlightWords}

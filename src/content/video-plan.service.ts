@@ -56,6 +56,10 @@ export interface VideoPlanBuildInput {
   hookHighlightWords?: string[];
   /** Visual preset id for the hook intro. */
   visualPreset?: string;
+  /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
+  hookBadgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
+  hookBadgeColor?: string;
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -108,6 +112,8 @@ export class VideoPlanService implements IVideoPlanService {
       hookTag,
       hookHighlightWords,
       visualPreset,
+      hookBadgePresetId,
+      hookBadgeColor,
     } = input;
     const configuredTarget = this.options.targetDuration ?? 60;
     // Never make a video longer than its narration: that produces a frozen
@@ -269,6 +275,12 @@ export class VideoPlanService implements IVideoPlanService {
         }
         if (visualPreset) {
           firstScene.visualPreset = visualPreset;
+        }
+        if (hookBadgePresetId) {
+          firstScene.hookBadgePresetId = hookBadgePresetId;
+        }
+        if (hookBadgeColor) {
+          firstScene.hookBadgeColor = hookBadgeColor;
         }
         if (!firstScene.source && clipEnd > clipStart) {
           firstScene.source = {

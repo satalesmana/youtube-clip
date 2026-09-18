@@ -39,6 +39,10 @@ export interface PlanScene {
   highlightWords?: string[];
   /** Visual preset id for the hook headline. */
   visualPreset?: string;
+  /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
+  hookBadgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
+  hookBadgeColor?: string;
 }
 
 /** A caption event with word-level timing for the composition engines. */

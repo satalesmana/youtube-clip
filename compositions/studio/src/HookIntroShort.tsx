@@ -155,6 +155,8 @@ export const HookIntroShort: React.FC<HookIntroProps> = ({
       <HookHeadline
         text={hook.headlineText}
         tag={hook.tag}
+        badgePresetId={hook.badgePresetId}
+        badgeColor={hook.badgeColor}
         theme={theme}
         highlightWords={hook.highlightWords}
         visualPreset={visualPreset}

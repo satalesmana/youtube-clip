@@ -37,6 +37,14 @@ export const planSceneSchema = z.object({
   highlightWords: z.array(z.string()).optional(),
   /** Visual preset id for the hook headline. */
   visualPreset: z.string().optional(),
+  /** Badge pill preset id */
+  hookBadgePresetId: z
+    .enum(['neon-outline', 'solid-impact', 'highlight-chip', 'editorial-label'])
+    .optional(),
+  /** Badge pill color variant */
+  hookBadgeColor: z
+    .enum(['cyan', 'magenta', 'red', 'yellow', 'green', 'purple', 'gold', 'auto'])
+    .optional(),
 });
 
 /** A caption event with word-level timing. */

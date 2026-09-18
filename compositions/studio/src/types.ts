@@ -23,6 +23,10 @@ export type PlanScene = {
   highlightWords?: string[];
   /** Visual preset id for the hook intro headline. */
   visualPreset?: string;
+  /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
+  hookBadgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+  /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
+  hookBadgeColor?: string;
 };
 
 export type PlanCaption = {
@@ -91,6 +95,10 @@ export type HookIntroProps = {
     animation?: string;
     /** Typography variant override from the Hook Klip design system. */
     typography?: string;
+    /** Badge pill preset id: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label' */
+    badgePresetId?: 'neon-outline' | 'solid-impact' | 'highlight-chip' | 'editorial-label';
+    /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
+    badgeColor?: string;
   };
   /** Staged source video (public-relative path, absolute for Studio testing). */
   sourceVideoPath: string;

@@ -7,7 +7,7 @@ import { scaleBurstProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord, getTextOutlineStyle } from './highlightUtil';
-import { HookTagPill } from './HookTagPill';
+import { HookTagPill, type BadgePresetId } from './HookTagPill';
 
 const MAX_WORDS = 10;
 
@@ -15,6 +15,8 @@ interface BoldCapsRendererProps {
   text: string;
   theme: Theme;
   tag?: string;
+  badgePresetId?: BadgePresetId;
+  badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
 }
@@ -23,6 +25,8 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
   text,
   theme,
   tag,
+  badgePresetId,
+  badgeColor,
   highlightWords,
   visualPreset,
 }) => {
@@ -137,7 +141,14 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
         }}
       >
         {/* Tag pill */}
-        <HookTagPill tag={tag} fontFamily={font} fallbackAccent={theme.accent} marginBottom={6} />
+        <HookTagPill
+          tag={tag}
+          fontFamily={font}
+          fallbackAccent={theme.accent}
+          marginBottom={6}
+          badgePresetId={badgePresetId}
+          badgeColor={badgeColor}
+        />
 
         {/* Stacked 3-part Bold Headline */}
         <div

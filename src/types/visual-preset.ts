@@ -93,6 +93,23 @@ export type CompositionLayout =
   | 'data-focus'
   | 'question-focus';
 
+/** 4 Badge Pill Presets according to the Badge Design System. */
+export type BadgePresetId =
+  | 'neon-outline'
+  | 'solid-impact'
+  | 'highlight-chip'
+  | 'editorial-label';
+
+export type BadgeColorVariant =
+  | 'cyan'
+  | 'magenta'
+  | 'red'
+  | 'yellow'
+  | 'green'
+  | 'purple'
+  | 'gold'
+  | 'auto';
+
 /**
  * Typed union of all valid visual preset IDs.
  * This is the single source of truth for the preset vocabulary.

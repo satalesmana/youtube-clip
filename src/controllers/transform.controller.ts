@@ -825,6 +825,8 @@ export class TransformController {
         hookTag: request.hookTag,
         hookHighlightWords: request.hookHighlightWords,
         visualPreset: request.visualPreset,
+        hookBadgePresetId: request.hookBadgePreset,
+        hookBadgeColor: request.hookBadgeColor,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
     } catch (err) {
@@ -982,7 +984,9 @@ export class TransformController {
       request.visualPreset ||
       request.hookLayout ||
       request.hookAnimation ||
-      request.hookTypography
+      request.hookTypography ||
+      request.hookBadgePreset ||
+      request.hookBadgeColor
     );
     if (!isCustomizedHook && request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
       const { access } = await import('node:fs/promises');
@@ -1008,11 +1012,13 @@ export class TransformController {
           themeSeed: `${videoId}:${request.subtitleStyle || request.template || 'default'}`,
           outputDir,
           fileName: `styled-hook-intro-${jobId}`,
-          // Visual preset & custom overrides (layout + animation + typography)
+          // Visual preset & custom overrides (layout + animation + typography + badge)
           visualPreset: request.visualPreset,
           layout: request.hookLayout,
           animation: request.hookAnimation,
           typography: request.hookTypography,
+          badgePresetId: request.hookBadgePreset,
+          badgeColor: request.hookBadgeColor,
         });
 
         hookIntroFile = styled.path;

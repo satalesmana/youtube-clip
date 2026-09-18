@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import type { ClientVisualPreset } from '../../lib/visual-presets';
 import { CLIENT_PRESET_MAP } from '../../lib/visual-presets';
-import { resolveTagVisual } from '../../lib/hook-tags';
+import { resolveBadgeStyle } from '../../lib/hook-tags';
 import type {
   VisualPresetSelection,
   VisualPresetId,
   CompositionLayout,
   AnimationPreset,
   TypographyVariant,
+  BadgePresetId,
+  BadgeColorVariant,
 } from '../../types';
 
 interface HookPresetLivePreviewProps {
@@ -15,6 +17,8 @@ interface HookPresetLivePreviewProps {
   overrideLayout?: CompositionLayout | 'auto';
   overrideAnimation?: AnimationPreset | 'auto';
   overrideTypography?: TypographyVariant | 'auto';
+  selectedBadgePreset?: BadgePresetId;
+  selectedBadgeColor?: BadgeColorVariant;
   customText?: string;
   customTag?: string;
   highlightWords?: string[];
@@ -41,6 +45,8 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
   overrideLayout = 'auto',
   overrideAnimation = 'auto',
   overrideTypography = 'auto',
+  selectedBadgePreset = 'neon-outline',
+  selectedBadgeColor = 'auto',
   customText,
   customTag,
   highlightWords = [],
@@ -78,10 +84,10 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
       fontClass: `font-${preset.fontName.toLowerCase().replace(/\s+/g, '-')}`,
     };
 
-  // Trigger animation replay when preset, layout, animation, or typography changes
+  // Trigger animation replay when preset, layout, animation, typography, or badge styling changes
   useEffect(() => {
     setReplayKey((k) => k + 1);
-  }, [activePresetId, overrideLayout, overrideAnimation, overrideTypography]);
+  }, [activePresetId, overrideLayout, overrideAnimation, overrideTypography, selectedBadgePreset, selectedBadgeColor]);
 
   const headlineText = customText && customText.trim() ? customText : preset.demoHeadline;
   const tagText = customTag && customTag.trim() ? customTag : preset.tag;
@@ -168,19 +174,129 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
                 </div>
               )}
 
-              {/* Tag Pill */}
+              {/* Tag Pill with Badge Design System */}
               {tagText && (() => {
-                const visual = resolveTagVisual(tagText);
+                const badge = resolveBadgeStyle(selectedBadgePreset, selectedBadgeColor, tagText);
+
+                // ── Solid Impact: 2-line layout with icon + accent strokes ──
+                if (selectedBadgePreset === 'solid-impact') {
+                  const parts = tagText.trim().split(/\s+/);
+                  const emojiMatch = parts[0]?.match(/^\p{Emoji}/u);
+                  let iconEmoji = '';
+                  let topText = '';
+                  let bottomText = '';
+
+                  if (emojiMatch) {
+                    iconEmoji = parts[0];
+                    topText = parts.slice(1, 2).join(' ');
+                    bottomText = parts.slice(2).join(' ');
+                  } else {
+                    topText = parts.slice(0, 1).join(' ');
+                    bottomText = parts.slice(1).join(' ');
+                  }
+
+                  const accentYellow =
+                    selectedBadgeColor === 'yellow' ? '#FEF08A'
+                    : selectedBadgeColor === 'green' ? '#BBF7D0'
+                    : '#FACC15';
+
+                  const AccentStrokes = ({ side }: { side: 'left' | 'right' }) => (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 3,
+                      marginLeft: side === 'right' ? 6 : 0,
+                      marginRight: side === 'left' ? 6 : 0,
+                    }}>
+                      {[12, 9, 5].map((w, i) => (
+                        <div key={i} style={{
+                          width: w,
+                          height: 3,
+                          borderRadius: 2,
+                          backgroundColor: badge.bgColor,
+                          boxShadow: `0 0 4px ${badge.bgColor}CC`,
+                        }} />
+                      ))}
+                    </div>
+                  );
+
+                  return (
+                    <div className="hpl-tag-pill" style={{ background: 'none', border: 'none', boxShadow: 'none', padding: 0 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <AccentStrokes side="left" />
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 7,
+                          backgroundColor: badge.bgColor,
+                          borderRadius: 10,
+                          padding: '6px 13px 6px 8px',
+                          boxShadow: `0 0 0 1.5px rgba(255,255,255,0.2), 0 6px 20px rgba(0,0,0,0.7), 0 0 20px ${badge.bgColor}99`,
+                          position: 'relative',
+                          overflow: 'hidden',
+                        }}>
+                          {/* Inner highlight */}
+                          <div style={{
+                            position: 'absolute', top: 0, left: 0, right: 0, height: '45%',
+                            background: 'linear-gradient(to bottom, rgba(255,255,255,0.15), transparent)',
+                            borderRadius: '10px 10px 0 0', pointerEvents: 'none',
+                          }} />
+                          {/* Icon block */}
+                          {iconEmoji && (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: 28, height: 28, backgroundColor: accentYellow,
+                              borderRadius: 6, flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
+                            }}>
+                              <span style={{ fontSize: 16, lineHeight: 1 }}>{iconEmoji}</span>
+                            </div>
+                          )}
+                          {/* Text stack */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
+                            {topText && (
+                              <span style={{
+                                fontSize: 11, fontWeight: 900, letterSpacing: '0.6px',
+                                color: '#FFFFFF', textTransform: 'uppercase', lineHeight: 1.15,
+                                textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                              }}>{topText}</span>
+                            )}
+                            {bottomText && (
+                              <span style={{
+                                fontSize: 13, fontWeight: 900, letterSpacing: '0.3px',
+                                color: accentYellow, textTransform: 'uppercase', lineHeight: 1.15,
+                                textShadow: `0 0 8px ${accentYellow}80, 0 1px 4px rgba(0,0,0,0.6)`,
+                              }}>{bottomText}</span>
+                            )}
+                          </div>
+                        </div>
+                        <AccentStrokes side="right" />
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ── Other presets: flat single-line pill ──
                 return (
                   <div
                     className="hpl-tag-pill"
                     style={{
-                      borderColor: visual.borderColor,
-                      backgroundColor: visual.bgColor,
-                      boxShadow: `0 4px 14px rgba(0, 0, 0, 0.7), 0 0 12px ${visual.glowColor}`,
+                      borderColor: badge.borderColor,
+                      backgroundColor: badge.bgColor,
+                      borderRadius: badge.borderRadius > 100 ? 9999 : `${badge.borderRadius}px`,
+                      borderWidth: `${badge.borderWidth}px`,
+                      borderStyle: badge.borderWidth > 0 ? 'solid' : 'none',
+                      boxShadow: badge.boxShadow,
                     }}
                   >
-                    <span style={{ color: visual.textColor }}>{tagText}</span>
+                    <span
+                      style={{
+                        color: badge.textColor,
+                        letterSpacing: badge.letterSpacing,
+                        fontWeight: badge.fontWeight,
+                      }}
+                    >
+                      {tagText}
+                    </span>
                   </div>
                 );
               })()}
