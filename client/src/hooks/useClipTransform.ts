@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
 import type {
+  BrollPlacementItem,
   DownloadedVideo,
   ScriptSection,
   TransformResult,
@@ -34,6 +35,9 @@ export function useClipTransform() {
   // ClipRefinementService which snaps to the nearest complete sentence/segment.
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [enableBroll, setEnableBroll] = useState(true);
+  const [brollPlacements, setBrollPlacements] = useState<BrollPlacementItem[]>([]);
+  const [loadingBroll, setLoadingBroll] = useState(false);
+  const [brollError, setBrollError] = useState<string | null>(null);
   const [enableIntroOutro, setEnableIntroOutro] = useState(true);
   const [templateId, setTemplateId] = useState('beast');
   const [whisperProvider, setWhisperProvider] = useState('openai');
@@ -44,7 +48,7 @@ export function useClipTransform() {
   const [isScriptCached, setIsScriptCached] = useState<boolean>(false);
   const [draftingScript, setDraftingScript] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
-  const [ttsVoice, setTtsVoice] = useState('id-ID-ArdiNeural');
+  const [ttsVoice, setTtsVoice] = useState('');
   const [sourceVolume, setSourceVolume] = useState(25);
   const [synthesizingTts, setSynthesizingTts] = useState(false);
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
@@ -456,6 +460,80 @@ export function useClipTransform() {
     setSelectedClipIndices([]);
   }, []);
 
+  // B-Roll actions
+  const fetchBrollSuggestions = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!options?.force && brollPlacements.length > 0) return;
+      const targetUrl = url.trim();
+      const videoId = downloadedVideo?.videoId;
+      if (!targetUrl && !videoId) return;
+
+      setLoadingBroll(true);
+      setBrollError(null);
+
+      const selectedClipsPayload = selectedClipIndices
+        .map((idx) => clips[idx])
+        .filter((c): c is ViralClip => Boolean(c))
+        .map((c) => ({ start: c.start, end: c.end, title: c.title }));
+
+      try {
+        const res = await api.suggestBroll({
+          youtubeUrl: targetUrl || undefined,
+          videoId: videoId || undefined,
+          selectedClips: selectedClipsPayload.length > 0 ? selectedClipsPayload : undefined,
+          customScript: outputMode === 'narration' && scriptDraft ? scriptDraft : undefined,
+          outputMode,
+        });
+
+        if (res.placements && res.placements.length > 0) {
+          setBrollPlacements(
+            res.placements.map((p) => ({
+              ...p,
+              enabled: p.enabled !== undefined ? p.enabled : true,
+            }))
+          );
+        } else {
+          setBrollPlacements([]);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Gagal mendeteksi B-Roll.';
+        setBrollError(msg);
+      } finally {
+        setLoadingBroll(false);
+      }
+    },
+    [url, downloadedVideo?.videoId, selectedClipIndices, clips, outputMode, scriptDraft, brollPlacements.length]
+  );
+
+  const toggleBrollPlacement = useCallback((index: number) => {
+    setBrollPlacements((prev) =>
+      prev.map((item, idx) =>
+        idx === index ? { ...item, enabled: item.enabled === false ? true : false } : item
+      )
+    );
+  }, []);
+
+  const updateBrollPlacement = useCallback((index: number, updates: Partial<BrollPlacementItem>) => {
+    setBrollPlacements((prev) =>
+      prev.map((item, idx) => (idx === index ? { ...item, ...updates } : item))
+    );
+  }, []);
+
+  const removeBrollPlacement = useCallback((index: number) => {
+    setBrollPlacements((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
+  const addBrollPlacement = useCallback((placement: BrollPlacementItem) => {
+    setBrollPlacements((prev) => [...prev, { ...placement, enabled: placement.enabled !== false }]);
+  }, []);
+
+  // Auto-fetch B-Roll suggestions when entering step 3 if enabled and empty
+  useEffect(() => {
+    if (step === 3 && enableBroll && brollPlacements.length === 0 && (url.trim() || downloadedVideo?.videoId)) {
+      fetchBrollSuggestions();
+    }
+  }, [step, enableBroll, brollPlacements.length, url, downloadedVideo?.videoId, fetchBrollSuggestions]);
+
   const startTransform = useCallback(async () => {
     const targetUrl = url.trim();
     if (!targetUrl) throw new Error('Masukkan URL video');
@@ -500,6 +578,7 @@ export function useClipTransform() {
         audioMode,
         aspectRatio,
         enableBroll,
+        brollPlacements: enableBroll && brollPlacements.length > 0 ? brollPlacements : undefined,
         enableIntroOutro,
         whisperProvider,
         sttProvider: whisperProvider,
@@ -560,6 +639,7 @@ export function useClipTransform() {
     audioMode,
     aspectRatio,
     enableBroll,
+    brollPlacements,
     enableIntroOutro,
     whisperProvider,
     customPrompt,
@@ -602,6 +682,15 @@ export function useClipTransform() {
     setAspectRatio,
     enableBroll,
     setEnableBroll,
+    brollPlacements,
+    setBrollPlacements,
+    loadingBroll,
+    brollError,
+    fetchBrollSuggestions,
+    toggleBrollPlacement,
+    updateBrollPlacement,
+    removeBrollPlacement,
+    addBrollPlacement,
     enableIntroOutro,
     setEnableIntroOutro,
     templateId,

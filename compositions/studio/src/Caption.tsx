@@ -1,4 +1,4 @@
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { quickEnter } from './animation';
@@ -84,6 +84,29 @@ export const Caption: React.FC<{
 
   const currentActiveIdx = spokenCount > 0 ? spokenCount - 1 : -1;
 
+  // Word relative start/end frames within this caption's local frame timeline.
+  // Headless Chromium renders offline frame-by-frame; CSS transitions cannot execute.
+  // Driving scale and glow through Remotion's spring() ensures smooth, frame-accurate animation.
+  const wordFrames = words.map((_, k) => {
+    if (caption.wordTimings && caption.wordTimings[k]) {
+      const timing = caption.wordTimings[k]!;
+      const relStart = Math.max(
+        0,
+        Math.round(timing.start * fps - (absoluteStartFrame ?? 0)),
+      );
+      const relEnd = Math.max(
+        relStart + 1,
+        Math.round(timing.end * fps - (absoluteStartFrame ?? 0)),
+      );
+      return { start: relStart, end: relEnd };
+    }
+    const perWord = durationFrames / nWords;
+    return {
+      start: Math.round(k * perWord),
+      end: Math.round((k + 1) * perWord),
+    };
+  });
+
   const isSports = theme.id === 'sports';
 
   // Fonts explicitly matched to Step 3 design system:
@@ -102,28 +125,30 @@ export const Caption: React.FC<{
     return null;
   }
 
-  const baseMax = isHormozi ? 92 : isClean ? 78 : isSports ? 104 : 96;
-  const fitted = fitTextSize(caption.text, captionFont, width * 0.88, baseMax, 40);
+  // Sweet spot font sizing for 1080x1920 short-form video:
+  // - Hormozi: base 72px (tall Anton, boxed)
+  // - Clean: base 64px (clean Inter, sentence case)
+  // - Pop Dinamis (Beast): base 76px (bold Archivo Black)
+  // - Sports: base 80px (italic Anton)
+  const baseMax = isHormozi ? 72 : isClean ? 64 : isSports ? 80 : 76;
+  const fitted = fitTextSize(caption.text, captionFont, width * 0.86, baseMax, 44);
   const strokeSize = Math.max(3, Math.round(fitted / 18));
 
-  const renderTokens = (text: string, syncWords = false) => {
-    let wordIdx = 0;
-    return text.split(/(\s+)/).map((token, i) => {
-      const trimmed = token.trim();
-      const isWord = trimmed.length > 0;
-      const thisIdx = wordIdx;
+  const renderWords = () => {
+    return words.map((word, k) => {
+      const isCurrent = k === currentActiveIdx;
+      const isPast = k < currentActiveIdx;
+      const cleanWord = word.toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
+      const isHighlight = highlightSet.has(cleanWord) || highlightSet.has(word.toLowerCase());
 
-      if (isWord) {
-        wordIdx += 1;
-      }
-
-      if (!isWord) {
-        return <span key={i}>{token}</span>;
-      }
-
-      const isCurrent = syncWords && thisIdx === currentActiveIdx;
-      const isPast = syncWords && thisIdx < currentActiveIdx;
-      const isHighlight = highlightSet.has(trimmed.toLowerCase());
+      // Spring-driven frame-accurate zoom calculation
+      const wTiming = wordFrames[k] ?? { start: 0, end: durationFrames };
+      const framesSinceStart = Math.max(0, frame - wTiming.start);
+      const wordSpring = spring({
+        frame: framesSinceStart,
+        fps,
+        config: { damping: 14, mass: 0.45, stiffness: 220 },
+      });
 
       // ─────────────────────────────────────────────────────────────────
       // Preset 1: Hormozi High Contrast Black Box
@@ -136,18 +161,26 @@ export const Caption: React.FC<{
           color = '#FFFFFF'; // solid crisp white
         }
 
+        const scale = isCurrent
+          ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.07, 1.04], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            })
+          : 1.0;
+
         return (
           <span
-            key={i}
+            key={k}
             style={{
               color,
               display: 'inline-block',
-              transform: isCurrent ? 'scale(1.08)' : 'scale(1)',
-              transition: 'transform 0.08s ease',
+              transform: `scale(${scale})`,
+              transformOrigin: 'center bottom',
+              margin: '0 2px',
               textShadow: isCurrent ? '0 0 16px rgba(255, 229, 0, 0.5)' : undefined,
             }}
           >
-            {token}
+            {word}
           </span>
         );
       }
@@ -163,20 +196,28 @@ export const Caption: React.FC<{
           color = '#F3F4F6'; // soft white
         }
 
+        const scale = isCurrent
+          ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.05, 1.03], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            })
+          : 1.0;
+
         return (
           <span
-            key={i}
+            key={k}
             style={{
               color,
               display: 'inline-block',
-              transform: isCurrent ? 'scale(1.05)' : 'scale(1)',
-              transition: 'transform 0.08s ease',
+              transform: `scale(${scale})`,
+              transformOrigin: 'center bottom',
+              margin: '0 2px',
               textShadow: isCurrent
                 ? '0 0 14px rgba(163, 230, 53, 0.6), 0 2px 8px rgba(0, 0, 0, 0.9)'
                 : '0 2px 8px rgba(0, 0, 0, 0.85)',
             }}
           >
-            {token}
+            {word}
           </span>
         );
       }
@@ -186,14 +227,19 @@ export const Caption: React.FC<{
       // ─────────────────────────────────────────────────────────────────
       let color = 'rgba(255, 255, 255, 0.85)'; // upcoming
       let shadowGlow = '';
-      let scale = 'scale(1)';
+
+      const scale = isCurrent
+        ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.09, 1.06], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          })
+        : 1.0;
 
       if (isCurrent) {
         color = isHighlight ? '#00E5FF' : '#FFE500';
         shadowGlow = isHighlight
-          ? '0 0 26px rgba(0, 229, 255, 0.9), '
-          : '0 0 26px rgba(255, 229, 0, 0.9), ';
-        scale = 'scale(1.16)';
+          ? '0 0 24px rgba(0, 229, 255, 0.9), '
+          : '0 0 24px rgba(255, 229, 0, 0.9), ';
       } else if (isHighlight) {
         color = '#00E5FF';
         shadowGlow = '0 0 14px rgba(0, 229, 255, 0.6), ';
@@ -202,23 +248,24 @@ export const Caption: React.FC<{
       }
 
       if (isSports && isCurrent) {
-        shadowGlow = `0 0 26px ${theme.accent}, 0 0 35px rgba(255, 230, 0, 0.5), `;
+        shadowGlow = `0 0 24px ${theme.accent}, 0 0 35px rgba(255, 230, 0, 0.5), `;
       }
 
       const outline = `-${strokeSize}px -${strokeSize}px 0 #000, ${strokeSize}px -${strokeSize}px 0 #000, -${strokeSize}px ${strokeSize}px 0 #000, ${strokeSize}px ${strokeSize}px 0 #000, 0 ${strokeSize * 1.5}px ${strokeSize * 2.5}px rgba(0,0,0,0.95)`;
 
       return (
         <span
-          key={i}
+          key={k}
           style={{
             color,
             display: 'inline-block',
-            transform: scale,
-            transition: 'transform 0.08s ease',
+            transform: `scale(${scale})`,
+            transformOrigin: 'center bottom',
+            margin: '0 2px',
             textShadow: `${shadowGlow}${outline}`,
           }}
         >
-          {token}
+          {word}
         </span>
       );
     });
@@ -234,6 +281,12 @@ export const Caption: React.FC<{
     >
       <div
         style={{
+          display: 'inline-flex',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          alignItems: 'baseline',
+          columnGap: isClean ? '10px' : isHormozi ? '12px' : '14px',
+          rowGap: '6px',
           fontSize: fitted,
           lineHeight: isHormozi ? 1.1 : isClean ? 1.25 : 1.16,
           textAlign: 'center',
@@ -243,7 +296,7 @@ export const Caption: React.FC<{
           fontStyle: isSports ? 'italic' : 'normal',
           letterSpacing: isSports ? 2 : isHormozi ? 1.5 : isClean ? 0.2 : 0.8,
           color: '#FFFFFF',
-          maxWidth: width * 0.92,
+          maxWidth: width * 0.88,
           whiteSpace: 'normal',
           ...(isHormozi
             ? {
@@ -276,7 +329,7 @@ export const Caption: React.FC<{
           }),
         }}
       >
-        {renderTokens(caption.text, true)}
+        {renderWords()}
       </div>
     </AbsoluteFill>
   );

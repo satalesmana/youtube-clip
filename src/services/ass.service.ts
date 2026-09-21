@@ -56,7 +56,7 @@ export class AssService implements IAssService {
     return [
       '[Script Info]',
       'ScriptType: v4.00+',
-      'WrapStyle: 2',
+      'WrapStyle: 0',
       'ScaledBorderAndShadow: yes',
       `PlayResX: ${this.options.playResX}`,
       `PlayResY: ${this.options.playResY}`,
@@ -157,7 +157,8 @@ export class AssService implements IAssService {
         .map((word) => {
           const color = word.isKeyword ? style.keywordColorHex : style.baseColorHex;
           const scale = word.isKeyword ? '\\fscx115\\fscy115' : '';
-          return `{\\1c${hexToAssColor(color)}${scale}}${escapeAssText(word.text)}`;
+          const text = style.uppercase ? word.text.toUpperCase() : word.text;
+          return `{\\1c${hexToAssColor(color)}${scale}}${escapeAssText(text)}`;
         })
         .join(' ');
     }
@@ -166,6 +167,7 @@ export class AssService implements IAssService {
     let cursor = 0;
 
     for (const word of words) {
+      const text = style.uppercase ? word.text.toUpperCase() : word.text;
       const gapSeconds = Math.max(0, word.start - event.start - cursor);
       if (gapSeconds > 0.02) {
         out += `{\\k${Math.round(gapSeconds * 100)}}`;
@@ -182,7 +184,7 @@ export class AssService implements IAssService {
         popTags = `\\t(${t1},${t1 + popMs},\\fscx130\\fscy130)\\t(${t1 + popMs},${t1 + popMs * 2},\\fscx100\\fscy100)`;
       }
 
-      out += `{\\1c${hexToAssColor(color)}${keywordScale}${popTags}\\k${Math.round(wordDuration * 100)}}${escapeAssText(word.text)} `;
+      out += `{\\1c${hexToAssColor(color)}${keywordScale}${popTags}\\k${Math.round(wordDuration * 100)}}${escapeAssText(text)} `;
       cursor = word.end - event.start;
     }
 

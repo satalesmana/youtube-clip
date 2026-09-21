@@ -77,6 +77,7 @@ export default defineEventHandler(async (event) => {
           watermarkFilterService: container.watermarkFilterService,
           captionService: container.captionService,
           styledHookPreviewService: container.styledHookPreviewService,
+          brollService: container.brollService,
           onStage: (stage, opts) => send('stage', { stage, skipped: opts?.skipped ?? false }),
         };
 
@@ -124,6 +125,7 @@ export default defineEventHandler(async (event) => {
     watermarkFilterService: container.watermarkFilterService,
     captionService: container.captionService,
     styledHookPreviewService: container.styledHookPreviewService,
+    brollService: container.brollService,
   };
 
   const controller = new TransformController(deps);

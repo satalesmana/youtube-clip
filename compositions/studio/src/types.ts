@@ -65,6 +65,12 @@ export type CompositionPlan = {
     sourceUnderlay: boolean;
     ducking: boolean;
   };
+  brolls?: Array<{
+    start: number;
+    end: number;
+    videoPath: string;
+    query?: string;
+  }>;
 };
 
 export type CompositionProps = {

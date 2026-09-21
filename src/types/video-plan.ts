@@ -91,4 +91,11 @@ export interface VideoPlan {
     /** Whether to duck source audio under narration (future). */
     ducking: boolean;
   };
+  /** Optional contextual B-roll video cutaways overlay */
+  brolls?: Array<{
+    start: number;
+    end: number;
+    videoPath: string;
+    query?: string;
+  }>;
 }

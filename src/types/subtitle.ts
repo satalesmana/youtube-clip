@@ -40,5 +40,7 @@ export interface AssStyleConfig {
   useOpaqueBox?: boolean;
   /** Padding in pixels around the text when `useOpaqueBox` is true. Default: 8. */
   boxPaddingPx?: number;
+  /** Whether to transform the rendered text to UPPERCASE (standard for Beast and Hormozi styles). */
+  uppercase?: boolean;
 }
 

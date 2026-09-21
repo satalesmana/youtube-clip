@@ -306,6 +306,8 @@ export const transformRequestSchema = z.object({
   captionCreditTemplate: z.string().optional(),
   /** Whether to generate viral captions during transform. Defaults to true. */
   generateCaptions: z.boolean().default(true),
+  /** Force regeneration of social media captions even if a cached latest.json exists on disk. */
+  refreshCaptions: z.boolean().default(false),
   /**
    * Audio output mode for the final video.
    *
@@ -325,6 +327,30 @@ export const transformRequestSchema = z.object({
    * Range: 0.0 (silent) to 1.0 (full). Defaults to 0.3 (≈ −10 dB).
    */
   sourceAudioVolume: z.number().min(0).max(1).optional(),
+  /** Whether to insert contextual B-roll footage. */
+  enableBroll: z.boolean().optional(),
+  /**
+   * User-selected B-roll placements to insert during the video.
+   */
+  brollPlacements: z.array(z.object({
+    id: z.string().optional(),
+    enabled: z.boolean().optional(),
+    cue: z.object({
+      start: z.number(),
+      end: z.number(),
+      query: z.string(),
+      mood: z.string().optional(),
+    }),
+    asset: z.object({
+      id: z.string(),
+      source: z.enum(['pexels', 'pixabay', 'local', 'ai-generated']).default('pexels'),
+      previewUrl: z.string().optional().default(''),
+      downloadUrl: z.string(),
+      durationSeconds: z.number().optional().default(4),
+      localFilePath: z.string().optional(),
+    }),
+    transition: z.enum(['cut', 'crossfade']).optional(),
+  })).optional(),
 }).refine((data) => Boolean(data.youtubeUrl) || Boolean(data.videoId), {
   message: 'Provide at least one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

@@ -2,11 +2,17 @@ import { resolve } from 'node:path';
 import { defineNitroConfig } from 'nitropack/config';
 
 const clientDist = resolve(process.cwd(), 'client/dist');
+const clientPublic = resolve(process.cwd(), 'client/public');
 
 export default defineNitroConfig({
   compatibilityDate: '2025-01-01',
   srcDir: 'server',
   publicAssets: [
+    {
+      baseURL: '/',
+      dir: clientPublic,
+      maxAge: 60 * 60,
+    },
     {
       baseURL: '/',
       dir: clientDist,

@@ -7,7 +7,7 @@ import { buildBrollSystemPrompt, buildBrollUserPrompt } from '../prompts/b-roll.
 import type { IAiProvider } from '../providers/ai.provider.js';
 import type { IBrollProvider } from '../providers/broll/index.js';
 import type { Logger } from '../utils/logger.js';
-import type { BrollCue, BrollPlacement } from '../types/b-roll.js';
+import type { BrollAsset, BrollCue, BrollPlacement } from '../types/b-roll.js';
 
 export interface BrollServiceOptions {
   model: string;
@@ -25,6 +25,8 @@ export interface BrollServiceOptions {
 export interface IBrollService {
   extractCues(segmentText: string, start: number, end: number): Promise<BrollCue[]>;
   resolvePlacements(cues: BrollCue[], cacheDir: string): Promise<BrollPlacement[]>;
+  searchFootage(query: string, options?: { minDurationSeconds?: number; maxResults?: number }): Promise<BrollAsset[]>;
+  downloadAsset(asset: BrollAsset, destPath: string): Promise<string>;
 }
 
 export class BrollService implements IBrollService {
@@ -34,6 +36,24 @@ export class BrollService implements IBrollService {
     private readonly options: BrollServiceOptions,
     private readonly logger: Logger,
   ) {}
+
+  /**
+   * Directly searches for footage matching a query using the active provider.
+   */
+  async searchFootage(query: string, options?: { minDurationSeconds?: number; maxResults?: number }): Promise<BrollAsset[]> {
+    return this.brollProvider.searchFootage(query, options);
+  }
+
+  /**
+   * Downloads an asset to destination path using the active provider.
+   */
+  async downloadAsset(asset: BrollAsset, destPath: string): Promise<string> {
+    if (this.brollProvider.downloadAsset) {
+      return this.brollProvider.downloadAsset(asset, destPath);
+    }
+    asset.localFilePath = destPath;
+    return destPath;
+  }
 
   /**
    * Prompts the AI provider to identify suitable visual moments in the dialogue.
@@ -54,7 +74,7 @@ export class BrollService implements IBrollService {
         system,
         prompt,
         temperature: this.options.temperature ?? 0.3,
-        timeoutMs: this.options.timeoutMs ?? 15000,
+        timeoutMs: this.options.timeoutMs ?? Number(process.env.ROUTER_TIMEOUT_MS ?? 60000),
       });
 
       const parsed = parseJson(raw);
@@ -94,7 +114,7 @@ export class BrollService implements IBrollService {
       try {
         const assets = await this.brollProvider.searchFootage(cue.query, {
           minDurationSeconds: Math.ceil(cue.end - cue.start),
-          maxResults: 3,
+          maxResults: 4,
         });
 
         if (assets.length === 0) {
@@ -107,15 +127,23 @@ export class BrollService implements IBrollService {
 
         const exists = await access(destPath).then(() => true).catch(() => false);
         if (!exists && this.brollProvider.downloadAsset) {
-          this.logger.info({ id: chosen.id, query: cue.query }, 'Downloading B-roll asset');
-          await this.brollProvider.downloadAsset(chosen, destPath);
+          try {
+            this.logger.info({ id: chosen.id, query: cue.query }, 'Downloading B-roll asset');
+            await this.brollProvider.downloadAsset(chosen, destPath);
+          } catch (dlErr) {
+            this.logger.warn({ err: dlErr, id: chosen.id }, 'Download B-roll asset failed, continuing with remote reference');
+            chosen.localFilePath = destPath;
+          }
         } else {
           chosen.localFilePath = destPath;
         }
 
         placements.push({
+          id: `broll-${i + 1}-${Date.now()}`,
           cue,
           asset: chosen,
+          candidates: assets,
+          enabled: true,
           transition: 'crossfade',
         });
       } catch (err) {

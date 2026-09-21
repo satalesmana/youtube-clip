@@ -135,20 +135,14 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
           <button
             type="button"
             className={`chip-toggle ${outputLanguage === 'id' ? 'active' : ''}`}
-            onClick={() => {
-              setOutputLanguage('id');
-              if (!ttsVoice.startsWith('id-')) setTtsVoice('id-ID-ArdiNeural');
-            }}
+            onClick={() => setOutputLanguage('id')}
           >
             🇮🇩 Bahasa Indonesia (ID)
           </button>
           <button
             type="button"
             className={`chip-toggle ${outputLanguage === 'en' ? 'active' : ''}`}
-            onClick={() => {
-              setOutputLanguage('en');
-              if (!ttsVoice.startsWith('en-')) setTtsVoice('en-US-GuyNeural');
-            }}
+            onClick={() => setOutputLanguage('en')}
           >
             🇺🇸 English (EN)
           </button>
@@ -195,12 +189,12 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
                 sec.type === 'hook'
                   ? '🔥 Hook 3 Detik'
                   : sec.type === 'conclusion'
-                  ? '🎯 Kesimpulan & CTA'
-                  : sec.type === 'commentary'
-                  ? '🗣️ Komentar / Analisis'
-                  : sec.type === 'context'
-                  ? '📖 Cerita / Konteks'
-                  : sec.type;
+                    ? '🎯 Kesimpulan & CTA'
+                    : sec.type === 'commentary'
+                      ? '🗣️ Komentar / Analisis'
+                      : sec.type === 'context'
+                        ? '📖 Cerita / Konteks'
+                        : sec.type;
 
               const wordCount = (sec.text || '').trim().split(/\s+/).filter(Boolean).length;
 
@@ -308,19 +302,10 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
             <label className="label-main">Pilihan Suara Narator (TTS Voice)</label>
             <input
               type="text"
-              list="tts-voice-options"
               value={ttsVoice}
               onChange={(e) => setTtsVoice(e.target.value)}
-              placeholder="Contoh: id-ID-ArdiNeural, en-US-GuyNeural..."
+              placeholder="Kosongkan untuk default server (atau isi mis. id-ID-ArdiNeural, nova...)"
             />
-            <datalist id="tts-voice-options">
-              <option value="id-ID-ArdiNeural">🇮🇩 id-ID-ArdiNeural (Pria Enerjik)</option>
-              <option value="id-ID-GadisNeural">🇮🇩 id-ID-GadisNeural (Wanita Ramah)</option>
-              <option value="en-US-GuyNeural">🇺🇸 en-US-GuyNeural (Pria Profesional)</option>
-              <option value="en-US-JennyNeural">🇺🇸 en-US-JennyNeural (Wanita Elegan)</option>
-              <option value="en-US-AndrewMultilingualNeural">🇺🇸 en-US-AndrewMultilingualNeural (Multibahasa)</option>
-              <option value="en-US-AvaMultilingualNeural">🇺🇸 en-US-AvaMultilingualNeural (Multibahasa)</option>
-            </datalist>
           </div>
 
           <div className="input-group">

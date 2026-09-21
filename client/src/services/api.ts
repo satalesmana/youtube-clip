@@ -1,4 +1,6 @@
 import type {
+  BrollAssetItem,
+  BrollPlacementItem,
   HistoryItem,
   ScriptSection,
   SubtitleTemplate,
@@ -412,7 +414,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...(payload.videoId ? { videoId: payload.videoId } : { youtubeUrl: payload.url }),
-        ttsVoice: payload.ttsVoice?.trim(),
+        ttsVoice: payload.ttsVoice?.trim() || undefined,
         ttsProvider: payload.ttsProvider,
         ttsRate: payload.ttsRate,
         customScript: payload.customScript,
@@ -446,7 +448,7 @@ export const api = {
         outputMode: payload.outputMode,
         customScript: payload.customScript,
         ttsProvider: payload.ttsProvider,
-        ttsVoice: payload.ttsVoice?.trim(),
+        ttsVoice: payload.ttsVoice?.trim() || undefined,
         ttsRate: payload.ttsRate,
         sourceVolume: payload.sourceVolume,
         selectedClips: payload.selectedClips,
@@ -462,6 +464,7 @@ export const api = {
         hookBadgePreset: payload.hookBadgePreset,
         hookBadgeColor: payload.hookBadgeColor,
         enableBroll: payload.enableBroll,
+        brollPlacements: payload.brollPlacements,
         enableIntroOutro: payload.enableIntroOutro,
         sourceRange:
           payload.sourceRange
@@ -518,14 +521,61 @@ export const api = {
     videoId?: string;
     title?: string;
     summary?: string;
-  }): Promise<Record<string, string>> {
+    refresh?: boolean;
+  }): Promise<{ captions: Record<string, any>; cached?: boolean }> {
     const res = await fetch('/api/captions/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await handleResponse<{ captions?: Record<string, string> }>(res);
-    return data.captions || {};
+    const data = await handleResponse<{ captions?: Record<string, any>; cached?: boolean }>(res);
+    return {
+      captions: data.captions || {},
+      cached: Boolean(data.cached),
+    };
+  },
+
+  async suggestBroll(payload: {
+    youtubeUrl?: string;
+    videoId?: string;
+    selectedClips?: Array<{ start: number; end: number; title?: string }>;
+    customScript?: {
+      language?: string;
+      sections: ScriptSection[];
+    };
+    outputMode?: 'reel' | 'narration';
+    dialogueText?: string;
+  }): Promise<{ placements: BrollPlacementItem[]; count: number }> {
+    const res = await fetch('/api/broll/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await handleResponse<{ placements?: BrollPlacementItem[]; count?: number; success?: boolean }>(res);
+    return {
+      placements: data.placements || [],
+      count: data.count || (data.placements ? data.placements.length : 0),
+    };
+  },
+
+  async searchBrollFootage(
+    query: string,
+    options?: { minDuration?: number; maxResults?: number }
+  ): Promise<{ assets: BrollAssetItem[]; count: number }> {
+    const res = await fetch('/api/broll/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query,
+        minDuration: options?.minDuration ?? 2,
+        maxResults: options?.maxResults ?? 6,
+      }),
+    });
+    const data = await handleResponse<{ assets?: BrollAssetItem[]; count?: number; success?: boolean }>(res);
+    return {
+      assets: data.assets || [],
+      count: data.count || (data.assets ? data.assets.length : 0),
+    };
   },
 };
 

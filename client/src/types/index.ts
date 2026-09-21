@@ -162,6 +162,33 @@ export interface ScriptSection {
   spokenText?: string;
 }
 
+export interface BrollCueItem {
+  start: number;
+  end: number;
+  query: string;
+  mood?: string;
+}
+
+export interface BrollAssetItem {
+  id: string;
+  source: 'pexels' | 'pixabay' | 'local' | 'ai-generated';
+  previewUrl: string;
+  downloadUrl: string;
+  durationSeconds: number;
+  width?: number;
+  height?: number;
+  localFilePath?: string;
+}
+
+export interface BrollPlacementItem {
+  id?: string;
+  cue: BrollCueItem;
+  asset: BrollAssetItem;
+  transition?: 'cut' | 'crossfade';
+  candidates?: BrollAssetItem[];
+  enabled?: boolean;
+}
+
 export interface TransformRequest {
   url: string;
   language?: string;
@@ -171,6 +198,7 @@ export interface TransformRequest {
   targetDuration?: number;
   aspectRatio?: '9:16' | '16:9' | '1:1';
   enableBroll?: boolean;
+  brollPlacements?: BrollPlacementItem[];
   enableIntroOutro?: boolean;
   whisperProvider?: string;
   sttProvider?: string;

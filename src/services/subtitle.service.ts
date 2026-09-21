@@ -117,7 +117,19 @@ export class SubtitleService implements ISubtitleService {
           flat.push({ text: word.word, start: word.start, end: word.end, segmentIndex });
         }
       } else {
-        flat.push({ text: segment.text, start: segment.start, end: segment.end, segmentIndex });
+        const rawWords = (segment.text || '').trim().split(/\s+/).filter(Boolean);
+        if (rawWords.length > 0) {
+          const segDuration = Math.max(0.1, segment.end - segment.start);
+          const wordDur = segDuration / rawWords.length;
+          rawWords.forEach((w, i) => {
+            flat.push({
+              text: w,
+              start: segment.start + i * wordDur,
+              end: segment.start + (i + 1) * wordDur,
+              segmentIndex,
+            });
+          });
+        }
       }
     });
 

@@ -34,6 +34,8 @@ import type { IWatermarkFilterService } from '../services/watermark-filter.servi
 import type { ICaptionService } from '../content/caption.service.js';
 import type { IStyledHookPreview } from '../hook-preview/styled-hook-preview.service.js';
 import type { VideoCaptionResult, SocialPlatform } from '../types/caption.js';
+import type { IBrollService } from '../services/b-roll.service.js';
+import type { BrollPlacement } from '../types/b-roll.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
 import { normalizeForSpeech } from '../utils/speech-normalizer.js';
@@ -79,6 +81,8 @@ export interface TransformControllerDeps {
    * Optional styled hook renderer for rendering kinetic typography hook intro during Step 3.
    */
   styledHookPreviewService?: IStyledHookPreview;
+  /** Optional B-roll footage extraction and placement service. */
+  brollService?: IBrollService;
   /** Optional real-time progress callback — called before each pipeline stage starts. */
   onStage?: (stage: TransformStage, opts?: { skipped?: boolean }) => void;
 }
@@ -228,6 +232,56 @@ export class TransformController {
     }
 
     return { videoId, videoPath, transcript };
+  }
+
+  /** Resolves and caches B-roll video assets for insertion. */
+  private async resolveBrolls(
+    request: TransformRequestInput,
+    videoId: string,
+    jobId: string,
+    fallbackText: string,
+    durationSec: number,
+  ): Promise<BrollPlacement[]> {
+    if (!request.enableBroll) return [];
+
+    const { logger, outputsDir, brollService } = this.deps;
+    const brollDir = join(outputsDir, videoId, 'transform', jobId, 'broll');
+
+    let placements: BrollPlacement[] = [];
+
+    if (request.brollPlacements && request.brollPlacements.length > 0) {
+      // Use user-selected placements from Step 3
+      placements = (request.brollPlacements as unknown as BrollPlacement[]).filter((p) => p.enabled !== false);
+    } else if (brollService) {
+      try {
+        const cues = await brollService.extractCues(fallbackText, 0, durationSec);
+        placements = await brollService.resolvePlacements(cues, brollDir);
+      } catch (err) {
+        logger.warn({ err }, 'Auto B-roll cue resolution failed');
+      }
+    }
+
+    if (placements.length > 0) {
+      const { ensureDir } = await import('../utils/fs.js');
+      await ensureDir(brollDir);
+
+      for (let i = 0; i < placements.length; i++) {
+        const p = placements[i]!;
+        if (!p.asset.localFilePath) {
+          const dest = join(brollDir, `broll-${i + 1}-${p.asset.id}.mp4`);
+          try {
+            if (brollService) {
+              await brollService.downloadAsset(p.asset, dest);
+            }
+            p.asset.localFilePath = dest;
+          } catch (err) {
+            logger.warn({ err, assetId: p.asset.id }, 'Failed to download B-roll asset for render');
+          }
+        }
+      }
+    }
+
+    return placements.filter((p) => Boolean(p.asset.localFilePath));
   }
 
   /**
@@ -540,11 +594,15 @@ export class TransformController {
       );
     }
 
+    // Resolve B-roll footage if enabled
+    const fallbackBrollText = transcript.segments.slice(0, 10).map((s) => s.text).join(' ');
+    const brolls = await this.resolveBrolls(request, videoId, jobId, fallbackBrollText, 45);
+
     // ── Reel mode (flow redesign): direct concatenation of user-selected
     // clips with their original audio. No script, no TTS, no LLM stages —
     // every narration-mode behaviour below stays untouched.
     if (request.outputMode === 'reel') {
-      return this.transformReel(request, { videoId, videoPath });
+      return this.transformReel(request, { videoId, videoPath }, brolls);
     }
 
     // Stage 1: Generate angles
@@ -848,6 +906,7 @@ export class TransformController {
       ? await this.generateCaptionsForTransform({
           videoId,
           jobId,
+          refreshCaptions: request.refreshCaptions,
           sourceTitle: angleContext.sourceTitle || `Video ${videoId}`,
           sourceChannel: angleContext.sourceChannel,
           sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
@@ -912,6 +971,7 @@ export class TransformController {
       videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine, request.blur_watermark,
       { audioMode, sourceAudioVolume: request.sourceAudioVolume },
       request.subtitleStyle,
+      brolls,
     );
 
     return {
@@ -949,6 +1009,7 @@ export class TransformController {
   private async transformReel(
     request: TransformRequestInput,
     resolved: { videoId: string; videoPath: string },
+    brolls?: BrollPlacement[],
   ): Promise<Record<string, unknown>> {
     const { logger, outputsDir } = this.deps;
     const jobId = crypto.randomUUID();
@@ -1102,11 +1163,22 @@ export class TransformController {
     this.emit('tts', { skipped: true });
     this.emit('plan', { skipped: true });
 
+    // Map B-rolls to segments for reelComposer
+    let reelBrolls: Array<BrollPlacement[] | undefined> | undefined;
+    if (brolls && brolls.length > 0) {
+      reelBrolls = composeSegments.map((seg) => {
+        if (seg.filePath) return undefined;
+        const matched = brolls.filter((b) => b.cue.start < seg.end && b.cue.end > seg.start);
+        return matched.length > 0 ? matched : undefined;
+      });
+    }
+
     this.emit('render');
     const reel = await this.deps.reelComposer.compose({
       videoPath,
       segments: composeSegments,
       subtitles,
+      brolls: reelBrolls,
       outputDir,
       fileName: 'reel',
     });
@@ -1115,6 +1187,7 @@ export class TransformController {
       ? await this.generateCaptionsForTransform({
           videoId,
           jobId,
+          refreshCaptions: request.refreshCaptions,
           sourceTitle: request.hookTitle || (request.selectedClips[0]?.title ? `Reel: ${request.selectedClips[0].title}` : `Reel ${videoId}`),
           sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
           targetLanguage: request.language === 'auto' ? undefined : request.language,
@@ -1172,6 +1245,7 @@ export class TransformController {
   private async generateCaptionsForTransform(params: {
     videoId: string;
     jobId: string;
+    refreshCaptions?: boolean;
     sourceTitle: string;
     sourceChannel?: string;
     /** Full URL of the original source video (used to populate the {url} credit placeholder). */
@@ -1189,6 +1263,17 @@ export class TransformController {
   }): Promise<VideoCaptionResult | undefined> {
     if (!this.deps.captionService) return undefined;
     try {
+      if (!params.refreshCaptions) {
+        const saved = await this.deps.captionService.getSavedCaptions(params.videoId);
+        if (saved && saved.captions && Object.keys(saved.captions).length > 0) {
+          this.deps.logger.info(
+            { videoId: params.videoId, tone: saved.tone },
+            'Reusing saved social captions from disk for transform',
+          );
+          return saved;
+        }
+      }
+
       return await this.deps.captionService.generateCaptions({
         videoId: params.videoId,
         jobId: params.jobId,
@@ -1272,6 +1357,7 @@ export class TransformController {
     audioOptions?: { audioMode: import('../types/audio-mode.js').AudioMode; sourceAudioVolume?: number },
     /** User-chosen subtitle caption style preset (beast / hormozi / clean). */
     subtitleStyle?: string,
+    brolls?: BrollPlacement[],
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const resolvedAssStyle = resolveSubtitleStyle(subtitleStyle);
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
@@ -1323,6 +1409,15 @@ export class TransformController {
       .map((s) => s.narration)
       .join(' ');
 
+    const compositionBrolls = (brolls ?? [])
+      .filter((b) => Boolean(b.asset.localFilePath))
+      .map((b) => ({
+        start: b.cue.start,
+        end: b.cue.end,
+        videoPath: b.asset.localFilePath!,
+        query: b.cue.query,
+      }));
+
     // Build composition assets
     const assets: CompositionAssets = {
       sourceVideo: sourceVideoForRender,
@@ -1336,7 +1431,9 @@ export class TransformController {
       subtitleStyle: subtitleStyle || (this.deps as any)?.assStyle?.name,
       audioMode: audioOptions?.audioMode,
       sourceAudioVolume: audioOptions?.sourceAudioVolume,
+      brolls: compositionBrolls,
     };
+    videoPlan.brolls = compositionBrolls;
 
     try {
       // Try composition engine (Remotion or FFmpeg template)

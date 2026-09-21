@@ -43,6 +43,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
     setAspectRatio,
     enableBroll,
     setEnableBroll,
+    brollPlacements,
+    loadingBroll,
+    brollError,
+    fetchBrollSuggestions,
+    toggleBrollPlacement,
+    updateBrollPlacement,
+    removeBrollPlacement,
+    addBrollPlacement,
     enableIntroOutro,
     setEnableIntroOutro,
     templateId,
@@ -323,6 +331,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setTemplateId={setTemplateId}
         enableBroll={enableBroll}
         setEnableBroll={setEnableBroll}
+        brollPlacements={brollPlacements}
+        loadingBroll={loadingBroll}
+        brollError={brollError}
+        fetchBrollSuggestions={fetchBrollSuggestions}
+        toggleBrollPlacement={toggleBrollPlacement}
+        updateBrollPlacement={updateBrollPlacement}
+        removeBrollPlacement={removeBrollPlacement}
+        addBrollPlacement={addBrollPlacement}
         enableIntroOutro={enableIntroOutro}
         setEnableIntroOutro={setEnableIntroOutro}
         startTransform={() => startTransform()}
@@ -334,6 +350,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setStep={setStep}
         transformResult={transformResult}
         transformError={transformError}
+        runningTransform={runningTransform}
+        progressPct={progressPct}
+        progressLabel={progressLabel}
+        onRegenerateVideo={() => {
+          startTransform().catch((err) => {
+            console.error('Render ulang video gagal:', err);
+          });
+        }}
         onOpenCaptionModal={onOpenCaptionModal}
       />
 

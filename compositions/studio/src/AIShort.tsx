@@ -1,5 +1,5 @@
 import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion';
-import { Audio } from '@remotion/media';
+import { Audio, Video } from '@remotion/media';
 import * as React from 'react';
 import { Badge } from './Badge';
 import { Caption } from './Caption';
@@ -127,6 +127,49 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
               wordTimings={wordTimings}
               labels={activeSkin.labels}
             />
+          </Sequence>
+        );
+      })}
+
+      {/* Layer 2: Contextual B-Roll Overlay Videos (plays above source scenes, below captions & badges) */}
+      {plan.brolls?.map((broll, bIdx) => {
+        const startFrame = toFrame(broll.start, fps);
+        const durFrames = Math.max(1, toFrame(broll.end, fps) - startFrame);
+        const assetSrc = toAssetUrl(broll.videoPath);
+        return (
+          <Sequence
+            key={`broll-${bIdx}-${broll.start}`}
+            from={startFrame}
+            durationInFrames={durFrames}
+          >
+            <AbsoluteFill style={{ overflow: 'hidden', backgroundColor: '#000000' }}>
+              {/* Blurred background for 9:16 filling */}
+              <AbsoluteFill style={{ overflow: 'hidden' }}>
+                <Video
+                  src={assetSrc}
+                  objectFit="cover"
+                  muted
+                  volume={0}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    filter: 'blur(24px) brightness(0.6)',
+                    WebkitFilter: 'blur(24px) brightness(0.6)',
+                    transform: 'scale(1.15)',
+                  }}
+                />
+              </AbsoluteFill>
+              {/* Foreground video */}
+              <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
+                <Video
+                  src={assetSrc}
+                  objectFit="cover"
+                  muted
+                  volume={0}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </AbsoluteFill>
+            </AbsoluteFill>
           </Sequence>
         );
       })}

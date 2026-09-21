@@ -28,8 +28,13 @@ export interface BrollAsset {
 
 /** Configured B-roll placement ready for composition rendering. */
 export interface BrollPlacement {
+  id?: string;
   cue: BrollCue;
   asset: BrollAsset;
   /** Whether to cross-fade into B-roll or do a direct hard cut. */
   transition?: 'cut' | 'crossfade';
+  /** Alternative candidate assets found for this cue */
+  candidates?: BrollAsset[];
+  /** Whether this placement is currently enabled by user in UI */
+  enabled?: boolean;
 }

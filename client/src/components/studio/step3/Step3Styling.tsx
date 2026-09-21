@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { HookTextStylePresets } from '../HookTextStylePresets';
 import { resolvePresetLabelFromHook, resolvePresetIdFromHook } from '../../../lib/visual-presets';
 import type {
+  BrollPlacementItem,
   DownloadedVideo,
   ScriptSection,
   ViralClip,
@@ -15,6 +16,7 @@ import type {
 } from '../../../types';
 import { ScriptEditorPanel } from './ScriptEditorPanel';
 import { SubtitleTemplatePicker } from './SubtitleTemplatePicker';
+import { BrollInspectorPanel } from './BrollInspectorPanel';
 
 export type Step3SubTab = 'mode' | 'hook' | 'subtitles';
 
@@ -71,6 +73,14 @@ interface Step3StylingProps {
   setTemplateId: (id: string) => void;
   enableBroll: boolean;
   setEnableBroll: (val: boolean) => void;
+  brollPlacements: BrollPlacementItem[];
+  loadingBroll: boolean;
+  brollError: string | null;
+  fetchBrollSuggestions: (options?: { force?: boolean }) => void;
+  toggleBrollPlacement: (index: number) => void;
+  updateBrollPlacement: (index: number, updates: Partial<BrollPlacementItem>) => void;
+  removeBrollPlacement: (index: number) => void;
+  addBrollPlacement: (placement: BrollPlacementItem) => void;
   enableIntroOutro: boolean;
   setEnableIntroOutro: (val: boolean) => void;
   startTransform: () => void;
@@ -126,6 +136,14 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   setTemplateId,
   enableBroll,
   setEnableBroll,
+  brollPlacements,
+  loadingBroll,
+  brollError,
+  fetchBrollSuggestions,
+  toggleBrollPlacement,
+  updateBrollPlacement,
+  removeBrollPlacement,
+  addBrollPlacement,
   enableIntroOutro,
   setEnableIntroOutro,
   startTransform,
@@ -446,6 +464,20 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
             </div>
           </div>
 
+          {/* B-Roll Visual Inspector Panel */}
+          {enableBroll && (
+            <BrollInspectorPanel
+              brollPlacements={brollPlacements}
+              loadingBroll={loadingBroll}
+              brollError={brollError}
+              onRefreshSuggestions={() => fetchBrollSuggestions({ force: true })}
+              onTogglePlacement={toggleBrollPlacement}
+              onUpdatePlacement={updateBrollPlacement}
+              onRemovePlacement={removeBrollPlacement}
+              onAddPlacement={addBrollPlacement}
+            />
+          )}
+
           {/* Ringkasan Konfigurasi Render */}
           <div className="step3-summary-card">
             <div className="step3-summary-header">
@@ -486,6 +518,15 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
                 <span className="step3-summary-item-label">Klip Terpilih</span>
                 <span className="step3-summary-item-value">
                   📦 {selectedClipIndices.length} Klip Siap Render
+                </span>
+              </div>
+
+              <div className="step3-summary-item">
+                <span className="step3-summary-item-label">Footage B-Roll</span>
+                <span className="step3-summary-item-value">
+                  {enableBroll
+                    ? `🎞️ ${brollPlacements.filter((p) => p.enabled !== false).length} Klip Aktif`
+                    : '⚪ Nonaktif'}
                 </span>
               </div>
             </div>

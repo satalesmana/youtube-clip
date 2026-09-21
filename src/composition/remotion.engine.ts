@@ -84,11 +84,38 @@ export class RemotionCompositionEngine implements ICompositionEngine {
         creatorLogoUrl = `media/${jobId}/creator-logo${logoExt}`;
       }
 
+      // Stage B-roll assets under mediaDir so Remotion render server can access them
+      const stagedBrolls: Array<{ start: number; end: number; videoPath: string; query?: string }> = [];
+      if (assets.brolls && assets.brolls.length > 0) {
+        for (let i = 0; i < assets.brolls.length; i++) {
+          const b = assets.brolls[i]!;
+          if (!b.videoPath) continue;
+          const brollExt = extname(b.videoPath) || '.mp4';
+          const filename = `broll-${i}${brollExt}`;
+          try {
+            await stageFile(b.videoPath, mediaDir, filename);
+            stagedBrolls.push({
+              start: b.start,
+              end: b.end,
+              videoPath: `media/${jobId}/${filename}`,
+              query: b.query,
+            });
+          } catch (brollErr) {
+            logger.warn({ brollErr, brollPath: b.videoPath }, 'Failed to stage B-roll asset for Remotion');
+          }
+        }
+      }
+
+      const effectivePlan = {
+        ...plan,
+        brolls: stagedBrolls.length > 0 ? stagedBrolls : plan.brolls,
+      };
+
       // Write props to temp file
       await writeFile(
         propsPath,
         JSON.stringify({
-          plan,
+          plan: effectivePlan,
           narrationPath,
           sourceVideoPath,
           channelName: assets.channelName,

@@ -36,6 +36,13 @@ export interface CompositionAssets {
    * Range: 0.0–1.0. Defaults to 0.3 (≈ −10 dB).
    */
   sourceAudioVolume?: number;
+  /** Optional contextual B-roll video cutaways overlay */
+  brolls?: Array<{
+    start: number;
+    end: number;
+    videoPath: string;
+    query?: string;
+  }>;
 }
 
 /** Output from a successful render. */

@@ -15,7 +15,7 @@ import { AssService } from '../services/ass.service.js';
 import { NoOpFaceDetectionService } from '../services/face-detection.service.js';
 import { FocalSmoothingService } from '../services/focal-smoothing.service.js';
 import { ReframeService } from '../services/reframe.service.js';
-import { PexelsBrollProvider, NoOpBrollProvider } from '../providers/broll/index.js';
+import { SmartBrollProvider, PexelsBrollProvider, NoOpBrollProvider } from '../providers/broll/index.js';
 import { BrollService } from '../services/b-roll.service.js';
 import { ThumbnailService } from '../services/thumbnail.service.js';
 import { ContentAngleService } from '../content/angle.service.js';
@@ -247,15 +247,17 @@ const reframeService = new ReframeService(
   focalSmoothingService,
 );
 
-const brollProvider = process.env.PEXELS_API_KEY
-  ? new PexelsBrollProvider({ apiKey: process.env.PEXELS_API_KEY, logger: createLogger('broll') })
-  : new NoOpBrollProvider();
+const brollProvider = new SmartBrollProvider({
+  apiKey: process.env.PEXELS_API_KEY,
+  logger: createLogger('broll'),
+});
 
 const brollService = new BrollService(
   aiProvider.provider,
   brollProvider,
   {
     model: aiProvider.model,
+    timeoutMs: Number(process.env.ROUTER_TIMEOUT_MS ?? 60_000),
   },
   createLogger('broll-service'),
 );
