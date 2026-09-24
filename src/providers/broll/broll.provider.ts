@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { BrollAsset } from '../../types/b-roll.js';
 import type { Logger } from '../../utils/logger.js';
 
@@ -51,14 +53,13 @@ export class PexelsBrollProvider implements IBrollProvider {
       return this.apiKey;
     }
     try {
-      const { readFileSync } = require('node:fs');
-      const { resolve } = require('node:path');
       const content = readFileSync(resolve(process.cwd(), '.env'), 'utf-8');
       const match = content.match(/^PEXELS_API_KEY\s*=\s*["']?([^"'\r\n]+)["']?/m);
       if (match?.[1]) {
-        this.apiKey = match[1].trim();
-        process.env.PEXELS_API_KEY = this.apiKey;
-        return this.apiKey;
+        const keyVal = match[1].trim();
+        this.apiKey = keyVal;
+        process.env.PEXELS_API_KEY = keyVal;
+        return keyVal;
       }
     } catch {
       // Ignore

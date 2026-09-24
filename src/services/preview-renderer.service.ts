@@ -163,6 +163,7 @@ export class PreviewRendererService implements IPreviewRenderer {
       ...filterArgs,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28',
       '-c:a', 'aac', '-b:a', '96k',
+      '-avoid_negative_ts', 'make_zero',
       '-movflags', '+faststart',
       outputPath,
     ]);

@@ -5,8 +5,10 @@ import { EdgeTtsProvider } from './edge-tts.provider.js';
 import type { EdgeTtsProviderOptions } from './edge-tts.provider.js';
 import { OpenAiTtsProvider } from './openai-tts.provider.js';
 import type { OpenAiTtsProviderOptions } from './openai-tts.provider.js';
+import { FishAudioTtsProvider } from './fish-audio-tts.provider.js';
+import type { FishAudioTtsProviderOptions } from './fish-audio-tts.provider.js';
 
-export type TTSProviderKind = 'edge-tts' | 'openai';
+export type TTSProviderKind = 'edge-tts' | 'openai' | 'fish-audio';
 
 export interface TtsProviderFactoryOptions {
   kind: TTSProviderKind;
@@ -14,6 +16,8 @@ export interface TtsProviderFactoryOptions {
   edge?: Partial<EdgeTtsProviderOptions>;
   /** Options for OpenAI-compatible (used when kind === 'openai'). */
   openai?: Partial<OpenAiTtsProviderOptions>;
+  /** Options for Fish Audio direct (used when kind === 'fish-audio'). */
+  fish?: Partial<FishAudioTtsProviderOptions>;
   logger: Logger;
 }
 
@@ -29,6 +33,26 @@ export function createTtsProvider(options: TtsProviderFactoryOptions): ITTSProvi
         rate: options.edge?.rate,
         logger,
       });
+    case 'fish-audio': {
+      if (!options.fish?.apiKey) {
+        throw AppError.validation('Fish Audio TTS requires apiKey.');
+      }
+      return new FishAudioTtsProvider({
+        outputDir: options.fish.outputDir ?? 'outputs',
+        apiKey: options.fish.apiKey,
+        baseUrl: options.fish.baseUrl,
+        model: options.fish.model,
+        format: options.fish.format,
+        temperature: options.fish.temperature,
+        topP: options.fish.topP,
+        speed: options.fish.speed,
+        volume: options.fish.volume,
+        sampleRate: options.fish.sampleRate,
+        latency: options.fish.latency,
+        rate: options.fish.rate,
+        logger,
+      });
+    }
     case 'openai': {
       if (!options.openai?.baseUrl || !options.openai?.apiKey) {
         throw AppError.validation('OpenAI TTS requires baseUrl and apiKey.');

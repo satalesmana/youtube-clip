@@ -16,6 +16,7 @@ import { detectAudioSpikes } from '../utils/audio-peak.js';
 import type { RerankedClip } from '../schemas/highlight.schema.js';
 import type { ClipRecommendRequestInput } from '../schemas/clip-recommendation.schema.js';
 import type { ViralClipDto } from '../schemas/clip-recommendation.schema.js';
+import type { IClipRefinementService } from '../services/clip-refinement.service.js';
 
 export interface ClipControllerDeps {
   youtubeService: IYoutubeService;
@@ -24,6 +25,7 @@ export interface ClipControllerDeps {
   highlightAnalysisService: IHighlightAnalysisService;
   highlightService: IHighlightService;
   previewRenderer: IPreviewRenderer;
+  clipRefinementService?: IClipRefinementService;
   outputsDir: string;
   logger: Logger;
   ffmpegBinaryPath?: string;
@@ -139,6 +141,20 @@ export class ClipController {
       : null;
     const ranked = this.finalizeRanking(reranked ? [...pool] : pool, reranked);
 
+    // Refine candidate boundaries against transcript sentences and acoustic silence cushions
+    // so clips NEVER cut off words or start/end mid-sentence
+    const refinedClips = ranked.map((clip) => {
+      if (this.deps.clipRefinementService && transcript.segments.length > 0) {
+        const refined = this.deps.clipRefinementService.refine(clip, transcript);
+        return {
+          ...clip,
+          start: refined.start,
+          end: refined.end,
+        };
+      }
+      return clip;
+    });
+
     // Stage: render a lightweight preview per clip (parallel, failures are
     // non-fatal — the clip stays in the list without a playable preview).
     const workspace = await this.workspaceFor(videoId);
@@ -154,7 +170,7 @@ export class ClipController {
     }
 
     const settledPreviews = await Promise.allSettled(
-      ranked.map((clip, index) =>
+      refinedClips.map((clip, index) =>
         this.deps.previewRenderer.renderPreview({
           videoPath: this.videoPathFor(videoId),
           start: clip.start,
@@ -166,7 +182,7 @@ export class ClipController {
       ),
     );
 
-    const clips: ViralClipDto[] = ranked.map((clip, index) => {
+    const clips: ViralClipDto[] = refinedClips.map((clip, index) => {
       const outcome = settledPreviews[index];
       const previewPath = outcome?.status === 'fulfilled' ? outcome.value.path : null;
       const thumbnailPath = outcome?.status === 'fulfilled' ? outcome.value.thumbnailPath : null;
@@ -264,6 +280,21 @@ export class ClipController {
     const workspace = await this.workspaceFor(videoId);
     const previewsDir = join(workspace.root, 'clip-previews');
     const videoPath = this.videoPathFor(videoId);
+
+    // Re-refine saved clip boundaries against transcript if available so existing clips benefit from natural cuts
+    const transcript = await this.deps.transcriptService.loadTranscript(videoId);
+    if (this.deps.clipRefinementService && transcript && transcript.segments.length > 0) {
+      saved.clips = saved.clips.map((clip) => {
+        const refined = this.deps.clipRefinementService!.refine(clip, transcript);
+        return {
+          ...clip,
+          start: refined.start,
+          end: refined.end,
+          durationSeconds: Number((refined.end - refined.start).toFixed(2)),
+        };
+      });
+      await this.saveResult(videoId, saved);
+    }
 
     // Clean old preview files to ensure fresh render
     try {

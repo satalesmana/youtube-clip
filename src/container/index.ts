@@ -15,7 +15,7 @@ import { AssService } from '../services/ass.service.js';
 import { NoOpFaceDetectionService } from '../services/face-detection.service.js';
 import { FocalSmoothingService } from '../services/focal-smoothing.service.js';
 import { ReframeService } from '../services/reframe.service.js';
-import { SmartBrollProvider, PexelsBrollProvider, NoOpBrollProvider } from '../providers/broll/index.js';
+import { SmartBrollProvider } from '../providers/broll/index.js';
 import { BrollService } from '../services/b-roll.service.js';
 import { ThumbnailService } from '../services/thumbnail.service.js';
 import { ContentAngleService } from '../content/angle.service.js';
@@ -69,6 +69,7 @@ import {
 import { WatermarkFilterService } from '../services/watermark-filter.service.js';
 import { CaptionService } from '../content/caption.service.js';
 import { CaptionController } from '../controllers/caption.controller.js';
+import { ProducerService } from '../services/producer.service.js';
 
 /**
  * Composition root: this is the only module that knows about concrete
@@ -221,7 +222,7 @@ const highlightService = new HighlightService(
   createLogger('highlight.service'),
 );
 
-const clipRefinementService = new ClipRefinementService({
+export const clipRefinementService = new ClipRefinementService({
   leadInSeconds: env.REFINEMENT_LEAD_IN_SECONDS,
   trailingSeconds: env.REFINEMENT_TRAILING_SECONDS,
   minDurationSeconds: env.REFINEMENT_MIN_SECONDS,
@@ -498,6 +499,20 @@ export function createTtsService(overrides?: { provider?: ReturnType<typeof crea
         model: env.TTS_MODEL,
         rate: env.TTS_RATE,
       },
+      fish: {
+        outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+        baseUrl: env.TTS_FISH_BASE_URL,
+        apiKey: env.TTS_FISH_API_KEY,
+        model: env.TTS_FISH_MODEL,
+        format: env.TTS_FISH_FORMAT,
+        temperature: env.TTS_FISH_TEMPERATURE,
+        topP: env.TTS_FISH_TOP_P,
+        speed: env.TTS_FISH_SPEED,
+        volume: env.TTS_FISH_VOLUME,
+        sampleRate: env.TTS_FISH_SAMPLE_RATE,
+        latency: env.TTS_FISH_LATENCY,
+        rate: env.TTS_RATE,
+      },
       logger,
     });
 
@@ -526,9 +541,9 @@ const OPENAI_VOICES = new Set(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimme
  * or the default provider from env.
  */
 export function resolveTtsProviderKind(
-  kind?: 'edge-tts' | 'openai',
+  kind?: 'edge-tts' | 'openai' | 'fish-audio',
   voice?: string,
-): 'edge-tts' | 'openai' {
+): 'edge-tts' | 'openai' | 'fish-audio' {
   if (kind) return kind;
   if (voice && OPENAI_VOICES.has(voice.trim().toLowerCase())) {
     return 'openai';
@@ -542,7 +557,7 @@ export function resolveTtsProviderKind(
  * a specific voice from the UI, or switches provider/rate).
  */
 export function createTtsServiceWith(
-  kind?: 'edge-tts' | 'openai',
+  kind?: 'edge-tts' | 'openai' | 'fish-audio',
   voice?: string,
   rate?: string,
 ): TtsService {
@@ -562,6 +577,20 @@ export function createTtsServiceWith(
       baseUrl: env.TTS_BASE_URL,
       apiKey: env.TTS_API_KEY,
       model: env.TTS_MODEL,
+      rate: effectiveRate,
+    },
+    fish: {
+      outputDir: resolve(rootDir, env.OUTPUTS_DIR),
+      baseUrl: env.TTS_FISH_BASE_URL,
+      apiKey: env.TTS_FISH_API_KEY,
+      model: env.TTS_FISH_MODEL,
+      format: env.TTS_FISH_FORMAT,
+      temperature: env.TTS_FISH_TEMPERATURE,
+      topP: env.TTS_FISH_TOP_P,
+      speed: env.TTS_FISH_SPEED,
+      volume: env.TTS_FISH_VOLUME,
+      sampleRate: env.TTS_FISH_SAMPLE_RATE,
+      latency: env.TTS_FISH_LATENCY,
       rate: effectiveRate,
     },
     logger,
@@ -645,6 +674,7 @@ export const clipController = new ClipController({
   whisperService,
   highlightAnalysisService,
   highlightService,
+  clipRefinementService,
   previewRenderer,
   outputsDir: paths.outputs,
   logger: createLogger('clips.controller'),
@@ -828,6 +858,17 @@ export const captionController = new CaptionController({
   logger: createLogger('caption.controller'),
 });
 
+export const producerService = new ProducerService(
+  aiProvider.provider,
+  {
+    model: aiProvider.model,
+    temperature: aiProvider.temperature,
+    timeoutMs: aiProvider.timeoutMs,
+    maxRetries: aiProvider.maxRetries,
+  },
+  createLogger('producer.service'),
+);
+
 /** Exposed for tests/tooling that need direct access to individual services. */
 export const container = {
   paths,
@@ -865,6 +906,7 @@ export const container = {
   transcriptController,
   captionService,
   captionController,
+  producerService,
   ttsService,
   videoPlanService,
   contentCache,
