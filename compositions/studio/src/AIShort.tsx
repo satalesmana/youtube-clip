@@ -85,6 +85,12 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   hookBadge,
   creatorLogoUrl,
   subtitleStyle,
+  enableIntroOutro,
+  outroPreset,
+  outroCtaText,
+  outroButtonText,
+  outroDuration,
+  outroChannelName,
   skin,
 }) => {
   const { fps } = useVideoConfig();
@@ -92,7 +98,9 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   const theme = activeSkin.theme ?? selectTheme(plan.candidateId, plan.angleId);
   const contentFrames = toFrame(plan.duration, fps);
 
-  const outroFrames = Math.max(1, Math.round(OUTRO_SECONDS * fps));
+  const isOutroActive = enableIntroOutro !== false;
+  const outroSeconds = isOutroActive ? (outroDuration ?? OUTRO_SECONDS) : 0;
+  const outroFrames = isOutroActive && outroSeconds > 0 ? Math.max(1, Math.round(outroSeconds * fps)) : 0;
   const badgeFrames = Math.max(1, Math.round(BADGE_SECONDS * fps));
   const totalDurationFrames = contentFrames + outroFrames;
 
@@ -201,24 +209,29 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
         })}
 
       {/* Outro / CTA: Appears strictly AFTER all video scenes and narration voiceover have completed */}
-      <Sequence from={contentFrames} durationInFrames={outroFrames}>
-        {plan.scenes.length > 0 && sourceVideoPath ? (
-          <SceneBackground
-            scene={plan.scenes[plan.scenes.length - 1]!}
-            videoSrc={sourceVideoPath}
+      {outroFrames > 0 && (
+        <Sequence from={contentFrames} durationInFrames={outroFrames}>
+          {plan.scenes.length > 0 && sourceVideoPath ? (
+            <SceneBackground
+              scene={plan.scenes[plan.scenes.length - 1]!}
+              videoSrc={sourceVideoPath}
+              theme={theme}
+              isFirst={false}
+              isLast={true}
+              sceneDurationFrames={outroFrames}
+            />
+          ) : null}
+          <Outro
             theme={theme}
-            isFirst={false}
-            isLast={true}
-            sceneDurationFrames={outroFrames}
+            channelName={outroChannelName || channelName}
+            durationFrames={outroFrames}
+            logoSrc={creatorLogoUrl}
+            preset={outroPreset}
+            ctaText={outroCtaText}
+            buttonText={outroButtonText}
           />
-        ) : null}
-        <Outro
-          theme={theme}
-          channelName={channelName}
-          durationFrames={outroFrames}
-          logoSrc={creatorLogoUrl}
-        />
-      </Sequence>
+        </Sequence>
+      )}
 
       {hookBadge ? (
         <Sequence from={0} durationInFrames={badgeFrames}>

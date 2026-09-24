@@ -200,27 +200,27 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           transform: `scale(${scale})`,
           opacity,
           backgroundColor: 'rgba(8, 14, 26, 0.94)',
-          border: `1.5px solid ${accentHex}`,
+          border: `2.5px solid ${accentHex}`,
           borderRadius: 9999,
-          padding: '2.5px 11px',
+          padding: '8px 24px',
           marginBottom,
-          boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 ${Math.round(14 * glowIntensity)}px ${accentHex}80`,
+          boxShadow: `0 6px 24px rgba(0,0,0,0.6), 0 0 ${Math.round(20 * glowIntensity)}px ${accentHex}80`,
         }}
       >
         <HookIcon
           name={iconName}
-          size={12}
+          size={24}
           color={accentHex}
           glow
           glowColor={`${accentHex}90`}
-          style={{ marginRight: 5 }}
+          style={{ marginRight: 10 }}
         />
         <span
           style={{
             fontFamily: fontFamily || 'inherit',
-            fontSize: 12,
+            fontSize: 26,
             fontWeight: 800,
-            letterSpacing: '0.6px',
+            letterSpacing: '1.2px',
             color: accentHex,
             textTransform: 'uppercase',
           }}
@@ -263,32 +263,32 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
     const strokeScale = interpolate(frame, [8, 18], [0.4, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
     /**
-     * Compact SVG Zigzag accent strokes.
+     * Scaled SVG Zigzag accent strokes for 1080x1920 video.
      */
     const SvgAccentStrokes: React.FC<{ side: 'left' | 'right' }> = ({ side }) => {
       const strokes = [
-        { w: 12, offset: 0 },
-        { w: 8, offset: 2 },
-        { w: 5, offset: 3 },
+        { w: 22, offset: 0 },
+        { w: 15, offset: 4 },
+        { w: 9, offset: 6 },
       ];
       return (
         <svg
-          width={15}
-          height={18}
-          viewBox="0 0 15 18"
+          width={26}
+          height={32}
+          viewBox="0 0 26 32"
           style={{
             opacity: strokeOpacity,
             transform: `scaleX(${side === 'left' ? -strokeScale : strokeScale})`,
             transformOrigin: side === 'left' ? 'right center' : 'left center',
-            marginLeft: side === 'left' ? 0 : 5,
-            marginRight: side === 'right' ? 0 : 5,
+            marginLeft: side === 'left' ? 0 : 8,
+            marginRight: side === 'right' ? 0 : 8,
             flexShrink: 0,
             overflow: 'visible',
           }}
         >
           <defs>
             <filter id={`stroke-glow-${side}`} x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="1.2" result="blur" />
+              <feGaussianBlur stdDeviation="2" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -296,17 +296,17 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
             </filter>
           </defs>
           {strokes.map(({ w, offset }, i) => {
-            const y = 3 + i * 6;
+            const y = 6 + i * 10;
             const tilt = side === 'left' ? offset * 0.25 : -offset * 0.25;
             return (
               <line
                 key={i}
-                x1={15 - w}
+                x1={26 - w}
                 y1={y + tilt}
-                x2={15}
+                x2={26}
                 y2={y - tilt}
                 stroke={bgHex}
-                strokeWidth={2.5}
+                strokeWidth={4}
                 strokeLinecap="round"
                 filter={`url(#stroke-glow-${side})`}
               />
@@ -329,17 +329,17 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
       >
         <SvgAccentStrokes side="left" />
 
-        {/* Compact single-line sticker body */}
+        {/* Sticker body */}
         <div
           style={{
             position: 'relative',
             display: 'inline-flex',
             alignItems: 'center',
             backgroundColor: bgHex,
-            borderRadius: 7,
-            border: '1.2px solid rgba(255,255,255,0.25)',
-            padding: '3px 12px',
-            boxShadow: `0 4px 12px rgba(0,0,0,0.65), 0 0 12px ${bgHex}75`,
+            borderRadius: 14,
+            border: '2px solid rgba(255,255,255,0.3)',
+            padding: '8px 24px',
+            boxShadow: `0 6px 20px rgba(0,0,0,0.65), 0 0 20px ${bgHex}75`,
             overflow: 'hidden',
           }}
         >
@@ -357,23 +357,23 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           />
           <HookIcon
             name={iconName}
-            size={12}
+            size={24}
             color="#FFFFFF"
             glow
             glowColor="rgba(255,255,255,0.7)"
-            style={{ marginRight: 5, position: 'relative', zIndex: 1 }}
+            style={{ marginRight: 10, position: 'relative', zIndex: 1 }}
           />
           <span
             style={{
               position: 'relative',
               zIndex: 1,
               fontFamily: fontFamily || 'inherit',
-              fontSize: 12,
+              fontSize: 26,
               fontWeight: 900,
-              letterSpacing: '0.6px',
+              letterSpacing: '1.2px',
               color: '#FFFFFF',
               textTransform: 'uppercase',
-              textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+              textShadow: '0 2px 6px rgba(0,0,0,0.6)',
             }}
           >
             {cleanText}
@@ -414,27 +414,27 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           transform: `scale(${scale}) scaleX(${scaleX})`,
           opacity,
           backgroundColor: bgTint,
-          border: `1.5px solid ${accentHex}`,
-          borderRadius: 8,
-          padding: '2.5px 11px',
+          border: `2.5px solid ${accentHex}`,
+          borderRadius: 14,
+          padding: '8px 24px',
           marginBottom,
-          boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 12px ${accentHex}40`,
+          boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 20px ${accentHex}40`,
         }}
       >
         <HookIcon
           name={iconName}
-          size={12}
+          size={24}
           color={accentHex}
           glow
           glowColor={`${accentHex}80`}
-          style={{ marginRight: 5 }}
+          style={{ marginRight: 10 }}
         />
         <span
           style={{
             fontFamily: fontFamily || 'inherit',
-            fontSize: 12,
+            fontSize: 26,
             fontWeight: 800,
-            letterSpacing: '0.7px',
+            letterSpacing: '1.2px',
             color: accentHex,
             textTransform: 'uppercase',
           }}
@@ -466,26 +466,26 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           justifyContent: 'center',
           transform: `translateY(${translateY}px)`,
           opacity,
-          backgroundColor: 'rgba(255, 255, 255, 0.08)',
-          border: `1.2px solid ${accentHex}D0`,
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          border: `2px solid ${accentHex}D0`,
           borderRadius: 9999,
-          padding: '2px 10px',
+          padding: '6px 22px',
           marginBottom,
-          boxShadow: '0 2px 10px rgba(0,0,0,0.45)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.45)',
         }}
       >
         <HookIcon
           name={iconName}
-          size={11}
+          size={22}
           color={accentHex}
-          style={{ marginRight: 5 }}
+          style={{ marginRight: 10 }}
         />
         <span
           style={{
             fontFamily: fontFamily || 'inherit',
-            fontSize: 11.5,
+            fontSize: 24,
             fontWeight: 700,
-            letterSpacing: '1.2px',
+            letterSpacing: '2px',
             color: accentHex,
             textTransform: 'uppercase',
           }}
@@ -526,7 +526,7 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           transform: `translateX(${translateX}px) scale(${scale}) rotate(${rotate}deg)`,
           opacity,
           marginBottom,
-          filter: `drop-shadow(0 4px 14px rgba(0,0,0,0.65)) drop-shadow(0 0 14px ${bgHex}75)`,
+          filter: `drop-shadow(0 6px 20px rgba(0,0,0,0.65)) drop-shadow(0 0 20px ${bgHex}75)`,
         }}
       >
         <div
@@ -535,18 +535,18 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
             display: 'inline-flex',
             alignItems: 'center',
             backgroundColor: bgHex,
-            clipPath: 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 0% 0%)',
-            borderRadius: '4px 0 0 4px',
-            padding: '3px 14px 3px 18px',
+            clipPath: 'polygon(0% 0%, calc(100% - 16px) 0%, 100% 50%, calc(100% - 16px) 100%, 0% 100%, 0% 0%)',
+            borderRadius: '8px 0 0 8px',
+            padding: '8px 28px 8px 30px',
           }}
         >
           {/* Ticket punch hole on left */}
           <div
             style={{
               position: 'absolute',
-              left: 6,
-              width: 6,
-              height: 6,
+              left: 10,
+              width: 9,
+              height: 9,
               borderRadius: '50%',
               backgroundColor: 'rgba(8, 14, 26, 0.95)',
               boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.35)',
@@ -566,21 +566,21 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           />
           <HookIcon
             name={iconName}
-            size={12}
+            size={24}
             color={textHex}
-            style={{ marginRight: 5, position: 'relative', zIndex: 1 }}
+            style={{ marginRight: 10, position: 'relative', zIndex: 1 }}
           />
           <span
             style={{
               position: 'relative',
               zIndex: 1,
               fontFamily: fontFamily || 'inherit',
-              fontSize: 12,
+              fontSize: 26,
               fontWeight: 900,
-              letterSpacing: '0.6px',
+              letterSpacing: '1.2px',
               color: textHex,
               textTransform: 'uppercase',
-              textShadow: textHex === '#FFFFFF' ? '0 1px 4px rgba(0,0,0,0.6)' : 'none',
+              textShadow: textHex === '#FFFFFF' ? '0 2px 6px rgba(0,0,0,0.6)' : 'none',
             }}
           >
             {cleanText}
@@ -621,8 +621,8 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           justifyContent: 'center',
           transform: `scale(${scale})`,
           opacity,
-          marginBottom: marginBottom + 4,
-          filter: `drop-shadow(0 4px 14px rgba(0,0,0,0.65)) drop-shadow(0 0 14px ${bgHex}75)`,
+          marginBottom: marginBottom + 6,
+          filter: `drop-shadow(0 6px 20px rgba(0,0,0,0.65)) drop-shadow(0 0 20px ${bgHex}75)`,
         }}
       >
         <div
@@ -631,9 +631,9 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
             display: 'inline-flex',
             alignItems: 'center',
             backgroundColor: bgHex,
-            borderRadius: 8,
-            border: '1.2px solid rgba(255,255,255,0.3)',
-            padding: '3px 11px',
+            borderRadius: 14,
+            border: '2px solid rgba(255,255,255,0.35)',
+            padding: '8px 24px',
           }}
         >
           {/* Top gloss highlight */}
@@ -644,7 +644,7 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
               left: 0,
               right: 0,
               height: '45%',
-              borderRadius: '8px 8px 0 0',
+              borderRadius: '14px 14px 0 0',
               background: 'linear-gradient(to bottom, rgba(255,255,255,0.28), transparent)',
               pointerEvents: 'none',
             }}
@@ -653,34 +653,34 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           <div
             style={{
               position: 'absolute',
-              bottom: -5,
-              left: 16,
+              bottom: -8,
+              left: 24,
               width: 0,
               height: 0,
-              borderLeft: '5px solid transparent',
-              borderRight: '5px solid transparent',
-              borderTop: `6px solid ${bgHex}`,
+              borderLeft: '8px solid transparent',
+              borderRight: '8px solid transparent',
+              borderTop: `9px solid ${bgHex}`,
               transform: `rotate(${tailWobble}deg)`,
               transformOrigin: 'top center',
             }}
           />
           <HookIcon
             name={iconName}
-            size={12}
+            size={24}
             color={textHex}
-            style={{ marginRight: 5, position: 'relative', zIndex: 1 }}
+            style={{ marginRight: 10, position: 'relative', zIndex: 1 }}
           />
           <span
             style={{
               position: 'relative',
               zIndex: 1,
               fontFamily: fontFamily || 'inherit',
-              fontSize: 12,
+              fontSize: 26,
               fontWeight: 800,
-              letterSpacing: '0.6px',
+              letterSpacing: '1.2px',
               color: textHex,
               textTransform: 'uppercase',
-              textShadow: textHex === '#FFFFFF' ? '0 1px 4px rgba(0,0,0,0.6)' : 'none',
+              textShadow: textHex === '#FFFFFF' ? '0 2px 6px rgba(0,0,0,0.6)' : 'none',
             }}
           >
             {cleanText}
@@ -723,7 +723,7 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           transform: `scale(${scale}) rotate(${rotate}deg)`,
           opacity,
           marginBottom,
-          filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.75)) drop-shadow(0 0 16px ${bgHex}80)`,
+          filter: `drop-shadow(0 6px 22px rgba(0,0,0,0.75)) drop-shadow(0 0 22px ${bgHex}80)`,
         }}
       >
         <div
@@ -733,7 +733,7 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
             alignItems: 'center',
             backgroundColor: bgHex,
             clipPath: burstPolygon,
-            padding: '4px 14px',
+            padding: '10px 32px',
           }}
         >
           {/* Subtle top shine */}
@@ -750,21 +750,21 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           />
           <HookIcon
             name={iconName}
-            size={12}
+            size={24}
             color={textHex}
-            style={{ marginRight: 5, position: 'relative', zIndex: 1 }}
+            style={{ marginRight: 10, position: 'relative', zIndex: 1 }}
           />
           <span
             style={{
               position: 'relative',
               zIndex: 1,
               fontFamily: fontFamily || 'inherit',
-              fontSize: 12,
+              fontSize: 26,
               fontWeight: 900,
-              letterSpacing: '0.6px',
+              letterSpacing: '1.2px',
               color: textHex,
               textTransform: 'uppercase',
-              textShadow: textHex === '#FFFFFF' ? '0 1px 4px rgba(0,0,0,0.7)' : 'none',
+              textShadow: textHex === '#FFFFFF' ? '0 2px 6px rgba(0,0,0,0.7)' : 'none',
             }}
           >
             {cleanText}
@@ -802,35 +802,35 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
         transform: `translateX(${translateX}px) scaleX(${scaleX})`,
         opacity,
         marginBottom,
-        filter: `drop-shadow(0 4px 14px rgba(0,0,0,0.6)) drop-shadow(0 0 14px ${bgHex}60)`,
+        filter: `drop-shadow(0 6px 20px rgba(0,0,0,0.6)) drop-shadow(0 0 20px ${bgHex}60)`,
       }}
     >
       {/* Slanted twin speed strokes on the left */}
       <div
         style={{
           display: 'inline-flex',
-          gap: 3,
-          marginRight: 5,
+          gap: 6,
+          marginRight: 10,
           transform: 'skewX(-16deg)',
         }}
       >
         <div
           style={{
-            width: 3.5,
-            height: 16,
+            width: 5,
+            height: 32,
             backgroundColor: bgHex,
-            borderRadius: 1.5,
-            boxShadow: `0 0 6px ${bgHex}`,
+            borderRadius: 2.5,
+            boxShadow: `0 0 10px ${bgHex}`,
           }}
         />
         <div
           style={{
-            width: 2,
-            height: 16,
+            width: 3,
+            height: 32,
             backgroundColor: bgHex,
             opacity: 0.65,
-            borderRadius: 1.5,
-            boxShadow: `0 0 4px ${bgHex}`,
+            borderRadius: 2,
+            boxShadow: `0 0 8px ${bgHex}`,
           }}
         />
       </div>
@@ -842,8 +842,8 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
           display: 'inline-flex',
           alignItems: 'center',
           backgroundColor: bgHex,
-          clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)',
-          padding: '3px 14px 3px 14px',
+          clipPath: 'polygon(16px 0%, 100% 0%, calc(100% - 16px) 100%, 0% 100%)',
+          padding: '8px 28px',
         }}
       >
         {/* Top gloss highlight */}
@@ -860,22 +860,22 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
         />
         <HookIcon
           name={iconName}
-          size={12}
+          size={24}
           color={textHex}
-          style={{ marginRight: 5, position: 'relative', zIndex: 1 }}
+          style={{ marginRight: 10, position: 'relative', zIndex: 1 }}
         />
         <span
           style={{
             position: 'relative',
             zIndex: 1,
             fontFamily: fontFamily || 'inherit',
-            fontSize: 12,
+            fontSize: 26,
             fontWeight: 900,
             fontStyle: 'italic',
-            letterSpacing: '0.8px',
+            letterSpacing: '1.4px',
             color: textHex,
             textTransform: 'uppercase',
-            textShadow: textHex === '#FFFFFF' ? '0 1px 4px rgba(0,0,0,0.6)' : 'none',
+            textShadow: textHex === '#FFFFFF' ? '0 2px 6px rgba(0,0,0,0.6)' : 'none',
           }}
         >
           {cleanText}

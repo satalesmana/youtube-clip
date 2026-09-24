@@ -351,6 +351,35 @@ export const transformRequestSchema = z.object({
     }),
     transition: z.enum(['cut', 'crossfade']).optional(),
   })).optional(),
+  /** Whether to append an outro call-to-action (CTA) card to the video. */
+  enableIntroOutro: z.boolean().optional(),
+  /**
+   * Outro CTA card style preset.
+   * - `creator-glass`  — Modern glassmorphism with glowing avatar & verified badge (default).
+   * - `viral-neon`     — Cyberpunk high-energy glow, bell badge & pulsing neon button.
+   * - `minimal-clean`  — Clean obsidian dark card with refined typography.
+   * - `comment-debate` — Algorithmic engagement driver with chat bubble & question prompt.
+   * - `subscribe-bell` — Classic YouTube Shorts creator hub with subscribe bell CTA.
+   * - `link-in-bio`    — Conversion-optimized CTA directing traffic to bio link.
+   */
+  outroPreset: z.enum([
+    'creator-glass',
+    'viral-neon',
+    'minimal-clean',
+    'comment-debate',
+    'subscribe-bell',
+    'link-in-bio',
+  ] as const).optional(),
+  /** Custom call-to-action headline text for the outro card. */
+  outroCtaText: z.string().max(250).optional(),
+  /** Custom action button label for the outro card (e.g. "+ IKUTI SEKARANG"). */
+  outroButtonText: z.string().max(80).optional(),
+  /** Target duration in seconds for the outro card (1–10s, default 3s). */
+  outroDuration: z.number().min(1).max(10).optional(),
+  /** Custom channel name / handle for the outro card (e.g. "@kreator" or "Channel Name"). */
+  outroChannelName: z.string().max(100).optional(),
+  /** Custom channel logo image URL, base64 data URL, or local file path for the outro card. */
+  outroLogoUrl: z.string().optional(),
 }).refine((data) => Boolean(data.youtubeUrl) || Boolean(data.videoId), {
   message: 'Provide at least one of: youtubeUrl OR videoId.',
   path: ['youtubeUrl'],

@@ -1,6 +1,7 @@
 import type {
   BrollAssetItem,
   BrollPlacementItem,
+  DownloadedVideo,
   HistoryItem,
   ScriptSection,
   SubtitleTemplate,
@@ -125,27 +126,13 @@ export const api = {
     };
   },
 
-  async downloadVideo(url: string): Promise<{
-    videoId: string;
-    title: string;
-    durationSeconds: number;
-    videoPath: string;
-    thumbnailUrl: string;
-    alreadyDownloaded: boolean;
-  }> {
+  async downloadVideo(url: string): Promise<DownloadedVideo> {
     const res = await fetch('/api/video/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     });
-    return await handleResponse<{
-      videoId: string;
-      title: string;
-      durationSeconds: number;
-      videoPath: string;
-      thumbnailUrl: string;
-      alreadyDownloaded: boolean;
-    }>(res);
+    return await handleResponse<DownloadedVideo>(res);
   },
 
   /** Fetches or creates the transcript for a video. Pass youtubeUrl so the backend can transcribe if transcript isn't cached. */
@@ -466,6 +453,13 @@ export const api = {
         enableBroll: payload.enableBroll,
         brollPlacements: payload.brollPlacements,
         enableIntroOutro: payload.enableIntroOutro,
+        outroPreset: payload.outroPreset,
+        outroCtaText: payload.outroCtaText,
+        outroButtonText: payload.outroButtonText,
+        outroDuration: payload.outroDuration,
+        outroChannelName: payload.outroChannelName,
+        outroLogoUrl: payload.outroLogoUrl,
+        channel: payload.channel,
         sourceRange:
           payload.sourceRange
             ? payload.sourceRange

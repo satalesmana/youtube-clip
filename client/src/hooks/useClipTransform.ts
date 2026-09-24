@@ -13,8 +13,10 @@ import type {
   TypographyVariant,
   BadgePresetId,
   BadgeColorVariant,
+  OutroPresetId,
 } from '../types';
 import { resolvePresetIdFromHook } from '../lib/visual-presets';
+import { resolveClientOutroPreset } from '../lib/outro-presets';
 
 export function useClipTransform() {
   const [step, setStep] = useState<number>(1);
@@ -39,6 +41,12 @@ export function useClipTransform() {
   const [loadingBroll, setLoadingBroll] = useState(false);
   const [brollError, setBrollError] = useState<string | null>(null);
   const [enableIntroOutro, setEnableIntroOutro] = useState(true);
+  const [outroPreset, setOutroPreset] = useState<OutroPresetId>('creator-glass');
+  const [outroCtaText, setOutroCtaText] = useState('');
+  const [outroButtonText, setOutroButtonText] = useState('');
+  const [outroDuration, setOutroDuration] = useState(3);
+  const [outroChannelName, setOutroChannelName] = useState('');
+  const [outroLogoUrl, setOutroLogoUrl] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState('beast');
   const [whisperProvider, setWhisperProvider] = useState('openai');
   const [customPrompt, setCustomPrompt] = useState('');
@@ -73,6 +81,13 @@ export function useClipTransform() {
       // Non-fatal if no cache exists
     });
   }, [downloadedVideo?.videoId, scriptDraft]);
+
+  // Sync default outroChannelName with downloadedVideo's channelTitle if not set
+  useEffect(() => {
+    if (downloadedVideo?.channelTitle && !outroChannelName) {
+      setOutroChannelName(downloadedVideo.channelTitle);
+    }
+  }, [downloadedVideo?.channelTitle]);
 
   // Clips Analysis
   const [clips, setClips] = useState<ViralClip[]>([]);
@@ -567,6 +582,11 @@ export function useClipTransform() {
       ? (customHookTag.trim() || selectedHook?.tag || undefined)
       : undefined;
 
+    const effectiveOutroPreset = resolveClientOutroPreset(outroPreset);
+    const effectiveChannelName = (outroChannelName.trim() || downloadedVideo?.channelTitle || 'kreator').trim();
+    const effectiveCta = outroCtaText.trim() || effectiveOutroPreset.defaultCtaText;
+    const effectiveBtn = outroButtonText.trim() || effectiveOutroPreset.defaultButtonText;
+
     try {
       setProgressPct(35);
       setProgressLabel('Memproses audio STT & deteksi B-roll…');
@@ -580,6 +600,13 @@ export function useClipTransform() {
         enableBroll,
         brollPlacements: enableBroll && brollPlacements.length > 0 ? brollPlacements : undefined,
         enableIntroOutro,
+        outroPreset: enableIntroOutro ? outroPreset : undefined,
+        outroCtaText: enableIntroOutro ? effectiveCta : undefined,
+        outroButtonText: enableIntroOutro ? effectiveBtn : undefined,
+        outroDuration: enableIntroOutro ? outroDuration : undefined,
+        outroChannelName: enableIntroOutro ? effectiveChannelName : undefined,
+        outroLogoUrl: enableIntroOutro && outroLogoUrl ? outroLogoUrl : undefined,
+        channel: effectiveChannelName ? { name: effectiveChannelName } : undefined,
         whisperProvider,
         sttProvider: whisperProvider,
         customPrompt: customPrompt.trim() || undefined,
@@ -693,6 +720,18 @@ export function useClipTransform() {
     addBrollPlacement,
     enableIntroOutro,
     setEnableIntroOutro,
+    outroPreset,
+    setOutroPreset,
+    outroCtaText,
+    setOutroCtaText,
+    outroButtonText,
+    setOutroButtonText,
+    outroDuration,
+    setOutroDuration,
+    outroChannelName,
+    setOutroChannelName,
+    outroLogoUrl,
+    setOutroLogoUrl,
     templateId,
     setTemplateId,
     whisperProvider,

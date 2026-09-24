@@ -84,6 +84,20 @@ export type CompositionProps = {
   creatorLogoUrl?: string;
   /** Subtitle style preset: 'beast', 'hormozi', 'clean'. */
   subtitleStyle?: string;
+  /** Whether outro CTA is enabled (defaults to true). */
+  enableIntroOutro?: boolean;
+  /** Outro style preset id (e.g. 'creator-glass', 'viral-neon', etc.). */
+  outroPreset?: string;
+  /** Custom call-to-action headline text for the outro card. */
+  outroCtaText?: string;
+  /** Custom action button text for the outro card. */
+  outroButtonText?: string;
+  /** Duration in seconds for the outro card (default 3s). */
+  outroDuration?: number;
+  /** Custom channel name / handle for the outro card. */
+  outroChannelName?: string;
+  /** Custom logo image URL, data URL, or file path for the outro card. */
+  outroLogoUrl?: string;
 };
 
 /** Props for the standalone styled hook intro (`HookIntroShort`). */
@@ -144,4 +158,6 @@ export type OutroCardShortProps = {
   creatorLogoUrl?: string;
   durationSeconds?: number;
   themeSeed?: string;
+  outroPreset?: string;
+  buttonText?: string;
 };

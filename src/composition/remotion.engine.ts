@@ -79,9 +79,27 @@ export class RemotionCompositionEngine implements ICompositionEngine {
         await stageFile(assets.narration, mediaDir, `narration${extname(assets.narration) || '.mp3'}`);
       }
       if (assets.creatorLogo) {
-        const logoExt = extname(assets.creatorLogo) || '.png';
-        await stageFile(assets.creatorLogo, mediaDir, `creator-logo${logoExt}`);
-        creatorLogoUrl = `media/${jobId}/creator-logo${logoExt}`;
+        if (assets.creatorLogo.startsWith('data:image/')) {
+          const matches = assets.creatorLogo.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+          const rawExt = matches ? matches[1] : 'png';
+          const ext = rawExt === 'jpeg' ? '.jpg' : rawExt === 'svg+xml' ? '.svg' : `.${rawExt}`;
+          const base64Data = matches ? matches[2] : assets.creatorLogo.split(',')[1];
+          if (base64Data) {
+            const dest = join(mediaDir, `creator-logo${ext}`);
+            await writeFile(dest, Buffer.from(base64Data, 'base64'));
+            creatorLogoUrl = `media/${jobId}/creator-logo${ext}`;
+          }
+        } else if (/^https?:\/\//.test(assets.creatorLogo)) {
+          creatorLogoUrl = assets.creatorLogo;
+        } else {
+          try {
+            const logoExt = extname(assets.creatorLogo) || '.png';
+            await stageFile(assets.creatorLogo, mediaDir, `creator-logo${logoExt}`);
+            creatorLogoUrl = `media/${jobId}/creator-logo${logoExt}`;
+          } catch (logoErr) {
+            logger.warn({ logoErr, creatorLogo: assets.creatorLogo }, 'Failed to stage creator logo file');
+          }
+        }
       }
 
       // Stage B-roll assets under mediaDir so Remotion render server can access them
@@ -122,6 +140,13 @@ export class RemotionCompositionEngine implements ICompositionEngine {
           hookBadge: assets.hookBadge,
           creatorLogoUrl,
           subtitleStyle: assets.subtitleStyle,
+          enableIntroOutro: assets.enableIntroOutro,
+          outroPreset: assets.outroPreset,
+          outroCtaText: assets.outroCtaText,
+          outroButtonText: assets.outroButtonText,
+          outroDuration: assets.outroDuration,
+          outroChannelName: assets.outroChannelName || assets.channelName,
+          outroLogoUrl: creatorLogoUrl,
         }, null, 2),
       );
 

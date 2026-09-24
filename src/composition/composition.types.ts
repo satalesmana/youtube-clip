@@ -43,6 +43,20 @@ export interface CompositionAssets {
     videoPath: string;
     query?: string;
   }>;
+  /** Whether to append an outro call-to-action (CTA) card to the video. */
+  enableIntroOutro?: boolean;
+  /** Outro CTA style preset: 'creator-glass', 'viral-neon', 'minimal-clean', 'comment-debate', 'subscribe-bell', 'link-in-bio'. */
+  outroPreset?: string;
+  /** Custom CTA headline text for the outro card. */
+  outroCtaText?: string;
+  /** Custom action button text for the outro card. */
+  outroButtonText?: string;
+  /** Outro card duration in seconds (default 3s). */
+  outroDuration?: number;
+  /** Custom channel name / handle for the outro card. */
+  outroChannelName?: string;
+  /** Custom logo image URL, data URL, or file path for the outro card. */
+  outroLogoUrl?: string;
 }
 
 /** Output from a successful render. */

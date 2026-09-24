@@ -53,6 +53,18 @@ export const StudioView: React.FC<StudioViewProps> = ({
     addBrollPlacement,
     enableIntroOutro,
     setEnableIntroOutro,
+    outroPreset,
+    setOutroPreset,
+    outroCtaText,
+    setOutroCtaText,
+    outroButtonText,
+    setOutroButtonText,
+    outroDuration,
+    setOutroDuration,
+    outroChannelName,
+    setOutroChannelName,
+    outroLogoUrl,
+    setOutroLogoUrl,
     templateId,
     setTemplateId,
     customPrompt,
@@ -341,6 +353,19 @@ export const StudioView: React.FC<StudioViewProps> = ({
         addBrollPlacement={addBrollPlacement}
         enableIntroOutro={enableIntroOutro}
         setEnableIntroOutro={setEnableIntroOutro}
+        outroPreset={outroPreset}
+        setOutroPreset={setOutroPreset}
+        outroCtaText={outroCtaText}
+        setOutroCtaText={setOutroCtaText}
+        outroButtonText={outroButtonText}
+        setOutroButtonText={setOutroButtonText}
+        outroDuration={outroDuration}
+        setOutroDuration={setOutroDuration}
+        outroChannelName={outroChannelName}
+        setOutroChannelName={setOutroChannelName}
+        outroLogoUrl={outroLogoUrl}
+        setOutroLogoUrl={setOutroLogoUrl}
+        channelName={downloadedVideo?.channelTitle}
         startTransform={() => startTransform()}
       />
 

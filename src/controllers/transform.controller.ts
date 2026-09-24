@@ -972,6 +972,15 @@ export class TransformController {
       { audioMode, sourceAudioVolume: request.sourceAudioVolume },
       request.subtitleStyle,
       brolls,
+      {
+        enableIntroOutro: request.enableIntroOutro,
+        outroPreset: request.outroPreset,
+        outroCtaText: request.outroCtaText,
+        outroButtonText: request.outroButtonText,
+        outroDuration: request.outroDuration,
+        outroChannelName: request.outroChannelName,
+        outroLogoUrl: request.outroLogoUrl,
+      },
     );
 
     return {
@@ -1358,6 +1367,15 @@ export class TransformController {
     /** User-chosen subtitle caption style preset (beast / hormozi / clean). */
     subtitleStyle?: string,
     brolls?: BrollPlacement[],
+    outroOptions?: {
+      enableIntroOutro?: boolean;
+      outroPreset?: string;
+      outroCtaText?: string;
+      outroButtonText?: string;
+      outroDuration?: number;
+      outroChannelName?: string;
+      outroLogoUrl?: string;
+    },
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
     const resolvedAssStyle = resolveSubtitleStyle(subtitleStyle);
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
@@ -1422,7 +1440,8 @@ export class TransformController {
     const assets: CompositionAssets = {
       sourceVideo: sourceVideoForRender,
       narration: ttsResult.outputPath,
-      channelName: channel?.name,
+      channelName: outroOptions?.outroChannelName?.trim() || channel?.name || 'kreator',
+      creatorLogo: outroOptions?.outroLogoUrl || channel?.logo,
       hookBadge,
       videoId,
       engine,
@@ -1432,6 +1451,13 @@ export class TransformController {
       audioMode: audioOptions?.audioMode,
       sourceAudioVolume: audioOptions?.sourceAudioVolume,
       brolls: compositionBrolls,
+      enableIntroOutro: outroOptions?.enableIntroOutro,
+      outroPreset: outroOptions?.outroPreset,
+      outroCtaText: outroOptions?.outroCtaText,
+      outroButtonText: outroOptions?.outroButtonText,
+      outroDuration: outroOptions?.outroDuration,
+      outroChannelName: outroOptions?.outroChannelName?.trim() || channel?.name,
+      outroLogoUrl: outroOptions?.outroLogoUrl || channel?.logo,
     };
     videoPlan.brolls = compositionBrolls;
 

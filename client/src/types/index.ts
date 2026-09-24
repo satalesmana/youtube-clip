@@ -25,6 +25,14 @@ export type VisualPresetId =
   | 'action-pointer'
   | 'burst-stat';
 
+export type OutroPresetId =
+  | 'creator-glass'
+  | 'viral-neon'
+  | 'minimal-clean'
+  | 'comment-debate'
+  | 'subscribe-bell'
+  | 'link-in-bio';
+
 export type CompositionLayout =
   | 'centered'
   | 'top-heavy'
@@ -200,6 +208,13 @@ export interface TransformRequest {
   enableBroll?: boolean;
   brollPlacements?: BrollPlacementItem[];
   enableIntroOutro?: boolean;
+  outroPreset?: OutroPresetId;
+  outroCtaText?: string;
+  outroButtonText?: string;
+  outroDuration?: number;
+  outroChannelName?: string;
+  outroLogoUrl?: string;
+  channel?: { name: string; logo?: string };
   whisperProvider?: string;
   sttProvider?: string;
   customPrompt?: string;
@@ -264,4 +279,6 @@ export interface DownloadedVideo {
   videoPath: string;
   thumbnailUrl: string;
   alreadyDownloaded: boolean;
+  channelTitle?: string;
+  channelName?: string;
 }

@@ -13,10 +13,13 @@ import type {
   TypographyVariant,
   BadgePresetId,
   BadgeColorVariant,
+  OutroPresetId,
 } from '../../../types';
 import { ScriptEditorPanel } from './ScriptEditorPanel';
 import { SubtitleTemplatePicker } from './SubtitleTemplatePicker';
 import { BrollInspectorPanel } from './BrollInspectorPanel';
+import { OutroCardStylingPanel } from './OutroCardStylingPanel';
+import { resolveClientOutroPreset } from '../../../lib/outro-presets';
 
 export type Step3SubTab = 'mode' | 'hook' | 'subtitles';
 
@@ -83,6 +86,19 @@ interface Step3StylingProps {
   addBrollPlacement: (placement: BrollPlacementItem) => void;
   enableIntroOutro: boolean;
   setEnableIntroOutro: (val: boolean) => void;
+  outroPreset: OutroPresetId;
+  setOutroPreset: (preset: OutroPresetId) => void;
+  outroCtaText: string;
+  setOutroCtaText: (text: string) => void;
+  outroButtonText: string;
+  setOutroButtonText: (text: string) => void;
+  outroDuration: number;
+  setOutroDuration: (duration: number) => void;
+  outroChannelName: string;
+  setOutroChannelName: (name: string) => void;
+  outroLogoUrl: string | null;
+  setOutroLogoUrl: (url: string | null) => void;
+  channelName?: string;
   startTransform: () => void;
 }
 
@@ -146,6 +162,19 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   addBrollPlacement,
   enableIntroOutro,
   setEnableIntroOutro,
+  outroPreset,
+  setOutroPreset,
+  outroCtaText,
+  setOutroCtaText,
+  outroButtonText,
+  setOutroButtonText,
+  outroDuration,
+  setOutroDuration,
+  outroChannelName,
+  setOutroChannelName,
+  outroLogoUrl,
+  setOutroLogoUrl,
+  channelName,
   startTransform,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<Step3SubTab>('mode');
@@ -478,6 +507,24 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
             />
           )}
 
+          {/* Outro CTA Preset & Styling Panel */}
+          {enableIntroOutro && (
+            <OutroCardStylingPanel
+              selectedPreset={outroPreset}
+              onPresetChange={setOutroPreset}
+              ctaText={outroCtaText}
+              onCtaTextChange={setOutroCtaText}
+              buttonText={outroButtonText}
+              onButtonTextChange={setOutroButtonText}
+              duration={outroDuration}
+              onDurationChange={setOutroDuration}
+              channelName={outroChannelName || channelName}
+              onChannelNameChange={setOutroChannelName}
+              logoUrl={outroLogoUrl}
+              onLogoUrlChange={setOutroLogoUrl}
+            />
+          )}
+
           {/* Ringkasan Konfigurasi Render */}
           <div className="step3-summary-card">
             <div className="step3-summary-header">
@@ -526,6 +573,15 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
                 <span className="step3-summary-item-value">
                   {enableBroll
                     ? `🎞️ ${brollPlacements.filter((p) => p.enabled !== false).length} Klip Aktif`
+                    : '⚪ Nonaktif'}
+                </span>
+              </div>
+
+              <div className="step3-summary-item">
+                <span className="step3-summary-item-label">Kartu Outro CTA</span>
+                <span className="step3-summary-item-value">
+                  {enableIntroOutro
+                    ? `🎯 ${resolveClientOutroPreset(outroPreset).name} (${outroDuration}s • @${(outroChannelName || channelName || 'kreator').replace(/^@/, '')}${outroLogoUrl ? ' • 🖼️ Logo' : ''})`
                     : '⚪ Nonaktif'}
                 </span>
               </div>

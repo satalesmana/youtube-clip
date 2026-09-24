@@ -2,6 +2,8 @@
  * Domain entities for Intro & Outro Cards (Clean Architecture - Layer 1).
  */
 
+import type { OutroPresetId } from './outro-preset.js';
+
 /** Configuration for an intro hook card. */
 export interface IntroCardConfig {
   headlineText: string;
@@ -17,4 +19,7 @@ export interface OutroCardConfig {
   handle?: string;
   creatorLogoUrl?: string;
   durationSeconds: number;
+  presetId?: OutroPresetId;
+  buttonText?: string;
 }
+
