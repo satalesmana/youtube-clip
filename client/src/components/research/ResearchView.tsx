@@ -31,7 +31,7 @@ export const ResearchView: React.FC<ResearchViewProps> = ({
   } = research;
 
   return (
-    <div style={{ maxWidth: '1040px', margin: '0 auto', padding: '0 24px 60px' }}>
+    <div style={{ width: '100%', maxWidth: '1720px', margin: '0 auto', padding: '0 32px 60px', boxSizing: 'border-box' }}>
       <div className="card">
         <div className="card-head">
           <div className="card-head-title">

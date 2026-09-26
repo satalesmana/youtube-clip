@@ -9,6 +9,9 @@ import { Step3Styling } from './step3/Step3Styling';
 import { Step4Output } from './step4/Step4Output';
 import { ClipDetailModal } from './modals/ClipDetailModal';
 import { HookDetailModal } from './modals/HookDetailModal';
+import { AiProducerDrawer } from '../producer/AiProducerDrawer';
+import { useAiProducer } from '../../hooks/useAiProducer';
+import { RemotionVideoEditor } from '../editor/RemotionVideoEditor';
 
 type ClipTransformHook = ReturnType<typeof useClipTransform>;
 
@@ -67,6 +70,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
     setOutroLogoUrl,
     templateId,
     setTemplateId,
+    subtitleSize,
+    setSubtitleSize,
     customPrompt,
     setCustomPrompt,
     // Script & TTS
@@ -142,6 +147,11 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const activeHookVideoRef = useRef<HTMLVideoElement | null>(null);
   const modalVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  // AI Producer state
+  const [isProducerOpen, setIsProducerOpen] = useState(false);
+  const producer = useAiProducer(transform, transform.downloadedVideo);
+
+
   const handleTogglePlay = (idx: number) => {
     if (playingClipIndex === idx) {
       if (activeVideoRef.current) {
@@ -207,7 +217,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
   };
 
   return (
-    <div style={{ maxWidth: '1040px', margin: '0 auto', padding: '0 24px 60px' }}>
+    <div style={{ width: '100%', maxWidth: '1720px', margin: '0 auto', padding: '0 32px 60px', boxSizing: 'border-box' }}>
       {/* 4-Step Sequencer Stepper */}
       <StudioStepper
         step={step}
@@ -292,7 +302,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
         onScrollToHookSection={scrollToHookSection}
       />
 
-      {/* STEP 3: Composer Studio (Subtitles & B-Roll) */}
+      {/* STEP 3: Composer Studio (Subtitles & B-Roll Inspector) */}
       <Step3Styling
         step={step}
         setStep={setStep}
@@ -341,6 +351,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setCustomHookTag={setCustomHookTag}
         templateId={templateId}
         setTemplateId={setTemplateId}
+        subtitleSize={subtitleSize}
+        setSubtitleSize={setSubtitleSize}
         enableBroll={enableBroll}
         setEnableBroll={setEnableBroll}
         brollPlacements={brollPlacements}
@@ -368,6 +380,15 @@ export const StudioView: React.FC<StudioViewProps> = ({
         channelName={downloadedVideo?.channelTitle}
         startTransform={() => startTransform()}
       />
+
+      {/* STEP 4: Live Remotion Video Editor with Integrated AI Producer */}
+      {step === 4 && (
+        <RemotionVideoEditor
+          transform={transform}
+          producer={producer}
+          onOpenFullProducerDrawer={() => setIsProducerOpen(true)}
+        />
+      )}
 
       {/* STEP 4: Master Output */}
       <Step4Output
@@ -401,6 +422,18 @@ export const StudioView: React.FC<StudioViewProps> = ({
         modalData={previewModalHook}
         onClose={() => setPreviewModalHook(null)}
         downloadedVideo={downloadedVideo}
+      />
+
+
+      {/* AI Producer Drawer */}
+      <AiProducerDrawer
+        isOpen={isProducerOpen}
+        onClose={() => setIsProducerOpen(false)}
+        producer={producer}
+        currentStep={transform.step}
+        videoTitle={transform.downloadedVideo?.title}
+        templateId={transform.templateId}
+        aspectRatio={transform.aspectRatio}
       />
     </div>
   );

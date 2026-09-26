@@ -47,7 +47,9 @@ export const Caption: React.FC<{
   absoluteStartFrame?: number;
   /** Subtitle style preset: 'beast' | 'hormozi' | 'clean' */
   subtitleStyle?: string;
-}> = ({ caption, theme, durationFrames, absoluteStartFrame, subtitleStyle = 'beast' }) => {
+  /** Subtitle font size preset: 'sm' | 'md' | 'lg' | 'xl' */
+  subtitleSize?: 'sm' | 'md' | 'lg' | 'xl';
+}> = ({ caption, theme, durationFrames, absoluteStartFrame, subtitleStyle = 'beast', subtitleSize = 'md' }) => {
   const frame = useCurrentFrame();
   const { width, fps } = useVideoConfig();
   const enter = quickEnter(frame, fps);
@@ -131,7 +133,13 @@ export const Caption: React.FC<{
   // - Pop Dinamis (Beast): base 76px (bold Archivo Black)
   // - Sports: base 80px (italic Anton)
   const baseMax = isHormozi ? 72 : isClean ? 64 : isSports ? 80 : 76;
-  const fitted = fitTextSize(caption.text, captionFont, width * 0.86, baseMax, 44);
+  const sizeMultiplier =
+    subtitleSize === 'sm' ? 0.82 :
+    subtitleSize === 'lg' ? 1.18 :
+    subtitleSize === 'xl' ? 1.36 : 1.0;
+  const scaledMax = Math.round(baseMax * sizeMultiplier);
+  const minFitted = Math.round(44 * sizeMultiplier);
+  const fitted = fitTextSize(caption.text, captionFont, width * 0.86, scaledMax, minFitted);
   const strokeSize = Math.max(3, Math.round(fitted / 18));
 
   const renderWords = () => {

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { HOOK_FONT } from './design';
 import type { Theme } from './design';
 import { SAFE_AREA } from './Caption';
+import { microLifeHold, smoothExitProgress } from './animation';
 
 /**
  * Modern Social Proof Floating Badge shown during the first ~2s of the hook.
@@ -17,6 +18,7 @@ export const Badge: React.FC<{
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
 
+  // Phase 1: Spring entrance
   const enterSpring = spring({
     frame,
     fps,
@@ -25,12 +27,19 @@ export const Badge: React.FC<{
   const enterScale = interpolate(enterSpring, [0, 1], [0.8, 1]);
   const enterY = interpolate(enterSpring, [0, 1], [-20, 0]);
 
-  const exit = interpolate(
-    frame,
-    [Math.max(0, durationFrames - Math.round(0.3 * fps)), durationFrames],
-    [1, 0],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-  );
+  // Phase 2: Micro-life subtle breathing
+  const microLife = microLifeHold(frame, fps, { amplitudeY: 2.5, frequency: 1.8 });
+
+  // Phase 3: Smooth 18-frame exit
+  const exit = smoothExitProgress(frame, durationFrames, fps, {
+    exitFrames: Math.min(18, Math.round(0.4 * fps)),
+    scaleTarget: 0.9,
+    translateYDelta: -16,
+  });
+
+  const finalScale = enterScale * microLife.scale * exit.scale;
+  const finalY = enterY + microLife.translateY + exit.translateY;
+  const finalOpacity = exit.opacity;
 
   return (
     <AbsoluteFill
@@ -58,8 +67,8 @@ export const Badge: React.FC<{
           textTransform: 'uppercase',
           maxWidth: width * 0.86,
           textAlign: 'center',
-          opacity: exit,
-          transform: `translateY(${enterY}px) scale(${enterScale})`,
+          opacity: finalOpacity,
+          transform: `translateY(${finalY}px) scale(${finalScale})`,
           border: '2px solid rgba(255, 255, 255, 0.4)',
         }}
       >

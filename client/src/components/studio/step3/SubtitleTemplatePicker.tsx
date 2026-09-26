@@ -1,13 +1,17 @@
-import React from 'react';
+import type { SubtitleSize } from '../../../types';
 
 interface SubtitleTemplatePickerProps {
   templateId: string;
   setTemplateId: (id: string) => void;
+  subtitleSize?: SubtitleSize;
+  setSubtitleSize?: (size: SubtitleSize) => void;
 }
 
 export const SubtitleTemplatePicker: React.FC<SubtitleTemplatePickerProps> = ({
   templateId,
   setTemplateId,
+  subtitleSize,
+  setSubtitleSize,
 }) => {
   return (
     <div className="input-group">
@@ -168,6 +172,56 @@ export const SubtitleTemplatePicker: React.FC<SubtitleTemplatePickerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Subtitle Font Size Selector */}
+      {setSubtitleSize && (
+        <div style={{ marginTop: '16px', background: 'var(--bg-card)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#FFFFFF' }}>
+              Ukuran Font Subtitle
+            </div>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Menyesuaikan proporsi font secara presisi
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            {[
+              { id: 'sm', label: 'Kecil (38px)', desc: 'Subtil & Rapi' },
+              { id: 'md', label: 'Sedang (48px)', desc: 'Standar Optimal' },
+              { id: 'lg', label: 'Besar (58px)', desc: 'Tebal & Catchy' },
+              { id: 'xl', label: 'Ekstra (68px)', desc: 'Maksimal Impact' },
+            ].map((s) => {
+              const isSelected = (subtitleSize || 'md') === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSubtitleSize(s.id as 'sm' | 'md' | 'lg' | 'xl')}
+                  style={{
+                    background: isSelected ? 'var(--bg-card-selected)' : 'var(--bg-input)',
+                    border: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '8px 10px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '3px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? 'var(--ice)' : '#FFFFFF' }}>
+                    {s.label}
+                  </span>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    {s.desc}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

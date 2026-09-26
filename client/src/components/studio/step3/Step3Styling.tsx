@@ -14,6 +14,7 @@ import type {
   BadgePresetId,
   BadgeColorVariant,
   OutroPresetId,
+  SubtitleSize,
 } from '../../../types';
 import { ScriptEditorPanel } from './ScriptEditorPanel';
 import { SubtitleTemplatePicker } from './SubtitleTemplatePicker';
@@ -74,6 +75,8 @@ interface Step3StylingProps {
   // Subtitle template & Extras
   templateId: string;
   setTemplateId: (id: string) => void;
+  subtitleSize?: SubtitleSize;
+  setSubtitleSize?: (size: SubtitleSize) => void;
   enableBroll: boolean;
   setEnableBroll: (val: boolean) => void;
   brollPlacements: BrollPlacementItem[];
@@ -99,7 +102,7 @@ interface Step3StylingProps {
   outroLogoUrl: string | null;
   setOutroLogoUrl: (url: string | null) => void;
   channelName?: string;
-  startTransform: () => void;
+  startTransform?: () => void;
 }
 
 export const Step3Styling: React.FC<Step3StylingProps> = ({
@@ -150,6 +153,8 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   setCustomHookTag,
   templateId,
   setTemplateId,
+  subtitleSize,
+  setSubtitleSize,
   enableBroll,
   setEnableBroll,
   brollPlacements,
@@ -175,7 +180,6 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   outroLogoUrl,
   setOutroLogoUrl,
   channelName,
-  startTransform,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<Step3SubTab>('mode');
 
@@ -456,6 +460,8 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           <SubtitleTemplatePicker
             templateId={templateId}
             setTemplateId={setTemplateId}
+            subtitleSize={subtitleSize}
+            setSubtitleSize={setSubtitleSize}
           />
 
           {/* B-roll & Outro CTA toggles */}
@@ -588,7 +594,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
             </div>
           </div>
 
-          {/* Final Render Action Button */}
+          {/* Final Navigation Action Button to Step 4 */}
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button type="button" className="btn ghost" onClick={() => setActiveSubTab('hook')}>
               ← Kembali ke Desain Hook
@@ -597,14 +603,12 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
               type="button"
               className="btn primary"
               style={{ padding: '12px 24px', fontSize: '14.5px', fontWeight: 700 }}
-              disabled={runningTransform || selectedClipIndices.length === 0}
-              onClick={startTransform}
+              disabled={selectedClipIndices.length === 0}
+              onClick={() => setStep(4)}
             >
-              {runningTransform
-                ? '⏳ Sedang Merender Video...'
-                : selectedClipIndices.length > 1
-                ? `🚀 Render ${selectedClipIndices.length} Klip → ${outputMode === 'narration' ? 'Video Narasi AI' : 'Video Reel'}`
-                : '🚀 Render Video Master'}
+              {selectedClipIndices.length > 1
+                ? `Lanjut ke Tahap 4 (${selectedClipIndices.length} Klip) →`
+                : 'Lanjut ke Tahap 4 (Editor Video) →'}
             </button>
           </div>
         </div>

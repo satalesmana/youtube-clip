@@ -11,7 +11,7 @@ import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { getPresetFont } from '../design';
 import type { Theme } from '../design';
-import { wordCascadeProgress } from '../animation';
+import { microLifeHold, smoothExitProgress, wordCascadeProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
@@ -27,6 +27,7 @@ interface WordCascadeRendererProps {
   badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
+  durationFrames?: number;
 }
 
 export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
@@ -37,6 +38,7 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
   badgeColor,
   highlightWords,
   visualPreset,
+  durationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -78,6 +80,17 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
   const strokeWidth = isOpportunityGlow ? 2 : Math.max(3, Math.round(headlineSize / 10));
   const useGlow = visualPreset.highlight === 'neon-glow';
 
+  // Phase 2: Micro-Life (Sustained hold with subtle floating bob & scale breathing)
+  const microLife = microLifeHold(frame, fps, { amplitudeY: 3, frequency: 1.5 });
+
+  // Phase 3: Smooth Exit Cycle (18-20 frames before end)
+  const exit = durationFrames
+    ? smoothExitProgress(frame, durationFrames, fps, { exitFrames: 18, scaleTarget: 0.94, translateYDelta: -20 })
+    : { exitProgress: 0, opacity: 1, scale: 1, translateY: 0 };
+
+  const finalTranslateY = microLife.translateY + exit.translateY;
+  const finalScale = microLife.scale * exit.scale;
+
   return (
     <AbsoluteFill
       style={{
@@ -91,6 +104,8 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
     >
       <div
         style={{
+          transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
+          opacity: exit.opacity,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

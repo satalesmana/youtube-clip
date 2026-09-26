@@ -61,10 +61,21 @@ export const SUBTITLE_STYLE_PRESETS: Record<SubtitleStyleId, AssStyleConfig> = {
 };
 
 /** Returns the preset for the given style id, falling back to 'beast'. */
-export function resolveSubtitleStyle(styleId?: string | null): AssStyleConfig {
+export function resolveSubtitleStyle(
+  styleId?: string | null,
+  size?: 'sm' | 'md' | 'lg' | 'xl' | null,
+): AssStyleConfig {
   const normalized = styleId === 'mrbeast' ? 'beast' : styleId;
-  if (normalized && normalized in SUBTITLE_STYLE_PRESETS) {
-    return SUBTITLE_STYLE_PRESETS[normalized as SubtitleStyleId];
-  }
-  return SUBTITLE_STYLE_PRESETS.beast;
+  const basePreset =
+    normalized && normalized in SUBTITLE_STYLE_PRESETS
+      ? SUBTITLE_STYLE_PRESETS[normalized as SubtitleStyleId]
+      : SUBTITLE_STYLE_PRESETS.beast;
+
+  if (!size || size === 'md') return basePreset;
+
+  const mult = size === 'sm' ? 0.8 : size === 'lg' ? 1.2 : size === 'xl' ? 1.4 : 1.0;
+  return {
+    ...basePreset,
+    fontSize: Math.round(basePreset.fontSize * mult),
+  };
 }

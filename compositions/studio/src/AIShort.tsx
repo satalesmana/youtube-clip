@@ -38,6 +38,8 @@ const SceneLayer: React.FC<{
   /** Real word boundaries for the scene's narration, concatenated from captions. */
   wordTimings?: PlanCaption['wordTimings'];
   labels?: Record<string, string>;
+  sourceUnderlay?: boolean;
+  sourceAudioVolume?: number;
 }> = ({
   scene,
   videoSrc,
@@ -48,6 +50,8 @@ const SceneLayer: React.FC<{
   absoluteStartFrame,
   wordTimings,
   labels,
+  sourceUnderlay,
+  sourceAudioVolume,
 }) => {
   return (
     <AbsoluteFill>
@@ -58,6 +62,8 @@ const SceneLayer: React.FC<{
         isFirst={isFirst}
         isLast={isLast}
         sceneDurationFrames={sceneDurationFrames}
+        sourceUnderlay={sourceUnderlay}
+        sourceAudioVolume={sourceAudioVolume}
       />
       <SceneText
         scene={scene}
@@ -85,6 +91,7 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   hookBadge,
   creatorLogoUrl,
   subtitleStyle,
+  subtitleSize,
   enableIntroOutro,
   outroPreset,
   outroCtaText,
@@ -103,6 +110,10 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   const outroFrames = isOutroActive && outroSeconds > 0 ? Math.max(1, Math.round(outroSeconds * fps)) : 0;
   const badgeFrames = Math.max(1, Math.round(BADGE_SECONDS * fps));
   const totalDurationFrames = contentFrames + outroFrames;
+
+  const hasNarration = Boolean(narrationPath);
+  const isSourceAudioActive = Boolean(plan.audio?.sourceUnderlay) || !hasNarration;
+  const sourceAudioVolume = !hasNarration ? 1 : plan.audio?.ducking ? 0.2 : 0.35;
 
   return (
     <AbsoluteFill style={{ backgroundColor: theme.surface, fontFamily: FONT }}>
@@ -134,6 +145,8 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
               absoluteStartFrame={startFrame}
               wordTimings={wordTimings}
               labels={activeSkin.labels}
+              sourceUnderlay={isSourceAudioActive}
+              sourceAudioVolume={sourceAudioVolume}
             />
           </Sequence>
         );
@@ -203,6 +216,7 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
                 durationFrames={capDur}
                 absoluteStartFrame={startFrame}
                 subtitleStyle={subtitleStyle}
+                subtitleSize={subtitleSize}
               />
             </Sequence>
           );
@@ -219,6 +233,7 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
               isFirst={false}
               isLast={true}
               sceneDurationFrames={outroFrames}
+              sourceUnderlay={false}
             />
           ) : null}
           <Outro

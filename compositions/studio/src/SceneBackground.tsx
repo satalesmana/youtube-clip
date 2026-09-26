@@ -28,6 +28,8 @@ export const SceneBackground: React.FC<{
   isFirst: boolean;
   isLast: boolean;
   sceneDurationFrames: number;
+  sourceUnderlay?: boolean;
+  sourceAudioVolume?: number;
 }> = ({
   scene,
   videoSrc,
@@ -35,6 +37,8 @@ export const SceneBackground: React.FC<{
   isFirst,
   isLast,
   sceneDurationFrames,
+  sourceUnderlay = false,
+  sourceAudioVolume = 1,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -91,8 +95,8 @@ export const SceneBackground: React.FC<{
           <Video
             src={assetUrl}
             objectFit="contain"
-            muted
-            volume={0}
+            muted={!sourceUnderlay}
+            volume={sourceUnderlay ? sourceAudioVolume : 0}
             trimBefore={offset}
             trimAfter={offset + duration}
             style={{

@@ -58,6 +58,7 @@ import { ClipController } from '../controllers/clip.controller.js';
 import { TranscriptController } from '../controllers/transcript.controller.js';
 import type { WhisperProvider } from '../services/whisper.service.js';
 import { ReelComposerService } from '../services/reel-composer.service.js';
+import { ReelRemotionService } from '../services/reel-remotion.service.js';
 import { createCompositionEngine } from '../composition/engine.factory.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 import {
@@ -713,6 +714,15 @@ export const reelComposer = new ReelComposerService(
   createLogger('reel-composer'),
 );
 
+/** Renders user-selected clip ranges into a reel via Remotion with transcript subtitles (outputMode: 'reel'). */
+export const reelRemotionService = new ReelRemotionService({
+  compositionsDir,
+  ffmpegBinaryPath: env.FFMPEG_BINARY_PATH,
+  canvasWidth: 1080,
+  canvasHeight: 1920,
+  logger: createLogger('reel-remotion'),
+});
+
 // --- Composition Engine (Sprint G) ---
 
 export const compositionEngine = createCompositionEngine({
@@ -918,5 +928,6 @@ export const container = {
   watermarkFilterService,
   previewRenderer,
   reelComposer,
+  reelRemotionService,
   styledHookPreviewService,
 };

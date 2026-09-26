@@ -48,6 +48,10 @@ export const transformRequestSchema = z.object({
    * - `clean`   — Minimal elegant fade, soft colors.
    */
   subtitleStyle: z.enum(['beast', 'hormozi', 'clean']).optional(),
+  /**
+   * Subtitle font size scaling preset: 'sm' (38px), 'md' (48px, default), 'lg' (58px), 'xl' (68px).
+   */
+  subtitleSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
   /** Channel branding (name + optional logo path). */
   channel: z
     .object({

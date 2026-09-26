@@ -20,6 +20,8 @@ export interface CompositionAssets {
   templateId?: string;
   /** Subtitle style preset for karaoke captions (e.g. beast, hormozi, clean). */
   subtitleStyle?: string;
+  /** Subtitle font size preset: 'sm' | 'md' | 'lg' | 'xl' (default 'md'). */
+  subtitleSize?: 'sm' | 'md' | 'lg' | 'xl';
   /** YouTube video id — render outputs land under `outputs/{videoId}/` when provided. */
   videoId?: string;
   /** Optional custom creator logo image path */

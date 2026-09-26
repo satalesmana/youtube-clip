@@ -140,6 +140,7 @@ export class RemotionCompositionEngine implements ICompositionEngine {
           hookBadge: assets.hookBadge,
           creatorLogoUrl,
           subtitleStyle: assets.subtitleStyle,
+          subtitleSize: assets.subtitleSize,
           enableIntroOutro: assets.enableIntroOutro,
           outroPreset: assets.outroPreset,
           outroCtaText: assets.outroCtaText,

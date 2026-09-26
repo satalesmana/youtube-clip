@@ -1,4 +1,4 @@
-import { interpolate, spring } from 'remotion';
+import { Easing, interpolate, spring } from 'remotion';
 
 export const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
@@ -104,3 +104,89 @@ export const fadeProgress = (frame: number, fps: number, durationFrames = 8): nu
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
+
+// ─── 3-Phase Animation Choreography (Oren Remotion Physics Standard) ────────
+
+export interface MicroLifeOptions {
+  amplitudeY?: number;   // px offset vertical bobbing (default: 4)
+  frequency?: number;    // cycles per second (default: 1.6)
+  scaleBreathing?: boolean; // subtle scale oscillation (default: true)
+}
+
+/**
+ * Micro-Life (Hold Phase):
+ * During the hold phase, maintains subtle visual life (gentle floating bob, soft glow pulse)
+ * so elements never look frozen or robotic.
+ */
+export const microLifeHold = (
+  frame: number,
+  fps: number,
+  options?: MicroLifeOptions,
+): { translateY: number; scale: number; glowPulse: number } => {
+  const amp = options?.amplitudeY ?? 4;
+  const freq = options?.frequency ?? 1.6;
+  const enableScale = options?.scaleBreathing ?? true;
+
+  const cycle = (frame / Math.max(1, fps)) * Math.PI * freq;
+  const translateY = Math.sin(cycle) * amp;
+  const scale = enableScale ? 1 + Math.sin(cycle * 0.8) * 0.012 : 1;
+  const glowPulse = 0.85 + 0.15 * Math.sin(cycle * 1.2);
+
+  return { translateY, scale, glowPulse };
+};
+
+export interface SmoothExitOptions {
+  exitFrames?: number;   // default 18 frames (~0.6s at 30fps)
+  translateYDelta?: number; // px shift during exit (default -28)
+  scaleTarget?: number;  // scale factor at exit end (default 0.92)
+}
+
+/**
+ * Smooth 18-20 Frame Exit Cycle:
+ * Executes a deterministic, smooth exit curve using Easing.inOut(Easing.cubic)
+ * before the clip ends, ensuring zero abrupt cuts on headline cards and badges.
+ */
+export const smoothExitProgress = (
+  frame: number,
+  durationFrames: number,
+  fps: number,
+  options?: SmoothExitOptions,
+): {
+  exitProgress: number; // 0 = fully visible hold phase, 1 = fully exited
+  opacity: number;      // 1 down to 0
+  scale: number;        // 1 down to scaleTarget (e.g. 0.92)
+  translateY: number;   // 0 down to translateYDelta (e.g. -28)
+} => {
+  const exitFrames = options?.exitFrames ?? Math.min(20, Math.max(12, Math.round(0.6 * fps)));
+  const exitStart = Math.max(0, durationFrames - exitFrames);
+
+  if (frame < exitStart || durationFrames <= exitFrames) {
+    return { exitProgress: 0, opacity: 1, scale: 1, translateY: 0 };
+  }
+
+  const exitProgress = interpolate(
+    frame,
+    [exitStart, durationFrames],
+    [0, 1],
+    {
+      easing: Easing.inOut(Easing.cubic),
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    },
+  );
+
+  const opacity = interpolate(exitProgress, [0, 1], [1, 0]);
+  const scale = interpolate(exitProgress, [0, 1], [1, options?.scaleTarget ?? 0.92]);
+  const translateY = interpolate(exitProgress, [0, 1], [0, options?.translateYDelta ?? -28]);
+
+  return { exitProgress, opacity, scale, translateY };
+};
+
+/**
+ * Frame 0 Off-Screen Anti-Flash:
+ * Prevents single-frame flash artifacts before motion springs engage.
+ */
+export const antiFlashOffset = (frame: number, initialOffset = -180): number => {
+  return frame === 0 ? initialOffset : 0;
+};
+

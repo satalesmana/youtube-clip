@@ -84,6 +84,8 @@ export type CompositionProps = {
   creatorLogoUrl?: string;
   /** Subtitle style preset: 'beast', 'hormozi', 'clean'. */
   subtitleStyle?: string;
+  /** Subtitle font size preset: 'sm', 'md', 'lg', 'xl'. */
+  subtitleSize?: 'sm' | 'md' | 'lg' | 'xl';
   /** Whether outro CTA is enabled (defaults to true). */
   enableIntroOutro?: boolean;
   /** Outro style preset id (e.g. 'creator-glass', 'viral-neon', etc.). */

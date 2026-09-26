@@ -30,6 +30,7 @@ import type { ISubtitleService } from '../services/subtitle.service.js';
 import type { ICompositionEngine, CompositionAssets } from '../composition/composition.types.js';
 import type { ContentCache } from '../services/content-cache.service.js';
 import type { ReelComposerService, ReelSegment, ReelSegmentSubtitle } from '../services/reel-composer.service.js';
+import type { ReelRemotionService } from '../services/reel-remotion.service.js';
 import type { IWatermarkFilterService } from '../services/watermark-filter.service.js';
 import type { ICaptionService } from '../content/caption.service.js';
 import type { IStyledHookPreview } from '../hook-preview/styled-hook-preview.service.js';
@@ -73,6 +74,10 @@ export interface TransformControllerDeps {
    * silently falling back to the narration pipeline.
    */
   reelComposer?: ReelComposerService;
+  /**
+   * Optional Remotion reel composer for rendering reel mode using Remotion.
+   */
+  reelRemotionService?: ReelRemotionService;
   /**
    * Optional caption service for generating platform-tailored viral social captions.
    */
@@ -971,6 +976,7 @@ export class TransformController {
       videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine, request.blur_watermark,
       { audioMode, sourceAudioVolume: request.sourceAudioVolume },
       request.subtitleStyle,
+      request.subtitleSize,
       brolls,
       {
         enableIntroOutro: request.enableIntroOutro,
@@ -1027,7 +1033,7 @@ export class TransformController {
     if (!request.selectedClips?.length) {
       throw AppError.validation('outputMode "reel" requires at least one selected clip.');
     }
-    if (!this.deps.reelComposer) {
+    if (!this.deps.reelComposer && !this.deps.reelRemotionService) {
       throw AppError.internal('Reel composer is not configured on this server.');
     }
 
@@ -1150,29 +1156,11 @@ export class TransformController {
       'Rendering reel (hook intro + direct clip join)',
     );
 
-    // Burn-in source subtitles per segment when a transcript exists: each
-    // segment gets its own rebased ASS file so captions match the trimmed
-    // playback (same mechanism the clip renderer uses). Pre-made file segments
-    // (styled hook intro) already carry their own on-screen text — no burn-in.
-    let subtitles: Array<ReelSegmentSubtitle | undefined> | undefined;
-    const transcript = await this.loadTranscriptForVideoId(videoId);
-    if (transcript && transcript.segments.length > 0) {
-      const { writeFile } = await import('node:fs/promises');
-      subtitles = await Promise.all(composeSegments.map(async (segment, index) => {
-        if (segment.filePath) return undefined;
-        const events = this.deps.subtitleService.buildEvents(transcript, segment.start, segment.end);
-        const assPath = join(outputDir, `reel-sub-${String(index).padStart(3, '0')}.ass`);
-        const reelAssStyle = resolveSubtitleStyle(request.subtitleStyle);
-        await writeFile(assPath, this.deps.assService.render(events, reelAssStyle), 'utf-8');
-        return { assPath };
-      }));
-    }
-
     this.emit('script', { skipped: true });
     this.emit('tts', { skipped: true });
     this.emit('plan', { skipped: true });
 
-    // Map B-rolls to segments for reelComposer
+    // Map B-rolls to segments
     let reelBrolls: Array<BrollPlacement[] | undefined> | undefined;
     if (brolls && brolls.length > 0) {
       reelBrolls = composeSegments.map((seg) => {
@@ -1182,15 +1170,51 @@ export class TransformController {
       });
     }
 
+    const transcript = await this.loadTranscriptForVideoId(videoId);
+
     this.emit('render');
-    const reel = await this.deps.reelComposer.compose({
-      videoPath,
-      segments: composeSegments,
-      subtitles,
-      brolls: reelBrolls,
-      outputDir,
-      fileName: 'reel',
-    });
+    let reel: { path: string; durationSeconds: number; sizeBytes: number };
+
+    if (this.deps.reelRemotionService) {
+      logger.info({ videoId, jobId }, 'Composing reel via Remotion with original transcript subtitles');
+      reel = await this.deps.reelRemotionService.compose({
+        videoPath,
+        segments: composeSegments,
+        transcript: transcript ?? undefined,
+        subtitleService: this.deps.subtitleService,
+        brolls: reelBrolls,
+        outputDir,
+        fileName: 'reel',
+        style: request.style,
+        subtitleStyle: request.subtitleStyle,
+        subtitleSize: request.subtitleSize,
+        themeSeed: `${videoId}:${request.subtitleStyle || request.style || 'default'}`,
+        channelName: request.channel?.name,
+      });
+    } else {
+      // Fallback: FFmpeg ASS burn-in
+      let subtitles: Array<ReelSegmentSubtitle | undefined> | undefined;
+      if (transcript && transcript.segments.length > 0) {
+        const { writeFile } = await import('node:fs/promises');
+        subtitles = await Promise.all(composeSegments.map(async (segment, index) => {
+          if (segment.filePath) return undefined;
+          const events = this.deps.subtitleService.buildEvents(transcript, segment.start, segment.end);
+          const assPath = join(outputDir, `reel-sub-${String(index).padStart(3, '0')}.ass`);
+          const reelAssStyle = resolveSubtitleStyle(request.subtitleStyle, request.subtitleSize);
+          await writeFile(assPath, this.deps.assService.render(events, reelAssStyle), 'utf-8');
+          return { assPath };
+        }));
+      }
+
+      reel = await this.deps.reelComposer!.compose({
+        videoPath,
+        segments: composeSegments,
+        subtitles,
+        brolls: reelBrolls,
+        outputDir,
+        fileName: 'reel',
+      });
+    }
 
     const reelCaptions = request.generateCaptions !== false
       ? await this.generateCaptionsForTransform({
@@ -1366,6 +1390,8 @@ export class TransformController {
     audioOptions?: { audioMode: import('../types/audio-mode.js').AudioMode; sourceAudioVolume?: number },
     /** User-chosen subtitle caption style preset (beast / hormozi / clean). */
     subtitleStyle?: string,
+    /** Subtitle font size preset (sm / md / lg / xl). */
+    subtitleSize?: 'sm' | 'md' | 'lg' | 'xl',
     brolls?: BrollPlacement[],
     outroOptions?: {
       enableIntroOutro?: boolean;
@@ -1377,7 +1403,7 @@ export class TransformController {
       outroLogoUrl?: string;
     },
   ): Promise<{ path: string; durationSeconds: number; sizeBytes: number; width: number; height: number }> {
-    const resolvedAssStyle = resolveSubtitleStyle(subtitleStyle);
+    const resolvedAssStyle = resolveSubtitleStyle(subtitleStyle, subtitleSize);
     const outputDir = join(this.deps.outputsDir, videoId, 'transform', jobId, 'clips');
     const { ensureDir } = await import('../utils/fs.js');
     await ensureDir(outputDir);
@@ -1448,6 +1474,7 @@ export class TransformController {
       style: this.toCompositionStyle(templateId),
       templateId,
       subtitleStyle: subtitleStyle || (this.deps as any)?.assStyle?.name,
+      subtitleSize,
       audioMode: audioOptions?.audioMode,
       sourceAudioVolume: audioOptions?.sourceAudioVolume,
       brolls: compositionBrolls,

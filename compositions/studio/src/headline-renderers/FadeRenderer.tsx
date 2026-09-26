@@ -3,7 +3,7 @@ import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { getPresetFont } from '../design';
 import type { Theme } from '../design';
-import { fadeProgress } from '../animation';
+import { fadeProgress, microLifeHold, smoothExitProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
@@ -19,6 +19,7 @@ interface FadeRendererProps {
   badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
+  durationFrames?: number;
 }
 
 export const FadeRenderer: React.FC<FadeRendererProps> = ({
@@ -29,12 +30,27 @@ export const FadeRenderer: React.FC<FadeRendererProps> = ({
   badgeColor,
   highlightWords,
   visualPreset,
+  durationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
   const font = getPresetFont(visualPreset.id, visualPreset.typography);
-  const opacity = fadeProgress(frame, fps, 10);
+
+  // Phase 1: Fade Entrance
+  const entryOpacity = fadeProgress(frame, fps, 10);
+
+  // Phase 2: Micro-Life (Sustained hold with subtle floating bob & scale breathing)
+  const microLife = microLifeHold(frame, fps, { amplitudeY: 3, frequency: 1.3 });
+
+  // Phase 3: Smooth Exit Cycle (18-20 frames before end)
+  const exit = durationFrames
+    ? smoothExitProgress(frame, durationFrames, fps, { exitFrames: 18, scaleTarget: 0.94, translateYDelta: -20 })
+    : { exitProgress: 0, opacity: 1, scale: 1, translateY: 0 };
+
+  const finalOpacity = entryOpacity * exit.opacity;
+  const finalScale = microLife.scale * exit.scale;
+  const finalTranslateY = microLife.translateY + exit.translateY;
 
   const allWords = text.trim().split(/\s+/).filter(Boolean);
   const tokens = allWords.slice(0, MAX_WORDS);
@@ -77,7 +93,8 @@ export const FadeRenderer: React.FC<FadeRendererProps> = ({
     >
       <div
         style={{
-          opacity,
+          opacity: finalOpacity,
+          transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',

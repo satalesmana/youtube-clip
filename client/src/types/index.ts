@@ -197,11 +197,14 @@ export interface BrollPlacementItem {
   enabled?: boolean;
 }
 
+export type SubtitleSize = 'sm' | 'md' | 'lg' | 'xl';
+
 export interface TransformRequest {
   url: string;
   language?: string;
   genre?: string;
   templateId?: string;
+  subtitleSize?: SubtitleSize;
   audioMode?: 'keep' | 'speech' | 'music' | 'keep_original' | 'strip_original' | 'voice_over';
   targetDuration?: number;
   aspectRatio?: '9:16' | '16:9' | '1:1';
@@ -282,3 +285,23 @@ export interface DownloadedVideo {
   channelTitle?: string;
   channelName?: string;
 }
+
+export interface WordTimestamp {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+  words?: WordTimestamp[];
+}
+
+export interface TranscriptResult {
+  language: string;
+  durationSeconds: number;
+  segments: TranscriptSegment[];
+}
+

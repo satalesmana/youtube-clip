@@ -8,10 +8,12 @@ import type {
   TransformRequest,
   TransformResult,
   TrendTopic,
+  TranscriptResult,
   ViralClip,
   ViralHook,
   ViralityScoreBreakdown,
 } from '../types';
+import type { ProducerChatRequest, ProducerChatResponse } from '../types/producer';
 
 class ApiError extends Error {
   status: number;
@@ -162,6 +164,22 @@ export const api = {
 
     // Retry on high‑traffic errors up to 3 times
     return await retry(fetchFn, 3, 2000);
+  },
+
+  /** Fetches full transcript with segments and word timestamps for precise caption sync */
+  async getTranscript(videoId: string): Promise<TranscriptResult | null> {
+    try {
+      const res = await fetch(`/api/transcript?videoId=${encodeURIComponent(videoId)}`);
+      if (!res.ok) return null;
+      const data = await handleResponse<{
+        success: boolean;
+        videoId: string;
+        transcript: TranscriptResult;
+      }>(res);
+      return data.transcript ?? null;
+    } catch {
+      return null;
+    }
   },
 
   async generateClips(payload: {
@@ -421,6 +439,7 @@ export const api = {
         genre: payload.genre && payload.genre !== 'auto' ? payload.genre : undefined,
         template: 'commentary',
         subtitleStyle: payload.templateId || 'beast',
+        subtitleSize: payload.subtitleSize || 'md',
         engine: 'remotion',
         audioMode:
           payload.audioMode === 'keep'
@@ -571,5 +590,20 @@ export const api = {
       count: data.count || (data.assets ? data.assets.length : 0),
     };
   },
+
+  /**
+   * Send a chat message to the AI Producer and receive a reply with optional
+   * editor actions to apply automatically.
+   */
+  async chatWithAiProducer(payload: ProducerChatRequest): Promise<ProducerChatResponse> {
+    const res = await fetch('/api/producer/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<ProducerChatResponse>(res);
+  },
 };
+
+
 

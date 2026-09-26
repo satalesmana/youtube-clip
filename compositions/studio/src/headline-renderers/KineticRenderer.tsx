@@ -11,6 +11,7 @@ import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { getPresetFont } from '../design';
 import type { Theme } from '../design';
+import { microLifeHold, smoothExitProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
@@ -26,6 +27,7 @@ interface KineticRendererProps {
   badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
+  durationFrames?: number;
 }
 
 export const KineticRenderer: React.FC<KineticRendererProps> = ({
@@ -36,6 +38,7 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
   badgeColor,
   highlightWords,
   visualPreset,
+  durationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -65,14 +68,26 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
     return i % 2 === 1;
   };
 
-  // Spring punch-in: 1.12 → 1.0
+  // Phase 1: Spring punch-in (1.12 → 1.0)
   const entrySpring = spring({
     frame,
     fps,
     config: { damping: 13, stiffness: 140, mass: 0.8 },
   });
-  const scale = interpolate(entrySpring, [0, 1], [1.12, 1]);
-  const opacity = interpolate(entrySpring, [0, 0.3], [0, 1], { extrapolateRight: 'clamp' });
+  const entryScale = interpolate(entrySpring, [0, 1], [1.12, 1]);
+  const entryOpacity = interpolate(entrySpring, [0, 0.3], [0, 1], { extrapolateRight: 'clamp' });
+
+  // Phase 2: Micro-Life (Sustained hold with subtle floating bob & scale breathing)
+  const microLife = microLifeHold(frame, fps, { amplitudeY: 3, frequency: 1.5 });
+
+  // Phase 3: Smooth Exit Cycle (18-20 frames before end)
+  const exit = durationFrames
+    ? smoothExitProgress(frame, durationFrames, fps, { exitFrames: 18, scaleTarget: 0.94, translateYDelta: -20 })
+    : { exitProgress: 0, opacity: 1, scale: 1, translateY: 0 };
+
+  const finalScale = entryScale * microLife.scale * exit.scale;
+  const finalOpacity = entryOpacity * exit.opacity;
+  const finalTranslateY = microLife.translateY + exit.translateY;
 
   const mid = Math.ceil(tokens.length / 2);
   const longestLine = tokens.length > 4
@@ -102,8 +117,8 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
     >
       <div
         style={{
-          transform: `scale(${scale})`,
-          opacity,
+          transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
+          opacity: finalOpacity,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

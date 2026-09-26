@@ -81,6 +81,13 @@ const producerChatSchema = z.object({
     audio: z.object({
       ttsVoice: z.string().optional(),
       sourceVolume: z.number(),
+      backgroundMusic: z
+        .object({
+          trackId: z.string().nullable().optional(),
+          volume: z.number().optional(),
+          autoDucking: z.boolean().optional(),
+        })
+        .optional(),
     }),
   }),
 });

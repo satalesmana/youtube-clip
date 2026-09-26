@@ -3,7 +3,7 @@ import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { getPresetFont } from '../design';
 import type { Theme } from '../design';
-import { scaleBurstProgress } from '../animation';
+import { microLifeHold, scaleBurstProgress, smoothExitProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord, getTextOutlineStyle } from './highlightUtil';
@@ -19,6 +19,7 @@ interface BoldCapsRendererProps {
   badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
+  durationFrames?: number;
 }
 
 export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
@@ -29,6 +30,7 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
   badgeColor,
   highlightWords,
   visualPreset,
+  durationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -36,9 +38,22 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
   const font = getPresetFont(visualPreset.id, visualPreset.typography);
   const isDataPunch = visualPreset.id === 'data-punch' || visualPreset.decoration === 'number-badge';
 
+  // Phase 1: Heavy overshoot scale-burst
   const progress = scaleBurstProgress(frame, fps);
-  const opacity = interpolate(progress, [0, 0.25], [0, 1], { extrapolateRight: 'clamp' });
-  const scale = interpolate(progress, [0, 1], [1.28, 1.0]);
+  const entryOpacity = interpolate(progress, [0, 0.25], [0, 1], { extrapolateRight: 'clamp' });
+  const entryScale = interpolate(progress, [0, 1], [1.28, 1.0]);
+
+  // Phase 2: Micro-Life (Sustained hold with subtle floating bob & scale breathing)
+  const microLife = microLifeHold(frame, fps, { amplitudeY: 3, frequency: 1.5 });
+
+  // Phase 3: Smooth Exit Cycle (18-20 frames before end)
+  const exit = durationFrames
+    ? smoothExitProgress(frame, durationFrames, fps, { exitFrames: 18, scaleTarget: 0.94, translateYDelta: -20 })
+    : { exitProgress: 0, opacity: 1, scale: 1, translateY: 0 };
+
+  const finalScale = entryScale * microLife.scale * exit.scale;
+  const finalOpacity = entryOpacity * exit.opacity;
+  const finalTranslateY = microLife.translateY + exit.translateY;
 
   const allWords = text.toUpperCase().split(/\s+/).filter(Boolean);
   const tokens = allWords.slice(0, MAX_WORDS);
@@ -126,8 +141,8 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
     >
       <div
         style={{
-          opacity,
-          transform: `scale(${scale})`,
+          opacity: finalOpacity,
+          transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           transformOrigin: 'center center',
           display: 'flex',
           flexDirection: 'column',

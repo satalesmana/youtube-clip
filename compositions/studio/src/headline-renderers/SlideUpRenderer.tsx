@@ -2,7 +2,7 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remo
 import * as React from 'react';
 import { getPresetFont } from '../design';
 import type { Theme } from '../design';
-import { slideUpProgress } from '../animation';
+import { microLifeHold, slideUpProgress, smoothExitProgress } from '../animation';
 import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
@@ -18,6 +18,7 @@ interface SlideUpRendererProps {
   badgeColor?: string;
   highlightWords?: string[];
   visualPreset: VisualPreset;
+  durationFrames?: number;
 }
 
 export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
@@ -28,6 +29,7 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
   badgeColor,
   highlightWords,
   visualPreset,
+  durationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -36,9 +38,22 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
   const isQuestion = visualPreset.id === 'minimal-question';
   const hasQuestionMark = visualPreset.decoration === 'question-mark' || isQuestion;
 
+  // Phase 1: Entrance Slide Up
   const progress = slideUpProgress(frame, fps);
-  const opacity = interpolate(progress, [0, 0.4], [0, 1], { extrapolateRight: 'clamp' });
-  const translateY = interpolate(progress, [0, 1], [80, 0]);
+  const entryOpacity = interpolate(progress, [0, 0.4], [0, 1], { extrapolateRight: 'clamp' });
+  const entryTranslateY = interpolate(progress, [0, 1], [80, 0]);
+
+  // Phase 2: Micro-Life (Sustained hold with subtle floating bob & scale breathing)
+  const microLife = microLifeHold(frame, fps, { amplitudeY: 3, frequency: 1.4 });
+
+  // Phase 3: Smooth Exit Cycle (18-20 frames before end)
+  const exit = durationFrames
+    ? smoothExitProgress(frame, durationFrames, fps, { exitFrames: 18, scaleTarget: 0.94, translateYDelta: -20 })
+    : { exitProgress: 0, opacity: 1, scale: 1, translateY: 0 };
+
+  const finalTranslateY = entryTranslateY + microLife.translateY + exit.translateY;
+  const finalOpacity = entryOpacity * exit.opacity;
+  const finalScale = microLife.scale * exit.scale;
 
   // Strip trailing question marks from text when question decoration is active
   const cleanedText = hasQuestionMark ? text.replace(/[?]+$/, '').trim() : text.trim();
@@ -131,8 +146,8 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
     >
       <div
         style={{
-          opacity,
-          transform: `translateY(${translateY}px)`,
+          opacity: finalOpacity,
+          transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

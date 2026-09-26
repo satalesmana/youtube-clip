@@ -51,7 +51,47 @@ export type ProducerAction =
   | { type: 'TRIM_CLIP'; index: number; start: number; end: number }
   | { type: 'TRIGGER_GENERATE_HOOKS'; refresh?: boolean }
   | { type: 'TRIGGER_GENERATE_BROLL'; force?: boolean }
-  | { type: 'TRIGGER_RENDER' };
+  | { type: 'TRIGGER_RENDER' }
+  | {
+      type: 'SET_DYNAMIC_STYLE';
+      target: 'hook' | 'subtitle' | 'video' | 'canvas' | 'outro';
+      styles: Record<string, string | number>;
+    }
+  | {
+      type: 'CLEAR_DYNAMIC_STYLES';
+      target?: 'hook' | 'subtitle' | 'video' | 'canvas' | 'outro' | 'all';
+    }
+  | {
+      type: 'ADD_DYNAMIC_OVERLAY';
+      overlay: {
+        id?: string;
+        start: number;
+        end: number;
+        type: 'sticker' | 'callout' | 'shape' | 'text' | 'badge' | 'html';
+        content: string;
+        position?: { x?: string | number; y?: string | number };
+        styles?: Record<string, string | number>;
+        animation?: 'bounce' | 'pulse' | 'fade' | 'slide' | 'spin' | 'none';
+      };
+    }
+  | { type: 'CLEAR_DYNAMIC_OVERLAYS' }
+  | {
+      type: 'SET_BACKGROUND_MUSIC';
+      trackId?: string | null;
+      volume?: number;
+      autoDucking?: boolean;
+    };
+
+export interface DynamicOverlayItem {
+  id: string;
+  start: number;
+  end: number;
+  type: 'sticker' | 'callout' | 'shape' | 'text' | 'badge' | 'html';
+  content: string;
+  position?: { x?: string | number; y?: string | number };
+  styles?: Record<string, string | number>;
+  animation?: 'bounce' | 'pulse' | 'fade' | 'slide' | 'spin' | 'none';
+}
 
 export interface ProducerEditorContext {
   video?: {
@@ -113,7 +153,14 @@ export interface ProducerEditorContext {
   audio: {
     ttsVoice?: string;
     sourceVolume: number;
+    backgroundMusic?: {
+      trackId?: string | null;
+      volume?: number;
+      autoDucking?: boolean;
+    };
   };
+  dynamicStyles?: Record<string, Record<string, string | number>>;
+  dynamicOverlays?: DynamicOverlayItem[];
 }
 
 export interface ProducerChatMessage {

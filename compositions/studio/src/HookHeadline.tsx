@@ -49,11 +49,21 @@ export const HookHeadline: React.FC<HookHeadlineProps> = ({
   badgeColor,
   highlightWords,
   visualPreset,
+  durationFrames,
 }) => {
   // Default to kinetic-punch when no preset is resolved (backward compat).
   const preset: VisualPreset = visualPreset ?? VISUAL_PRESET_REGISTRY['kinetic-punch'];
 
-  const commonProps = { text, theme, tag, badgePresetId, badgeColor, highlightWords, visualPreset: preset };
+  const commonProps = {
+    text,
+    theme,
+    tag,
+    badgePresetId,
+    badgeColor,
+    highlightWords,
+    visualPreset: preset,
+    durationFrames,
+  };
 
   if (preset.animation === 'fade') {
     return <FadeRenderer {...commonProps} />;

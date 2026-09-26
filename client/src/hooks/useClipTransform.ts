@@ -14,9 +14,13 @@ import type {
   BadgePresetId,
   BadgeColorVariant,
   OutroPresetId,
+  TranscriptResult,
+  SubtitleSize,
 } from '../types';
+import type { DynamicOverlayItem } from '../types/producer';
 import { resolvePresetIdFromHook } from '../lib/visual-presets';
 import { resolveClientOutroPreset } from '../lib/outro-presets';
+import { AUDIO_CATALOG, type MusicTrack } from '../lib/audio-catalog';
 
 export function useClipTransform() {
   const [step, setStep] = useState<number>(1);
@@ -48,8 +52,56 @@ export function useClipTransform() {
   const [outroChannelName, setOutroChannelName] = useState('');
   const [outroLogoUrl, setOutroLogoUrl] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState('beast');
+  const [subtitleSize, setSubtitleSize] = useState<SubtitleSize>('md');
   const [whisperProvider, setWhisperProvider] = useState('openai');
   const [customPrompt, setCustomPrompt] = useState('');
+
+  // Background Music state (default to first lo-fi track for instant audible atmosphere)
+  const [selectedMusicTrack, setSelectedMusicTrack] = useState<MusicTrack | null>(() => AUDIO_CATALOG[0] ?? null);
+  const [musicVolume, setMusicVolume] = useState<number>(25); // 0-100
+  const [autoDucking, setAutoDucking] = useState<boolean>(true);
+
+  // Dynamic CSS Style Overrides & Universal Dynamic Overlays (Zero-Code Dynamic Extensibility)
+  const [dynamicStyles, setDynamicStyles] = useState<Record<string, Record<string, string | number>>>({});
+  const [dynamicOverlays, setDynamicOverlays] = useState<DynamicOverlayItem[]>([]);
+
+  const updateDynamicStyle = useCallback((target: string, styles: Record<string, string | number>) => {
+    setDynamicStyles((prev) => ({
+      ...prev,
+      [target]: {
+        ...(prev[target] || {}),
+        ...styles,
+      },
+    }));
+  }, []);
+
+  const clearDynamicStyles = useCallback((target?: string) => {
+    if (!target || target === 'all') {
+      setDynamicStyles({});
+    } else {
+      setDynamicStyles((prev) => {
+        const next = { ...prev };
+        delete next[target];
+        return next;
+      });
+    }
+  }, []);
+
+  const addDynamicOverlay = useCallback((overlay: DynamicOverlayItem) => {
+    const item: DynamicOverlayItem = {
+      ...overlay,
+      id: overlay.id || `overlay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setDynamicOverlays((prev) => [...prev, item]);
+  }, []);
+
+  const removeDynamicOverlay = useCallback((id: string) => {
+    setDynamicOverlays((prev) => prev.filter((o) => o.id !== id));
+  }, []);
+
+  const clearDynamicOverlays = useCallback(() => {
+    setDynamicOverlays([]);
+  }, []);
 
   // AI Script Drafting & TTS Narration
   const [scriptDraft, setScriptDraft] = useState<{ language?: string; sections: ScriptSection[] } | null>(null);
@@ -88,6 +140,22 @@ export function useClipTransform() {
       setOutroChannelName(downloadedVideo.channelTitle);
     }
   }, [downloadedVideo?.channelTitle]);
+
+  // Full transcript with word timestamps for real-time Remotion preview & karaoke subtitle sync
+  const [transcript, setTranscript] = useState<TranscriptResult | null>(null);
+
+  useEffect(() => {
+    const vid = downloadedVideo?.videoId;
+    if (!vid) {
+      setTranscript(null);
+      return;
+    }
+    api.getTranscript(vid).then((t) => {
+      if (t) setTranscript(t);
+    }).catch((err) => {
+      console.warn('Gagal memuat transkrip untuk sinkronisasi subtitle:', err);
+    });
+  }, [downloadedVideo?.videoId]);
 
   // Clips Analysis
   const [clips, setClips] = useState<ViralClip[]>([]);
@@ -595,6 +663,7 @@ export function useClipTransform() {
         url: targetUrl,
         language,
         templateId,
+        subtitleSize,
         audioMode,
         aspectRatio,
         enableBroll,
@@ -663,6 +732,7 @@ export function useClipTransform() {
     ttsVoice,
     sourceVolume,
     templateId,
+    subtitleSize,
     audioMode,
     aspectRatio,
     enableBroll,
@@ -734,6 +804,8 @@ export function useClipTransform() {
     setOutroLogoUrl,
     templateId,
     setTemplateId,
+    subtitleSize,
+    setSubtitleSize,
     whisperProvider,
     setWhisperProvider,
     customPrompt,
@@ -798,5 +870,24 @@ export function useClipTransform() {
     transformResult,
     transformError,
     startTransform,
+    transcript,
+    setTranscript,
+    // Dynamic Styles & Overlays
+    dynamicStyles,
+    setDynamicStyles,
+    updateDynamicStyle,
+    clearDynamicStyles,
+    dynamicOverlays,
+    setDynamicOverlays,
+    addDynamicOverlay,
+    removeDynamicOverlay,
+    clearDynamicOverlays,
+    // Background Music
+    selectedMusicTrack,
+    setSelectedMusicTrack,
+    musicVolume,
+    setMusicVolume,
+    autoDucking,
+    setAutoDucking,
   };
 }
