@@ -153,6 +153,13 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const activeHookVideoRef = useRef<HTMLVideoElement | null>(null);
   const modalVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  const handleStepChange = (nextStep: number) => {
+    setStep(nextStep);
+    if (nextStep > step) {
+      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    }
+  };
+
   // AI Producer state
   const [isProducerOpen, setIsProducerOpen] = useState(false);
   const producer = useAiProducer(transform, transform.downloadedVideo);
@@ -227,7 +234,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
       {/* 4-Step Sequencer Stepper */}
       <StudioStepper
         step={step}
-        setStep={setStep}
+        setStep={handleStepChange}
         clipsCount={clips.length}
         selectedClipsCount={selectedClipIndices.length}
       />
@@ -267,7 +274,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
       {/* STEP 2: Retention Matrix & Scoring */}
       <Step2ClipsSelection
         step={step}
-        setStep={setStep}
+        setStep={handleStepChange}
         clips={clips}
         selectedClipIndices={selectedClipIndices}
         selectedClipIndex={selectedClipIndex}
@@ -311,7 +318,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
       {/* STEP 3: Composer Studio (Subtitles & B-Roll Inspector) */}
       <Step3Styling
         step={step}
-        setStep={setStep}
+        setStep={handleStepChange}
         outputMode={outputMode}
         setOutputMode={setOutputMode}
         scriptDraft={scriptDraft}
@@ -405,7 +412,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
       {/* STEP 4: Master Output */}
       <Step4Output
         step={step}
-        setStep={setStep}
+        setStep={handleStepChange}
         transformResult={transformResult}
         transformError={transformError}
         runningTransform={runningTransform}

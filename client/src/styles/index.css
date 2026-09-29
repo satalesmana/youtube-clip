@@ -4997,6 +4997,100 @@ textarea:focus {
   flex-shrink: 0;
 }
 
+.step3-visual-options {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(50, 130, 184, 0.1), rgba(14, 21, 30, 0.94) 55%);
+  border: 1px solid rgba(50, 130, 184, 0.46);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.step3-visual-options-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.step3-visual-options-heading h4 {
+  margin: 0;
+  color: #fff;
+  font-size: 15px;
+}
+
+.step3-visual-options-heading p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.step3-visual-options-heading > span {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  color: var(--ice);
+  background: rgba(50, 130, 184, 0.16);
+  border: 1px solid rgba(50, 130, 184, 0.32);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.step3-visual-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.step3-option-card {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  background: rgba(5, 10, 18, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+}
+
+.step3-option-description {
+  margin: 6px 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.step3-option-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.step3-option-toggle input,
+.step3-option-card input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+.step3-option-expand {
+  margin-top: 10px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.step3-readiness {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.step3-readiness.ready { color: #A3E635; }
+.step3-readiness.needs-attention { color: #FBBF24; }
+
 @media (max-width: 768px) {
   .step3-substepper {
     flex-direction: column;

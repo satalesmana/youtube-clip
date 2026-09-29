@@ -49,8 +49,8 @@ export const StudioStepper: React.FC<StudioStepperProps> = ({
       >
         <span className="wizard-step-num">3</span>
         <div className="wizard-step-info">
-          <span className="wizard-step-title">Gaya &amp; Subtitle</span>
-          <span className="wizard-step-desc">Template &amp; B-Roll</span>
+          <span className="wizard-step-title">Produksi Video</span>
+          <span className="wizard-step-desc">Format, gaya &amp; visual</span>
         </div>
       </div>
 

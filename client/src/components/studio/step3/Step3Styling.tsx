@@ -194,21 +194,24 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   channelName,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<Step3SubTab>('mode');
+  const [showBrollSettings, setShowBrollSettings] = useState(false);
+  const [showOutroSettings, setShowOutroSettings] = useState(false);
+  const canContinue = selectedClipIndices.length > 0 && (outputMode !== 'narration' || Boolean(ttsAudioUrl));
 
   return (
     <div className={`card ${step !== 3 ? 'hidden' : ''}`}>
       <div className="card-head">
         <div className="card-head-title">
-          <h2>3. Desain Subtitle &amp; Mode Konten</h2>
-          <span className="head-badge">Gaya &amp; Narasi</span>
+          <h2>3. Produksi Video</h2>
+          <span className="head-badge">Format, gaya &amp; visual</span>
         </div>
         <p className="muted">
-          Konfigurasikan gaya video dalam 3 langkah terarah: pilih tipe narasi, desain hook pembuka 3 detik, dan tentukan gaya subtitle karaoke.
+          Atur format video, tampilan pembuka, subtitle, dan opsi visual sebelum masuk ke editor.
         </p>
       </div>
 
       {/* Focused Sub-Stepper Navigation for Step 3 */}
-      <div className="step3-substepper" role="tablist" aria-label="Tahapan Desain Video">
+      <div className="step3-substepper" role="tablist" aria-label="Pengaturan produksi video">
         <button
           type="button"
           role="tab"
@@ -218,7 +221,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
         >
           <div className="step3-substep-num">1</div>
           <div className="step3-substep-content">
-            <span className="step3-substep-title">1. Tipe &amp; Narasi</span>
+            <span className="step3-substep-title">1. Format &amp; Narasi</span>
             <span className="step3-substep-subtitle">
               {outputMode === 'narration' ? '🎙️ Narasi AI' : '🎬 Klip Asli (Reel)'}
             </span>
@@ -236,9 +239,9 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
         >
           <div className="step3-substep-num">2</div>
           <div className="step3-substep-content">
-            <span className="step3-substep-title">2. Hook Intro (0–3s)</span>
+            <span className="step3-substep-title">2. Teks Pembuka</span>
             <span className="step3-substep-subtitle">
-              {enableHookIntro ? `⚡ ${selectedVisualPreset.toUpperCase()}` : 'Nonaktif'}
+              {enableHookIntro ? `⚡ ${selectedVisualPreset.toUpperCase()}` : 'Pembuka nonaktif'}
             </span>
           </div>
         </button>
@@ -254,9 +257,9 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
         >
           <div className="step3-substep-num">3</div>
           <div className="step3-substep-content">
-            <span className="step3-substep-title">3. Subtitle &amp; Render</span>
+            <span className="step3-substep-title">3. Subtitle &amp; Visual</span>
             <span className="step3-substep-subtitle">
-              {templateId === 'beast' || templateId === 'mrbeast' ? '🎨 MrBeast' : templateId === 'hormozi' ? '🎨 Hormozi' : '🎨 Clean'}
+              {templateId === 'beast' || templateId === 'mrbeast' ? 'Subtitle · MrBeast' : templateId === 'hormozi' ? 'Subtitle · Hormozi' : 'Subtitle · Clean'}
             </span>
           </div>
         </button>
@@ -356,7 +359,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
               className="btn primary"
               onClick={() => setActiveSubTab('hook')}
             >
-              Lanjut ke Desain Hook Intro (3.2) →
+              Lanjut ke Teks Pembuka →
             </button>
           </div>
         </div>
@@ -368,10 +371,10 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h3 style={{ margin: '0 0 4px', fontSize: '15px', color: '#fff' }}>
-                ⚡ Hook Intro &amp; Judul Kinetik (0–3 Detik)
+                ⚡ Teks pembuka (0–3 detik)
               </h3>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-                Teks animasi pembuka penentu retensi 3 detik pertama agar penonton tidak men-scroll lewat.
+                Teks animasi yang tampil pada awal video.
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -383,7 +386,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
                   style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                 />
                 <span style={{ color: enableHookIntro ? 'var(--ice)' : 'var(--text-muted)', fontWeight: 600 }}>
-                  {enableHookIntro ? '✓ Intro Hook Aktif' : 'Intro Hook Nonaktif'}
+                  {enableHookIntro ? '✓ Teks pembuka aktif' : 'Teks pembuka nonaktif'}
                 </span>
               </label>
               <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Langkah 2 dari 3</span>
@@ -451,7 +454,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
               className="btn primary"
               onClick={() => setActiveSubTab('subtitles')}
             >
-              Lanjut ke Subtitle &amp; Render (3.3) →
+              Lanjut ke Subtitle &amp; Visual →
             </button>
           </div>
         </div>
@@ -463,10 +466,10 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           <div style={{ marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h3 style={{ margin: '0 0 4px', fontSize: '14px', color: '#fff' }}>
-                🎨 Gaya Subtitle Karaoke &amp; Pengaturan Akhir
+                🎨 Subtitle &amp; opsi visual
               </h3>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-                Tentukan gaya animasi takarir kata per kata dan opsi visual tambahan sebelum merender video master.
+                Pilih tampilan subtitle. Opsi kamera, B-roll, dan kartu penutup bisa diatur jika diperlukan.
               </p>
             </div>
             <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Langkah 3 dari 3</span>
@@ -481,10 +484,20 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           />
 
           {/* B-roll & Outro CTA toggles */}
-          <div className="form-row" style={{ marginTop: '20px' }}>
+          <section className="step3-visual-options" aria-labelledby="step3-visual-options-title">
+            <div className="step3-visual-options-heading">
+              <div>
+                <h4 id="step3-visual-options-title">Opsi visual tambahan</h4>
+                <p>Atur framing dan sisipan visual yang akan muncul pada hasil video.</p>
+              </div>
+              <span>OPSIONAL</span>
+            </div>
+            <div className="step3-visual-options-grid">
             <div className="input-group">
-              <label className="label-main">Kamera Otomatis</label>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div className="step3-option-card">
+                <label className="label-main" htmlFor="check-auto-reframe">Framing wajah otomatis</label>
+                <p className="step3-option-description">Jaga pembicara tetap berada di area fokus.</p>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                 <input
                   type="checkbox"
                   id="check-auto-reframe"
@@ -495,46 +508,34 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
                 <label htmlFor="check-auto-reframe" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
                   Ikuti wajah dengan pan dan zoom halus
                   <span style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)', fontSize: '11px' }}>
-                    Untuk Reel dan Narasi vertikal; memerlukan OpenCV (`opencv-python-headless`). Jika wajah tidak terdeteksi, framing tengah digunakan.
+                    Jika wajah tidak terdeteksi, video memakai framing tengah.
                   </span>
                 </label>
+                </div>
               </div>
             </div>
             <div className="input-group">
-              <label className="label-main">Sisipan Footage B-Roll Otomatis</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                <input
-                  type="checkbox"
-                  id="check-broll"
-                  checked={enableBroll}
-                  onChange={(e) => setEnableBroll(e.target.checked)}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <label htmlFor="check-broll" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
-                  Aktifkan sisipan video B-roll otomatis sesuai konteks obrolan
-                </label>
+              <div className="step3-option-card">
+                <label className="label-main" htmlFor="check-broll">B-roll otomatis</label>
+                <p className="step3-option-description">Sisipkan footage pendukung sesuai konteks percakapan.</p>
+                <label className="step3-option-toggle"><input type="checkbox" id="check-broll" checked={enableBroll} onChange={(e) => setEnableBroll(e.target.checked)} /> Aktifkan B-roll</label>
+                {enableBroll && <button type="button" className="btn ghost step3-option-expand" aria-expanded={showBrollSettings} onClick={() => setShowBrollSettings((open) => !open)}>{showBrollSettings ? 'Tutup pengaturan' : `Atur footage (${brollPlacements.filter((p) => p.enabled !== false).length} aktif)`}</button>}
               </div>
             </div>
 
             <div className="input-group">
-              <label className="label-main">Kartu Penutup (Outro Call to Action)</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                <input
-                  type="checkbox"
-                  id="check-outro"
-                  checked={enableIntroOutro}
-                  onChange={(e) => setEnableIntroOutro(e.target.checked)}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <label htmlFor="check-outro" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
-                  Pasang kartu promosi 3 detik di akhir video
-                </label>
+              <div className="step3-option-card">
+                <label className="label-main" htmlFor="check-outro">Kartu penutup</label>
+                <p className="step3-option-description">Tambahkan ajakan mengikuti channel di akhir video.</p>
+                <label className="step3-option-toggle"><input type="checkbox" id="check-outro" checked={enableIntroOutro} onChange={(e) => setEnableIntroOutro(e.target.checked)} /> Tambahkan kartu penutup</label>
+                {enableIntroOutro && <button type="button" className="btn ghost step3-option-expand" aria-expanded={showOutroSettings} onClick={() => setShowOutroSettings((open) => !open)}>{showOutroSettings ? 'Tutup pengaturan' : 'Atur tampilan kartu'}</button>}
               </div>
             </div>
-          </div>
+            </div>
+          </section>
 
           {/* B-Roll Visual Inspector Panel */}
-          {enableBroll && (
+          {enableBroll && showBrollSettings && (
             <BrollInspectorPanel
               brollPlacements={brollPlacements}
               loadingBroll={loadingBroll}
@@ -548,7 +549,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           )}
 
           {/* Outro CTA Preset & Styling Panel */}
-          {enableIntroOutro && (
+          {enableIntroOutro && showOutroSettings && (
             <OutroCardStylingPanel
               selectedPreset={outroPreset}
               onPresetChange={setOutroPreset}
@@ -574,8 +575,8 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
                   Ringkasan Konfigurasi Render Video
                 </span>
               </div>
-              <span style={{ fontSize: '11px', color: '#A3E635', fontWeight: 600 }}>
-                ✓ Siap Diproses
+              <span className={`step3-readiness ${canContinue ? 'ready' : 'needs-attention'}`}>
+                {canContinue ? '✓ Siap ke editor' : outputMode === 'narration' && selectedClipIndices.length > 0 ? 'Perlu audio narasi' : 'Pilih minimal 1 klip'}
               </span>
             </div>
 
@@ -588,7 +589,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
               </div>
 
               <div className="step3-summary-item">
-                <span className="step3-summary-item-label">Hook Pembuka 0–3s</span>
+                <span className="step3-summary-item-label">Teks pembuka 0–3s</span>
                 <span className="step3-summary-item-value">
                   {enableHookIntro ? `⚡ ${selectedVisualPreset.toUpperCase()}` : '⚪ Nonaktif'}
                 </span>
@@ -602,28 +603,13 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
               </div>
 
               <div className="step3-summary-item">
-                <span className="step3-summary-item-label">Klip Terpilih</span>
-                <span className="step3-summary-item-value">
-                  📦 {selectedClipIndices.length} Klip Siap Render
-                </span>
+                <span className="step3-summary-item-label">Klip &amp; visual</span>
+                <span className="step3-summary-item-value">📦 {selectedClipIndices.length} klip · {autoReframe ? 'Framing wajah' : 'Framing standar'} · {enableBroll ? `${brollPlacements.filter((p) => p.enabled !== false).length} B-roll` : 'Tanpa B-roll'}</span>
               </div>
 
               <div className="step3-summary-item">
-                <span className="step3-summary-item-label">Footage B-Roll</span>
-                <span className="step3-summary-item-value">
-                  {enableBroll
-                    ? `🎞️ ${brollPlacements.filter((p) => p.enabled !== false).length} Klip Aktif`
-                    : '⚪ Nonaktif'}
-                </span>
-              </div>
-
-              <div className="step3-summary-item">
-                <span className="step3-summary-item-label">Kartu Outro CTA</span>
-                <span className="step3-summary-item-value">
-                  {enableIntroOutro
-                    ? `🎯 ${resolveClientOutroPreset(outroPreset).name} (${outroDuration}s • @${(outroChannelName || channelName || 'kreator').replace(/^@/, '')}${outroLogoUrl ? ' • 🖼️ Logo' : ''})`
-                    : '⚪ Nonaktif'}
-                </span>
+                <span className="step3-summary-item-label">Penutup</span>
+                <span className="step3-summary-item-value">{enableIntroOutro ? `🎯 ${resolveClientOutroPreset(outroPreset).name} · ${outroDuration} dtk` : 'Tanpa kartu penutup'}</span>
               </div>
             </div>
           </div>
@@ -631,18 +617,22 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           {/* Final Navigation Action Button to Step 4 */}
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button type="button" className="btn ghost" onClick={() => setActiveSubTab('hook')}>
-              ← Kembali ke Desain Hook
+              ← Kembali ke Teks Pembuka
             </button>
             <button
               type="button"
               className="btn primary"
               style={{ padding: '12px 24px', fontSize: '14.5px', fontWeight: 700 }}
-              disabled={selectedClipIndices.length === 0}
+              disabled={!canContinue}
               onClick={() => setStep(4)}
             >
-              {selectedClipIndices.length > 1
-                ? `Lanjut ke Tahap 4 (${selectedClipIndices.length} Klip) →`
-                : 'Lanjut ke Tahap 4 (Editor Video) →'}
+              {!canContinue && outputMode === 'narration' && selectedClipIndices.length > 0
+                ? 'Buat audio narasi untuk melanjutkan'
+                : selectedClipIndices.length === 0
+                  ? 'Pilih klip untuk melanjutkan'
+                  : selectedClipIndices.length > 1
+                    ? `Lanjut ke Tahap 4 (${selectedClipIndices.length} Klip) →`
+                    : 'Lanjut ke Tahap 4 (Editor Video) →'}
             </button>
           </div>
         </div>
