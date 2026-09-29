@@ -76,6 +76,7 @@ export interface RemotionStudioCompositionProps {
   dynamicStyles?: Record<string, React.CSSProperties>;
   dynamicOverlays?: Array<{
     id: string;
+    componentId?: string;
     start: number;
     end: number;
     type: 'sticker' | 'callout' | 'shape' | 'text' | 'badge' | 'html';
@@ -196,7 +197,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   dynamicOverlays = [],
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames: compositionDurationFrames } = useVideoConfig();
 
   const currentTimeSec = frame / fps;
   const targetAspect = aspectRatio === '16:9' ? 16 / 9 : aspectRatio === '1:1' ? 1 : 9 / 16;
@@ -210,7 +211,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     focusX = left.x + (right.x - left.x) * progress;
     focusY = left.y + (right.y - left.y) * progress;
   }
-  const totalDurationSec = (useVideoConfig().durationInFrames || 900) / fps;
+  const totalDurationSec = (compositionDurationFrames || 900) / fps;
 
   // ---------------------------------------------------------------------------
   // 1. Hook Intro Animations (0s - 3.5s)
@@ -241,15 +242,13 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   const outroStartSec = Math.max(0, totalDurationSec - outroDuration);
   const outroStartFrame = Math.round(outroStartSec * fps);
   const isOutroActive = enableIntroOutro && frame >= outroStartFrame;
-
-  const outroSpring = spring({
-    frame: Math.max(0, frame - outroStartFrame),
-    fps,
-    config: { damping: 15, stiffness: 100 },
-  });
-
-  const outroTranslateY = interpolate(outroSpring, [0, 1], [150, 0]);
-  const outroOpacity = interpolate(outroSpring, [0, 1], [0, 1]);
+  const outroDurationFrames = Math.max(
+    1,
+    Math.min(
+      Math.round(outroDuration * fps),
+      (compositionDurationFrames || 900) - outroStartFrame,
+    ),
+  );
   const outroTheme: Theme = {
     id: 'live-preview-outro',
     accent: '#38BDF8',
@@ -294,8 +293,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   const showSubtitles =
     !isRenderedVideo &&
     (!isHookActive || currentTimeSec > 2.0) &&
-    !isOutroActive &&
-    (hasRealCaptions ? Boolean(activeCaption) : true);
+    (hasRealCaptions ? Boolean(activeCaption) : !isOutroActive);
 
   // Default demo subtitle sentences if no custom text provided
   const sampleWords = (
@@ -440,7 +438,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
           <Video
             src={videoSrc}
             startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
-            volume={isRenderedVideo ? 1 : (outputMode === 'narration' ? (sourceVolume ?? 0.25) : 1)}
+            volume={sourceVolume ?? 1}
             style={{
               width: '100%',
               height: '100%',
@@ -669,9 +667,9 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 35,
             pointerEvents: 'none',
             ...dynamicStyles.subtitle,
+            zIndex: 60,
           }}
         >
           {hasRealCaptions && activeCaption ? (
@@ -974,25 +972,20 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {/* -------------------------------------------------------------------- */}
       {/* LAYER 6: Outro Call to Action Card (Last N seconds)                  */}
       {/* -------------------------------------------------------------------- */}
-      {isOutroActive && (
-        <AbsoluteFill
-          style={{
-            transform: `translateY(${outroTranslateY}px)`,
-            opacity: outroOpacity,
-            zIndex: 50,
-            ...dynamicStyles.outro,
-          }}
-        >
-          <Outro
-            theme={outroTheme}
-            channelName={channelName}
-            durationFrames={Math.max(1, Math.round(outroDuration * fps))}
-            logoSrc={outroLogoUrl}
-            preset={outroPreset}
-            ctaText={outroCtaText}
-            buttonText={outroButtonText}
-          />
-        </AbsoluteFill>
+      {enableIntroOutro && (
+        <Sequence from={outroStartFrame} durationInFrames={outroDurationFrames}>
+          <AbsoluteFill style={{ zIndex: 50, ...dynamicStyles.outro }}>
+            <Outro
+              theme={outroTheme}
+              channelName={channelName}
+              durationFrames={outroDurationFrames}
+              logoSrc={outroLogoUrl}
+              preset={outroPreset}
+              ctaText={outroCtaText}
+              buttonText={outroButtonText}
+            />
+          </AbsoluteFill>
+        </Sequence>
       )}
 
       {/* -------------------------------------------------------------------- */}
@@ -1003,9 +996,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
           {dynamicOverlays.map((ov) => {
             if (currentTimeSec < ov.start || currentTimeSec > ov.end) return null;
             const posX = ov.position?.x ?? '50%';
-            const posY = ov.position?.y ?? '50%';
+            const posY = ov.position?.y ?? (ov.componentId === 'lower-third' ? '74%' : ov.componentId === 'cta-banner' ? '68%' : '42%');
+            const localFrame = Math.max(0, frame - Math.round(ov.start * fps));
+            const entrance = spring({ frame: localFrame, fps, config: { damping: 16, stiffness: 180, mass: 0.7 } });
 
-            let animTransform = 'translate(-50%, -50%)';
+            let animTransform = `translate(-50%, -50%) translateY(${interpolate(entrance, [0, 1], [24, 0])}px) scale(${interpolate(entrance, [0, 1], [0.92, 1])})`;
             if (ov.animation === 'pulse') {
               const pulse = 1 + 0.08 * Math.sin(frame * 0.2);
               animTransform += ` scale(${pulse})`;
@@ -1036,7 +1031,20 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                   ...ov.styles,
                 }}
               >
-                {isHtml ? (
+                {ov.componentId === 'stat-card' ? (
+                  <div style={{ minWidth: 210, padding: '16px 24px', borderRadius: 18, textAlign: 'center', color: '#fff', background: 'linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,41,59,.92))', border: '1px solid rgba(56,189,248,.8)', boxShadow: '0 12px 36px rgba(0,0,0,.4)' }}>
+                    <div style={{ fontSize: 34, lineHeight: 1.1, fontWeight: 900, color: '#67e8f9' }}>{ov.content.split('\n')[0]}</div>
+                    {ov.content.includes('\n') && <div style={{ marginTop: 6, fontSize: 15, fontWeight: 700 }}>{ov.content.split('\n').slice(1).join(' ')}</div>}
+                  </div>
+                ) : ov.componentId === 'quote-card' ? (
+                  <div style={{ maxWidth: 680, padding: '18px 24px', borderLeft: '5px solid #facc15', borderRadius: 12, color: '#fff', background: 'rgba(15,23,42,.9)', fontSize: 24, lineHeight: 1.25, fontWeight: 800, boxShadow: '0 10px 32px rgba(0,0,0,.4)' }}>“{ov.content}”</div>
+                ) : ov.componentId === 'lower-third' ? (
+                  <div style={{ padding: '10px 18px', borderRadius: 8, color: '#fff', background: 'linear-gradient(90deg, rgba(2,132,199,.96), rgba(15,23,42,.9))', borderLeft: '4px solid #67e8f9', fontSize: 20, fontWeight: 800 }}>{ov.content}</div>
+                ) : ov.componentId === 'cta-banner' ? (
+                  <div style={{ padding: '14px 24px', borderRadius: 999, color: '#111827', background: '#fde047', fontSize: 22, fontWeight: 900, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>{ov.content}</div>
+                ) : ov.componentId === 'checklist' ? (
+                  <div style={{ display: 'grid', gap: 8, padding: '16px 20px', borderRadius: 14, color: '#fff', background: 'rgba(15,23,42,.92)', border: '1px solid rgba(148,163,184,.55)', fontSize: 18, fontWeight: 700 }}>{ov.content.split('\n').slice(0, 3).map((line, index) => <div key={index}>✓ {line}</div>)}</div>
+                ) : isHtml ? (
                   <div
                     style={{
                       display: 'inline-block',

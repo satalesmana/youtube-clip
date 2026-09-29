@@ -10,8 +10,8 @@ import { CanvasOverlayEditor } from './CanvasOverlayEditor';
 import { resolveAudioStreamUrl } from '../../lib/audio-catalog';
 import type { useClipTransform } from '../../hooks/useClipTransform';
 import type { useAiProducer } from '../../hooks/useAiProducer';
-import { formatTimecode } from '../studio/studioUtils';
 import { resolveBrollMediaAsset, resolveStockBrollUrl } from '../../lib/stock-broll';
+import { resolveClientOutroPreset } from '../../lib/outro-presets';
 import { api } from '../../services/api';
 
 
@@ -181,6 +181,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
   const [promptInput, setPromptInput] = useState('');
   const [activeTab, setActiveTab] = useState<'editor' | 'hook' | 'subtitle' | 'music'>('editor');
+  const [timelineZoom, setTimelineZoom] = useState(1);
 
   // playerRef for timeline sync
   const playerRef = useRef<PlayerRef | null>(null);
@@ -194,6 +195,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
   const [faceFocusPoints, setFaceFocusPoints] = useState<Array<{ time: number; x: number; y: number }>>([]);
   const [faceSourceAspectRatio, setFaceSourceAspectRatio] = useState(16 / 9);
   const [faceFocusStatus, setFaceFocusStatus] = useState<'idle' | 'analyzing' | 'ready' | 'no-face' | 'error'>('idle');
+  const selectedOutroPreset = resolveClientOutroPreset(outroPreset);
 
   const fps = 30;
 
@@ -224,6 +226,11 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       ? Math.max(clipBaseDuration, transform.ttsDurationSeconds)
       : clipBaseDuration);
   const durationInFrames = Math.max(90, Math.round(videoDurationSec * fps));
+  const effectiveDurationSec = durationInFrames / fps;
+  const effectiveOutroDurationSec = Math.min(
+    Math.max(0, outroDuration || 3),
+    effectiveDurationSec,
+  );
 
   // Active clip boundaries in source video
   const clipStart = activeClip?.start ?? 0;
@@ -601,13 +608,22 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     [dynamicOverlays],
   );
 
-  // Composition props (reactive)
-  const compositionProps: RemotionStudioCompositionProps = useMemo(
+  // Broll Placements memoized prop
+  const brollPlacementsProp = useMemo(
+    () =>
+      normalizedBrollList.map((b) => ({
+        start: b.start,
+        end: b.end,
+        query: b.query,
+        assetUrl: b.assetUrl,
+        posterUrl: b.posterUrl,
+      })),
+    [normalizedBrollList],
+  );
+
+  // Hook Intro sub-props
+  const hookIntroProps = useMemo(
     () => ({
-      videoSrc,
-      thumbnailUrl,
-      durationInSeconds: videoDurationSec,
-      aspectRatio,
       enableHookIntro,
       hookText: customHookText || activeClip?.title || 'Trik Rahasia Meningkatkan View!',
       hookTag: customHookTag || '🔥 JANGAN DI-SKIP',
@@ -617,6 +633,74 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       hookTypography: selectedHookTypography || 'kinetic',
       badgePreset: selectedHookBadgePreset || 'neon-outline',
       badgeColor: selectedHookBadgeColor || 'cyan',
+    }),
+    [
+      enableHookIntro,
+      customHookText,
+      activeClip?.title,
+      selectedVisualPreset,
+      selectedHookLayout,
+      selectedHookAnimation,
+      selectedHookTypography,
+      selectedHookBadgePreset,
+      selectedHookBadgeColor,
+    ],
+  );
+
+  // Outro sub-props
+  const outroProps = useMemo(
+    () => ({
+      enableIntroOutro,
+      outroPreset,
+      outroCtaText: outroCtaText.trim() || selectedOutroPreset.defaultCtaText,
+      outroButtonText: outroButtonText.trim() || selectedOutroPreset.defaultButtonText,
+      outroDuration: effectiveOutroDurationSec,
+      channelName: outroChannelName || downloadedVideo?.channelTitle || '@kreator',
+      outroLogoUrl: outroLogoUrl || undefined,
+    }),
+    [
+      enableIntroOutro,
+      outroPreset,
+      outroCtaText,
+      outroButtonText,
+      outroDuration,
+      effectiveOutroDurationSec,
+      selectedOutroPreset,
+      outroChannelName,
+      downloadedVideo?.channelTitle,
+      outroLogoUrl,
+    ],
+  );
+
+  // Audio sub-props
+  const audioProps = useMemo(
+    () => ({
+      musicSrc: resolveAudioStreamUrl(selectedMusicTrack?.streamUrl),
+      musicVolume: musicVolume / 100,
+      autoDucking,
+      sourceVolume: (transform.sourceVolume ?? 25) / 100,
+      narrationAudioUrl: transform.outputMode === 'narration' ? (transform.ttsAudioUrl || undefined) : undefined,
+      narrationVolume: 1,
+      outputMode: transform.outputMode,
+    }),
+    [
+      selectedMusicTrack?.streamUrl,
+      musicVolume,
+      autoDucking,
+      transform.sourceVolume,
+      transform.outputMode,
+      transform.ttsAudioUrl,
+    ],
+  );
+
+  // Composition props (reactive, merged from decoupled memo blocks)
+  const compositionProps: RemotionStudioCompositionProps = useMemo(
+    () => ({
+      videoSrc,
+      thumbnailUrl,
+      durationInSeconds: effectiveDurationSec,
+      aspectRatio,
+      ...hookIntroProps,
       templateId,
       subtitleSize,
       subtitleText: activeClip?.title,
@@ -626,74 +710,35 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         videoSrc === transform.transformResult.videoUrl,
       ),
       enableBroll,
-      brollPlacements: normalizedBrollList.map((b) => ({
-        start: b.start,
-        end: b.end,
-        query: b.query,
-        assetUrl: b.assetUrl,
-        posterUrl: b.posterUrl,
-      })),
-      enableIntroOutro,
-      outroPreset,
-      outroCtaText: outroCtaText || 'Follow untuk update tips video berikutnya!',
-      outroButtonText: outroButtonText || 'Follow',
-      outroDuration: outroDuration || 3,
-      channelName: outroChannelName || downloadedVideo?.channelTitle || '@kreator',
-      outroLogoUrl: outroLogoUrl || undefined,
-      // Music & Audio
-      musicSrc: resolveAudioStreamUrl(selectedMusicTrack?.streamUrl),
-      musicVolume: musicVolume / 100,
-      autoDucking,
-      sourceVolume: transform.outputMode === 'narration' ? ((transform.sourceVolume ?? 25) / 100) : 1,
-      narrationAudioUrl: transform.outputMode === 'narration' ? (transform.ttsAudioUrl || undefined) : undefined,
-      narrationVolume: 1,
-      outputMode: transform.outputMode,
+      brollPlacements: brollPlacementsProp,
+      ...outroProps,
+      ...audioProps,
       videoStartFromSec: (videoSrc && videoSrc.includes('/downloads/')) ? clipStart : 0,
       faceFocusPoints,
       faceSourceAspectRatio,
-      // Dynamic Styles & Universal Overlays
       dynamicStyles,
       dynamicOverlays,
     }),
     [
       videoSrc,
-      faceFocusPoints,
-      faceSourceAspectRatio,
       thumbnailUrl,
-      videoDurationSec,
+      effectiveDurationSec,
       aspectRatio,
-      enableHookIntro,
-      customHookText,
-      activeClip,
-      customHookTag,
-      selectedVisualPreset,
-      selectedHookLayout,
-      selectedHookAnimation,
-      selectedHookTypography,
-      selectedHookBadgePreset,
-      selectedHookBadgeColor,
+      hookIntroProps,
       templateId,
       subtitleSize,
-      clipCaptions,
-      narrationCaptions,
+      activeClip?.title,
       transform.outputMode,
-      transform.ttsAudioUrl,
-      clipStart,
-      transform.transformResult,
+      narrationCaptions,
+      clipCaptions,
+      transform.transformResult?.videoUrl,
       enableBroll,
-      normalizedBrollList,
-      enableIntroOutro,
-      outroPreset,
-      outroCtaText,
-      outroButtonText,
-      outroDuration,
-      outroChannelName,
-      outroLogoUrl,
-      downloadedVideo?.channelTitle,
-      selectedMusicTrack,
-      musicVolume,
-      autoDucking,
-      transform.sourceVolume,
+      brollPlacementsProp,
+      outroProps,
+      audioProps,
+      clipStart,
+      faceFocusPoints,
+      faceSourceAspectRatio,
       dynamicStyles,
       dynamicOverlays,
     ],
@@ -729,6 +774,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
   return (
     <div
+      className="remotion-editor-shell"
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-focus)',
@@ -773,7 +819,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h3 style={{ margin: 0, fontSize: '17px', color: '#FFFFFF', fontWeight: 800 }}>
-                Remotion Video Editor (Live Preview)
+                Editor Video
               </h3>
               <span
                 style={{
@@ -787,17 +833,17 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   textTransform: 'uppercase',
                 }}
               >
-                Opus Clip Engine
+                Live Preview
               </span>
             </div>
             <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-sub)' }}>
-              Pratinjau reaktif 60 FPS — Setiap perubahan teks, subtitle, dan B-roll langsung di-update seketika.
+              Perubahan hook, subtitle, dan B-roll langsung terlihat di pratinjau.
             </p>
           </div>
         </div>
 
         {/* Aspect Ratio Switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div className="remotion-editor-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-sub)', marginRight: '4px' }}>Format:</span>
           {(['9:16', '1:1', '16:9'] as const).map((ratio) => (
             <button
@@ -819,6 +865,14 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               {ratio === '9:16' ? '📱 9:16' : ratio === '1:1' ? '⏹️ 1:1' : '🖥️ 16:9'}
             </button>
           ))}
+          <button
+            type="button"
+            className="remotion-editor-render-button"
+            disabled={runningTransform}
+            onClick={() => startTransform()}
+          >
+            {runningTransform ? 'Merender…' : 'Render video'}
+          </button>
         </div>
       </div>
 
@@ -851,79 +905,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               color: transform.outputMode === 'narration' ? '#67E8F9' : '#6EE7B7',
             }}
           >
-            {transform.outputMode === 'narration' ? '🎙️ Mode Narasi AI Baru' : '🎞️ Mode Klip Sorotan (Audio Asli)'}
+            {transform.outputMode === 'narration' ? '🎙️ Narasi AI' : '🎞️ Klip Sorotan'}
           </span>
-
-          {/* Quick Volume Slider for Source Audio (Ducking in narration mode) */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              padding: '4px 10px',
-            }}
-          >
-            <span style={{ fontSize: '11.5px', color: 'var(--text-main)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              🔊 {transform.outputMode === 'narration' ? 'Audio Asli (Ducking):' : 'Volume Asli:'}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={transform.sourceVolume ?? 25}
-              onChange={(e) => transform.setSourceVolume(Number(e.target.value))}
-              style={{ width: '85px', cursor: 'pointer', accentColor: 'var(--accent)' }}
-              title="Atur volume suara asli video"
-            />
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 800,
-                color: (transform.sourceVolume ?? 25) === 0 ? '#EF4444' : 'var(--ice)',
-                minWidth: '34px',
-              }}
-            >
-              {(transform.sourceVolume ?? 25) === 0 ? 'Mute' : `${transform.sourceVolume ?? 25}%`}
-            </span>
-            {(transform.sourceVolume ?? 25) > 0 ? (
-              <button
-                type="button"
-                onClick={() => transform.setSourceVolume(0)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: '0 2px',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  color: 'var(--text-sub)',
-                }}
-                title="Mute suara asli"
-              >
-                🔇
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => transform.setSourceVolume(25)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: '0 2px',
-                  cursor: 'pointer',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: 'var(--accent)',
-                }}
-                title="Reset volume ke 25%"
-              >
-                🔉 25%
-              </button>
-            )}
-          </div>
 
           {transform.outputMode === 'narration' && (
             <>
@@ -1032,17 +1015,18 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       {/* UNIFIED 2-COLUMN LAYOUT: Left: Canvas & Timeline | Right: Inspector   */}
       {/* -------------------------------------------------------------------- */}
       <div
+        className="remotion-editor-workspace"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) 390px',
-          gap: '24px',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 360px)',
+          gap: '20px',
           alignItems: 'start',
         }}
       >
         {/* ================================================================== */}
         {/* LEFT / CENTER COLUMN: Player Canvas + Interactive Timeline         */}
         {/* ================================================================== */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', minWidth: 0, width: '100%' }}>
+        <div className="remotion-editor-stage-column" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', minWidth: 0, width: '100%' }}>
           {/* Player wrapper — position:relative so canvas overlay is absolute inside */}
           {/* Extra right padding reserved for library panel when canvas editor open */}
           <div
@@ -1055,6 +1039,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             }}
           >
             <div
+              className="remotion-editor-canvas-stage"
               onDragOver={(e) => {
                 e.preventDefault();
                 if (!canvasEditorOpen) setIsDragOverCanvas(true);
@@ -1176,37 +1161,14 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             </div>
           )}
 
-          {/* Timecode & Clip Info under Player */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              width: '100%',
-              maxWidth: aspectRatio === '9:16'
-                ? (canvasEditorOpen ? '420px' : '340px')
-                : aspectRatio === '1:1'
-                  ? (canvasEditorOpen ? '500px' : '420px')
-                  : '100%',
-              fontSize: '12px',
-              color: 'var(--text-sub)',
-              padding: '0 4px',
-              transition: 'max-width 0.2s ease',
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>⏱️ Durasi: {formatTimecode(videoDurationSec)}</span>
-            <span style={{ fontWeight: 600 }}>
-              {activeClip
-                ? `Klip #${(selectedClipIndex ?? 0) + 1} (${activeClip.score} Poin)`
-                : 'Klip Master'}
-            </span>
-          </div>
-
           {/* Interactive Timeline */}
           <div style={{ width: '100%' }}>
             <InteractiveTimeline
               playerRef={playerRef}
-              durationSec={videoDurationSec}
+              durationSec={effectiveDurationSec}
               fps={fps}
+              zoomLevel={timelineZoom}
+              onZoomLevelChange={setTimelineZoom}
               enableHookIntro={enableHookIntro}
               onEnableHookIntroChange={setEnableHookIntro}
               hookDurationSec={3.5}
@@ -1222,7 +1184,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               musicTrackLabel={selectedMusicTrack ? selectedMusicTrack.title : undefined}
               musicVolume={musicVolume}
               enableOutro={enableIntroOutro}
-              outroDurationSec={outroDuration || 3}
+              outroDurationSec={effectiveOutroDurationSec}
               outputMode={transform.outputMode}
               narrationAudioUrl={transform.outputMode === 'narration' ? (transform.ttsAudioUrl || undefined) : undefined}
               synthesizingTts={transform.synthesizingTts}
@@ -1253,6 +1215,14 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   prev.map((o) => {
                     if (o.id !== id) return o;
                     return { ...o, end: o.start + Math.max(0.5, newDur) };
+                  }),
+                );
+              }}
+              onAiOverlayTrim={(id, newStart, newDur) => {
+                setDynamicOverlays((prev) =>
+                  prev.map((o) => {
+                    if (o.id !== id) return o;
+                    return { ...o, start: newStart, end: newStart + newDur };
                   }),
                 );
               }}
@@ -1300,6 +1270,25 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   } as any);
                 }
               }}
+              onBrollBlockTrim={(id, newStart, newDur) => {
+                const idx = brollPlacements.findIndex(
+                  (b, i) => (b as any).id === id || `broll-${i}` === id,
+                );
+                if (idx !== -1) {
+                  const b = brollPlacements[idx];
+                  const newEnd = newStart + newDur;
+                  updateBrollPlacement(idx, {
+                    ...b,
+                    start: newStart,
+                    end: newEnd,
+                    startSec: newStart,
+                    endSec: newEnd,
+                    cue: b.cue
+                      ? { ...b.cue, start: newStart, end: newEnd }
+                      : { start: newStart, end: newEnd, query: (b as any).query || 'B-Roll' },
+                  } as any);
+                }
+              }}
             />
           </div>
         </div>
@@ -1308,6 +1297,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         {/* RIGHT COLUMN: Unified Studio Inspector Panel                       */}
         {/* ================================================================== */}
         <div
+          className="remotion-editor-inspector"
           style={{
             background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
@@ -1324,26 +1314,14 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '15px' }}>🎛️</span>
               <span style={{ fontSize: '13px', fontWeight: 800, color: '#FFFFFF', letterSpacing: '0.02em' }}>
-                Panel Kontrol Studio
+                Pengaturan
               </span>
             </div>
-            <span
-              style={{
-                fontSize: '10px',
-                color: '#38BDF8',
-                background: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontWeight: 700,
-              }}
-            >
-              Live Editor
-            </span>
           </div>
 
           {/* Sub-Tab Navigation */}
           <div
+            className="remotion-editor-inspector-tabs"
             style={{
               display: 'flex',
               gap: '4px',
@@ -1451,50 +1429,6 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                 >
                   {producer.isLoading ? '⏳...' : 'Kirim'}
                 </button>
-              </div>
-
-              {/* Quick Preset Chips */}
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginBottom: '8px' }}>
-                  ⚡ Saran Cepat Sekali-Klik:
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {[
-                    '🔥 Bikin Hook Lebih Clickbait',
-                    '🎨 Ganti Style Subtitle ke MrBeast',
-                    '🎨 Ganti Style Subtitle ke Hormozi',
-                    '🎬 Aktifkan B-Roll Pendukung',
-                    '📱 Ubah ke Rasio 9:16',
-                    '🚀 Render Video Sekarang',
-                  ].map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => handleSendPrompt(chip)}
-                      disabled={producer.isLoading}
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        color: 'var(--text-muted)',
-                        padding: '4px 10px',
-                        borderRadius: 'var(--radius-full)',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border-focus)';
-                        e.currentTarget.style.color = '#FFFFFF';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border)';
-                        e.currentTarget.style.color = 'var(--text-muted)';
-                      }}
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Applied Badges feedback */}
@@ -1905,53 +1839,6 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   )}
                 </div>
 
-                {/* Track 2: Suara Narasi AI (Only in narration mode) */}
-                {transform.outputMode === 'narration' && (
-                  <div
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid rgba(6, 182, 212, 0.3)',
-                      borderRadius: '8px',
-                      padding: '12px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#67E8F9' }}>
-                        🎙️ Suara Narasi AI Baru (TTS)
-                      </span>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: transform.ttsAudioUrl ? '#10B981' : '#F59E0B' }}>
-                        {transform.synthesizingTts ? '⏳ Mensintesis...' : transform.ttsAudioUrl ? '✓ Aktif (100%)' : '⚠️ Belum Disintesis'}
-                      </span>
-                    </div>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '11px', color: 'var(--text-sub)' }}>
-                      Suara narasi AI diputar pada volume penuh (100%) sebagai audio vokal utama.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={transform.synthesizingTts || !transform.scriptDraft?.sections?.length}
-                      onClick={() => {
-                        transform.startSynthesizeTts().catch((err) => {
-                          alert('Gagal mensintesis audio TTS: ' + (err instanceof Error ? err.message : String(err)));
-                        });
-                      }}
-                      style={{
-                        background: 'rgba(6, 182, 212, 0.15)',
-                        border: '1px solid #06B6D4',
-                        color: '#67E8F9',
-                        borderRadius: '6px',
-                        padding: '5px 12px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      {transform.synthesizingTts ? '⏳ Mensintesis...' : '🔄 Sinkronkan Ulang Audio Narasi'}
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Music Library Panel */}
@@ -1966,31 +1853,6 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             </div>
           )}
 
-          {/* Master Render Button */}
-          <button
-            type="button"
-            className="btn primary"
-            disabled={runningTransform}
-            onClick={() => startTransform()}
-            style={{
-              padding: '13px',
-              fontSize: '13.5px',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              borderRadius: 'var(--radius-md)',
-              boxShadow: '0 8px 24px rgba(50, 130, 184, 0.4)',
-              cursor: runningTransform ? 'not-allowed' : 'pointer',
-              width: '100%',
-              marginTop: '4px',
-            }}
-          >
-            {runningTransform
-              ? '⏳ Sedang Merender Video Master...'
-              : '🚀 Render Video Master (Remotion 1080x1920)'}
-          </button>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { PlayerRef } from '@remotion/player';
 import { formatTimecode } from '../studio/studioUtils';
 
@@ -55,6 +55,10 @@ export interface InteractiveTimelineProps {
   onSeek: (sec: number) => void;
   onBrollBlockMove: (id: string, newStartSec: number) => void;
   onBrollBlockResize: (id: string, newDurationSec: number) => void;
+  onBrollBlockTrim?: (id: string, newStartSec: number, newDurationSec: number) => void;
+  onAiOverlayTrim?: (id: string, newStartSec: number, newDurationSec: number) => void;
+  zoomLevel?: number;
+  onZoomLevelChange?: (zoom: number) => void;
   // New optional callbacks
   onMusicVolumeChange?: (volume: number) => void;
   onBrollBlockDelete?: (id: string) => void;
@@ -74,10 +78,10 @@ interface TooltipState {
 
 interface BrollDragState {
   id: string;
-  type: 'move' | 'resize';
+  type: 'move' | 'resize' | 'resize-left';
   startMouseX: number;
-  startSec: number;       // original startSec (for move)
-  startDuration: number;  // original durationSec (for resize)
+  startSec: number;       // original startSec (for move / resize-left)
+  startDuration: number;  // original durationSec (for resize / resize-left)
 }
 
 // ─── Volume Drag State ───────────────────────────────────────────────────────
@@ -134,6 +138,10 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   onBrollBlockResize,
   onMusicVolumeChange,
   onBrollBlockDelete,
+  onBrollBlockTrim,
+  onAiOverlayTrim,
+  zoomLevel: propZoomLevel,
+  onZoomLevelChange,
 }) => {
   // ── Internal State ──────────────────────────────────────────────────────────
   const [currentSec, setCurrentSec] = useState(0);
@@ -148,7 +156,17 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     label: '',
     duration: '',
   });
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [internalZoomLevel, setInternalZoomLevel] = useState(1);
+  const zoomLevel = propZoomLevel !== undefined ? propZoomLevel : internalZoomLevel;
+  const setZoomLevel = useCallback(
+    (action: number | ((prev: number) => number)) => {
+      const nextZoom = typeof action === 'function' ? action(zoomLevel) : action;
+      const clamped = Math.max(1, Math.min(8, nextZoom));
+      setInternalZoomLevel(clamped);
+      onZoomLevelChange?.(clamped);
+    },
+    [zoomLevel, onZoomLevelChange],
+  );
   const [snappingEnabled, setSnappingEnabled] = useState(true);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [activeSnapSec, setActiveSnapSec] = useState<number | null>(null);
@@ -166,6 +184,8 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   const currentSecRef = useRef(0);
   const zoomLevelRef = useRef(1);
   const zoomAnchorRef = useRef<{ zoom: number; sec: number; viewportX: number } | null>(null);
+  // ── QW-2: Throttle seekTo — buffer pending seek, flush once per RAF frame ──
+  const pendingSeekFrameRef = useRef<number | null>(null);
 
   isDraggingPlayheadRef.current = isDraggingPlayhead;
   brollDragRef.current = brollDrag;
@@ -174,26 +194,66 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   currentSecRef.current = currentSec;
   zoomLevelRef.current = zoomLevel;
 
+  // Global drag cursor and selection guard
+  useEffect(() => {
+    if (brollDrag || aiOverlayDrag || isDraggingPlayhead || volumeDrag) {
+      document.body.style.userSelect = 'none';
+      if (isDraggingPlayhead) document.body.style.cursor = 'ew-resize';
+      else if (brollDrag?.type === 'move' || aiOverlayDrag?.type === 'move') document.body.style.cursor = 'grabbing';
+      else if (brollDrag?.type?.startsWith('resize') || aiOverlayDrag?.type?.startsWith('resize')) document.body.style.cursor = 'col-resize';
+    } else {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    }
+    return () => {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [brollDrag, aiOverlayDrag, isDraggingPlayhead, volumeDrag]);
+
   // ── Computed track metrics ───────────────────────────────────────────────────
   const hookEnd = enableHookIntro ? hookDurationSec : 0;
   const outroStart = durationSec - (enableOutro ? outroDurationSec : 0);
 
-  // Snap points (in seconds)
-  const snapPoints = [0, hookEnd, outroStart, durationSec];
-  const clipSnapPoints: Array<{ sec: number; id?: string }> = [
-    ...snapPoints.map((sec) => ({ sec })),
-    { sec: currentSecRef.current },
-    ...brollBlocks.flatMap((block) => [{ sec: block.startSec, id: block.id }, { sec: block.startSec + block.durationSec, id: block.id }]),
-    ...aiOverlayBlocks.flatMap((block) => [{ sec: block.startSec, id: `ai:${block.id}` }, { sec: block.startSec + block.durationSec, id: `ai:${block.id}` }]),
-  ];
+  // ── QW-3: Memoized snap points — only recompute when blocks actually change ──
+  const snapPoints = useMemo(
+    () => [0, hookEnd, outroStart, durationSec],
+    [hookEnd, outroStart, durationSec],
+  );
 
-  // ── RAF Sync with Player ────────────────────────────────────────────────────
+  const clipSnapPoints = useMemo(
+    (): Array<{ sec: number; id?: string }> => [
+      ...snapPoints.map((sec) => ({ sec })),
+      // Playhead position included via currentSecRef at snap-time (not here)
+      ...brollBlocks.flatMap((block) => [
+        { sec: block.startSec, id: block.id },
+        { sec: block.startSec + block.durationSec, id: block.id },
+      ]),
+      ...aiOverlayBlocks.flatMap((block) => [
+        { sec: block.startSec, id: `ai:${block.id}` },
+        { sec: block.startSec + block.durationSec, id: `ai:${block.id}` },
+      ]),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      snapPoints,
+      // Serialize only the identity-relevant fields, not the full object reference
+      brollBlocks.map((b) => `${b.id}:${b.startSec}:${b.durationSec}`).join(','),
+      aiOverlayBlocks.map((b) => `${b.id}:${b.startSec}:${b.durationSec}`).join(','),
+    ],
+  );
+
+  // ── QW-1: RAF Sync with Player — skip setState when frame hasn't changed ────
   useEffect(() => {
     let rafId: number;
+    let prevFrame = -1;
     const poll = () => {
       if (playerRef.current && !isDraggingPlayheadRef.current) {
         const frame = playerRef.current.getCurrentFrame();
-        setCurrentSec(frame / fps);
+        if (frame !== prevFrame) {
+          prevFrame = frame;
+          setCurrentSec(frame / fps);
+        }
       }
       rafId = requestAnimationFrame(poll);
     };
@@ -215,7 +275,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         const viewportX = e.clientX - rect.left;
         const contentX = viewportX + scrollLeft;
         const width = rect.width;
-        zoomAnchorRef.current = { zoom: zoomLevelRef.current, sec: (contentX / (width * zoomLevelRef.current)) * durationSec, viewportX };
+        zoomAnchorRef.current = { zoom: zoomLevelRef.current, sec: (contentX / width) * durationSec, viewportX };
       }
       setZoomLevel((prev) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev * factor)));
     };
@@ -292,11 +352,35 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
           setContextMenu(null);
           break;
         }
+        // QW-6: Volume keyboard shortcuts
+        case 'm':
+        case 'M': {
+          // Mute/unmute source volume
+          if (onSourceVolumeChange) {
+            const current = sourceVolume ?? 25;
+            onSourceVolumeChange(current > 0 ? 0 : 25);
+          }
+          break;
+        }
+        case '[': {
+          // Volume down ±5
+          if (onMusicVolumeChange) {
+            onMusicVolumeChange(Math.max(0, (musicVolume ?? 25) - 5));
+          }
+          break;
+        }
+        case ']': {
+          // Volume up ±5
+          if (onMusicVolumeChange) {
+            onMusicVolumeChange(Math.min(100, (musicVolume ?? 25) + 5));
+          }
+          break;
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [durationSec, fps, onSeek, playerRef]);
+  }, [durationSec, fps, onSeek, playerRef, sourceVolume, onSourceVolumeChange, musicVolume, onMusicVolumeChange]);
 
   // ── Helper: get content area rect ────────────────────────────────────────────
   const getContentRect = useCallback(() => {
@@ -316,7 +400,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       const rect = getContentRect();
       if (!rect) return 0;
       const scrollLeft = scrollContainerRef.current?.scrollLeft ?? 0;
-      const totalWidth = rect.width * zoomLevelRef.current;
+      const totalWidth = rect.width;
       // The content element begins after the fixed track-label gutter.
       const posX = clientX - rect.left + scrollLeft;
       const ratio = Math.max(0, Math.min(1, posX / totalWidth));
@@ -332,9 +416,11 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         setActiveSnapSec(null);
         return sec;
       }
+      // Also include current playhead position as a live snap point
+      const livePoints = [...clipSnapPoints, { sec: currentSecRef.current }];
       let closest: number | null = null;
       let closestDistance = SNAP_PX_THRESHOLD;
-      for (const point of clipSnapPoints) {
+      for (const point of livePoints) {
         if (!Number.isFinite(point.sec) || point.id === excludedId) continue;
         const distPx = Math.abs(sec - point.sec) * pxPerSec;
         if (distPx < closestDistance) {
@@ -349,7 +435,8 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       setActiveSnapSec(null);
       return sec;
     },
-    [snappingEnabled, JSON.stringify(clipSnapPoints)],
+    // QW-3: clipSnapPoints is now a stable memoized array, no JSON.stringify needed
+    [snappingEnabled, clipSnapPoints],
   );
 
   // Keep the time under the playhead/cursor in the same viewport position when zooming.
@@ -359,14 +446,14 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     const contentEl = contentAreaRef.current;
     if (anchor && scrollEl && contentEl) {
       const width = contentEl.getBoundingClientRect().width;
-      const targetScroll = (anchor.sec / durationSec) * width * zoomLevel - anchor.viewportX;
+      const targetScroll = (anchor.sec / durationSec) * width - anchor.viewportX;
       scrollEl.scrollLeft = Math.max(0, targetScroll);
       zoomAnchorRef.current = null;
       return;
     }
     if (!scrollEl || !contentEl || zoomLevel <= 1) return;
     const width = contentEl.getBoundingClientRect().width;
-    scrollEl.scrollLeft = Math.max(0, (currentSec / durationSec) * width * zoomLevel - scrollEl.clientWidth / 2);
+    scrollEl.scrollLeft = Math.max(0, (currentSec / durationSec) * width - scrollEl.clientWidth / 2);
   }, [zoomLevel, durationSec]);
 
   // ── Playhead Mouse Down (on any track-content area) ──────────────────────────
@@ -391,7 +478,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     if (!scrollEl || !contentEl || isDraggingPlayhead || zoomLevel <= 1) return;
 
     const rect = contentEl.getBoundingClientRect();
-    const totalWidth = rect.width * zoomLevel;
+    const totalWidth = rect.width;
     const playheadPx = (currentSec / durationSec) * totalWidth;
     const viewLeft = scrollEl.scrollLeft;
     const viewRight = viewLeft + scrollEl.clientWidth;
@@ -411,19 +498,27 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       const vDrag = volumeDragRef.current;
       if (vDrag && onMusicVolumeChange) {
         const rect = getContentRect();
-        const totalWidth = (rect?.width ?? 600) * zoomLevelRef.current;
+        const totalWidth = rect?.width ?? 600;
         const deltaPct = ((e.clientX - vDrag.startMouseX) / totalWidth) * 100;
         const newVol = Math.max(0, Math.min(100, vDrag.startVolume + deltaPct));
         onMusicVolumeChange(Math.round(newVol));
         return;
       }
 
-      // Playhead drag
+      // Playhead drag — QW-2: throttle seekTo via RAF buffer
       if (isDraggingPlayheadRef.current) {
         const sec = mouseXToSec(e.clientX);
         setCurrentSec(sec);
         onSeek(sec);
-        playerRef.current?.seekTo(Math.round(sec * fps));
+        // Cancel any previously queued seek and queue a new one for this frame
+        if (pendingSeekFrameRef.current !== null) {
+          cancelAnimationFrame(pendingSeekFrameRef.current);
+        }
+        const targetFrame = Math.round(sec * fps);
+        pendingSeekFrameRef.current = requestAnimationFrame(() => {
+          playerRef.current?.seekTo(targetFrame);
+          pendingSeekFrameRef.current = null;
+        });
         return;
       }
 
@@ -432,18 +527,31 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       if (aiDrag) {
         const rect = getContentRect();
         if (!rect) return;
-        const totalWidth = rect.width * zoomLevelRef.current;
+        const totalWidth = rect.width;
         const pxPerSec = totalWidth / durationSec;
         const deltaSec = (e.clientX - aiDrag.startMouseX) / pxPerSec;
         const bypass = e.altKey;
 
         if (aiDrag.type === 'move') {
-        const maxStart = Math.max(0, durationSec - aiDrag.startDuration);
-        const rawStart = Math.max(0, Math.min(maxStart, aiDrag.startSec + deltaSec));
-        const snappedStart = snapSec(rawStart, pxPerSec, bypass, `ai:${aiDrag.id}`);
-        const snappedEnd = snapSec(rawStart + aiDrag.startDuration, pxPerSec, bypass, `ai:${aiDrag.id}`) - aiDrag.startDuration;
-        const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
-        onAiOverlayMove?.(aiDrag.id, Math.max(0, Math.min(maxStart, candidate)));
+          const maxStart = Math.max(0, durationSec - aiDrag.startDuration);
+          const rawStart = Math.max(0, Math.min(maxStart, aiDrag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, `ai:${aiDrag.id}`);
+          const snappedEnd = snapSec(rawStart + aiDrag.startDuration, pxPerSec, bypass, `ai:${aiDrag.id}`) - aiDrag.startDuration;
+          const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
+          onAiOverlayMove?.(aiDrag.id, Math.max(0, Math.min(maxStart, candidate)));
+        } else if (aiDrag.type === 'resize-left') {
+          const originalEnd = aiDrag.startSec + aiDrag.startDuration;
+          const maxStart = originalEnd - 0.5;
+          const rawStart = Math.max(0, Math.min(maxStart, aiDrag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, `ai:${aiDrag.id}`);
+          const newStart = Math.max(0, Math.min(maxStart, snappedStart));
+          const newDuration = Math.max(0.5, originalEnd - newStart);
+          if (onAiOverlayTrim) {
+            onAiOverlayTrim(aiDrag.id, newStart, newDuration);
+          } else {
+            onAiOverlayMove?.(aiDrag.id, newStart);
+            onAiOverlayResize?.(aiDrag.id, newDuration);
+          }
         } else {
           const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - aiDrag.startSec);
           const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, aiDrag.startDuration + deltaSec));
@@ -460,24 +568,37 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
 
       const rect = getContentRect();
       if (!rect) return;
-      const totalWidth = rect.width * zoomLevelRef.current;
+      const totalWidth = rect.width;
       const pxPerSec = totalWidth / durationSec;
       const deltaSec = (e.clientX - drag.startMouseX) / pxPerSec;
       const bypass = e.altKey;
 
       if (drag.type === 'move') {
-      const maxStart = Math.max(0, durationSec - drag.startDuration);
-      const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
-      const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
-      const snappedEnd = snapSec(rawStart + drag.startDuration, pxPerSec, bypass, drag.id) - drag.startDuration;
-      const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
-      onBrollBlockMove(drag.id, Math.max(0, Math.min(maxStart, candidate)));
-    } else {
-      const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - drag.startSec);
-      const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, drag.startDuration + deltaSec));
-      const snappedEnd = snapSec(drag.startSec + rawDuration, pxPerSec, bypass, drag.id);
-      const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - drag.startSec));
-      onBrollBlockResize(drag.id, newDuration);
+        const maxStart = Math.max(0, durationSec - drag.startDuration);
+        const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
+        const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
+        const snappedEnd = snapSec(rawStart + drag.startDuration, pxPerSec, bypass, drag.id) - drag.startDuration;
+        const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
+        onBrollBlockMove(drag.id, Math.max(0, Math.min(maxStart, candidate)));
+      } else if (drag.type === 'resize-left') {
+        const originalEnd = drag.startSec + drag.startDuration;
+        const maxStart = originalEnd - MIN_CLIP_DURATION;
+        const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
+        const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
+        const newStart = Math.max(0, Math.min(maxStart, snappedStart));
+        const newDuration = Math.max(MIN_CLIP_DURATION, originalEnd - newStart);
+        if (onBrollBlockTrim) {
+          onBrollBlockTrim(drag.id, newStart, newDuration);
+        } else {
+          onBrollBlockMove(drag.id, newStart);
+          onBrollBlockResize(drag.id, newDuration);
+        }
+      } else {
+        const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - drag.startSec);
+        const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, drag.startDuration + deltaSec));
+        const snappedEnd = snapSec(drag.startSec + rawDuration, pxPerSec, bypass, drag.id);
+        const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - drag.startSec));
+        onBrollBlockResize(drag.id, newDuration);
       }
     };
 
@@ -504,9 +625,11 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     durationSec,
     onBrollBlockMove,
     onBrollBlockResize,
+    onBrollBlockTrim,
     onMusicVolumeChange,
     onAiOverlayMove,
     onAiOverlayResize,
+    onAiOverlayTrim,
     snapSec,
     getContentRect,
     aiOverlayBlocks,
@@ -520,6 +643,9 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   const rulerMarkers: number[] = [];
   for (let s = 0; s <= durationSec; s = Math.round((s + markerInterval) * 10) / 10) {
     rulerMarkers.push(s);
+  }
+  if (rulerMarkers[rulerMarkers.length - 1] !== durationSec) {
+    rulerMarkers.push(durationSec);
   }
 
   // ── Playhead position (% within zoomed track) ────────────────────────────────
@@ -568,8 +694,18 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       setCurrentSec(sec);
       onSeek(sec);
       playerRef.current?.seekTo(Math.round(sec * fps));
+
+      // Smoothly scroll target block into view if zoomed in
+      const scrollEl = scrollContainerRef.current;
+      const contentEl = contentAreaRef.current;
+      if (scrollEl && contentEl && zoomLevel > 1) {
+        const totalWidth = contentEl.getBoundingClientRect().width;
+        const targetPx = (sec / durationSec) * totalWidth;
+        const targetScroll = Math.max(0, targetPx - scrollEl.clientWidth / 2);
+        scrollEl.scrollTo({ left: targetScroll, behavior: 'smooth' });
+      }
     },
-    [onSeek, playerRef, fps],
+    [onSeek, playerRef, fps, zoomLevel, durationSec],
   );
 
   // ─── Track Row wrapper ───────────────────────────────────────────────────────
@@ -588,7 +724,6 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       <div
         ref={isFirst ? contentAreaRef : undefined}
         className="timeline-track-content"
-        style={{ width: `${zoomLevel * 100}%` }}
         onMouseDown={handleTimelineMouseDown}
       >
         {/* Playhead line inside each track */}
@@ -610,7 +745,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
 
   // Subtitle track covers the content section in both reel and narration modes.
   const subtitleStart = outputMode === 'reel' && enableHookIntro ? hookEnd : 0;
-  const subtitleEnd = Math.max(subtitleStart, outroStart);
+  const subtitleEnd = durationSec;
   const subtitleLeft = secToPercent(subtitleStart);
   const subtitleWidth = secToPercent(subtitleEnd - subtitleStart);
 
@@ -770,8 +905,8 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
           {/* Empty label gutter */}
           <div
             style={{
-              width: '90px',
-              minWidth: '90px',
+              width: '110px',
+              minWidth: '110px',
               background: 'var(--bg-card)',
               borderRight: '1px solid var(--border)',
               flexShrink: 0,
@@ -782,7 +917,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
             {rulerMarkers.map((sec) => (
               <div
                 key={sec}
-                className="timeline-ruler-marker"
+                className={`timeline-ruler-marker${sec === durationSec ? ' timeline-ruler-marker-end' : ''}`}
                 style={{ left: secToPercent(sec) }}
               >
                 <span className="timeline-ruler-marker-label">{formatTimecode(sec)}</span>
@@ -818,7 +953,15 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         </div>
 
         {/* Inner tracks container (scrolls with ruler) */}
-        <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+            width: `${zoomLevel * 100}%`,
+            minWidth: '100%',
+          }}
+        >
 
           {/* ── TRACK 1: Hook ────────────────────────────────────────────── */}
           {renderTrackRow(
@@ -985,10 +1128,38 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                       }
                       onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
                     >
+                      {/* QW-4: Left resize handle (shrink/expand from start) */}
+                      <div
+                        title="Drag untuk ubah titik awal"
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: '6px',
+                          height: '100%',
+                          cursor: 'col-resize',
+                          background: 'rgba(0,0,0,0.3)',
+                          borderRadius: '4px 0 0 4px',
+                          zIndex: 2,
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          // Left handle: resize from start — store negative convention:
+                          // we flip the deltaSec sign in handleMouseMove using a custom type
+                          setBrollDrag({
+                            id: block.id,
+                            type: 'resize-left',
+                            startMouseX: e.clientX,
+                            startSec: block.startSec,
+                            startDuration: block.durationSec,
+                          });
+                        }}
+                      />
                       🎬{' '}
                       {block.query.length > 12 ? block.query.slice(0, 12) + '…' : block.query}
-                      {/* Resize handle */}
+                      {/* Right resize handle (extend/shrink from end) */}
                       <div
+                        title="Drag untuk ubah titik akhir"
                         style={{
                           position: 'absolute',
                           right: 0,
@@ -998,6 +1169,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                           cursor: 'col-resize',
                           background: 'rgba(0,0,0,0.3)',
                           borderRadius: '0 4px 4px 0',
+                          zIndex: 2,
                         }}
                         onMouseDown={(e) => {
                           e.stopPropagation();
@@ -1125,10 +1297,36 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                       }
                       onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
                     >
+                      {/* QW-4: Left resize handle for AI overlay */}
+                      <div
+                        title="Drag untuk ubah titik awal"
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: '6px',
+                          height: '100%',
+                          cursor: 'col-resize',
+                          background: 'rgba(0,0,0,0.3)',
+                          borderRadius: '4px 0 0 4px',
+                          zIndex: 2,
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setAiOverlayDrag({
+                            id: block.id,
+                            type: 'resize-left',
+                            startMouseX: e.clientX,
+                            startSec: block.startSec,
+                            startDuration: block.durationSec,
+                          });
+                        }}
+                      />
                       {emoji}{' '}
                       {block.label.length > 10 ? block.label.slice(0, 10) + '…' : block.label}
-                      {/* Resize handle */}
+                      {/* Right resize handle */}
                       <div
+                        title="Drag untuk ubah titik akhir"
                         style={{
                           position: 'absolute',
                           right: 0,
@@ -1138,6 +1336,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                           cursor: 'col-resize',
                           background: 'rgba(0,0,0,0.3)',
                           borderRadius: '0 4px 4px 0',
+                          zIndex: 2,
                         }}
                         onMouseDown={(e) => {
                           e.stopPropagation();
@@ -1153,24 +1352,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                     </div>
                   );
                 })
-              ) : (
-                <div
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '10px',
-                    color: 'var(--text-sub)',
-                    fontStyle: 'italic',
-                    pointerEvents: 'none',
-                    gap: '4px',
-                  }}
-                >
-                  🤖 Belum ada UI dari AI Producer
-                </div>
-              )}
+              ) : null}
             </>,
             false,
             'ai-overlay',
@@ -1214,40 +1396,6 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                 </span>
               )}
 
-              {/* Source volume quick bar */}
-              {onSourceVolumeChange && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    right: '6px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '46px',
-                    height: '6px',
-                    background: 'rgba(255,255,255,0.25)',
-                    borderRadius: '3px',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                  }}
-                  title="Klik untuk set volume video"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const clickX = e.clientX - rect.left;
-                    const newVol = Math.round(Math.max(0, Math.min(100, (clickX / rect.width) * 100)));
-                    onSourceVolumeChange(newVol);
-                  }}
-                >
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${sourceVolume ?? 25}%`,
-                      background: 'rgba(255,255,255,0.9)',
-                      borderRadius: '3px',
-                    }}
-                  />
-                </div>
-              )}
             </div>,
             false,
             'video',
@@ -1371,6 +1519,41 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                 }
                 onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
               >
+                {/* Mini audio waveform decoration */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    right: '60px',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    opacity: 0.28,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    padding: '0 8px',
+                    overflow: 'hidden',
+                  }}
+                  aria-hidden="true"
+                >
+                  {Array.from({ length: 54 }).map((_, i) => {
+                    const h = 20 + Math.sin(i * 0.45) * 35 + Math.cos(i * 0.9) * 25 + ((i % 3) * 10);
+                    const clampedH = Math.max(16, Math.min(88, Math.round(h)));
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          width: '2px',
+                          height: `${clampedH}%`,
+                          background: '#FFFFFF',
+                          borderRadius: '1px',
+                          flexShrink: 0,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
                 🎵 {musicTrackLabel ?? 'Background Music'}
                 <span style={{ opacity: 0.75, fontSize: '9px', marginLeft: '4px' }}>
                   Vol: {musicVolume}%

@@ -9,6 +9,7 @@ import type {
   ProducerChatResponse,
   ProducerEditorContext,
 } from '../types/producer.js';
+import { isProducerComponentId, PRODUCER_COMPONENT_CATALOG } from '../catalog/producer-components.js';
 
 export interface ProducerServiceOptions {
   model: string;
@@ -139,7 +140,7 @@ Supported actions:
 25. {"type": "TRIGGER_RENDER"}
 26. {"type": "SET_DYNAMIC_STYLE", "target": "hook" | "subtitle" | "video" | "canvas" | "outro", "styles": { [cssKey: string]: string | number }}
 27. {"type": "CLEAR_DYNAMIC_STYLES", "target"?: "hook" | "subtitle" | "video" | "canvas" | "outro" | "all"}
-28. {"type": "ADD_DYNAMIC_OVERLAY", "overlay": {"start": number, "end": number, "type": "sticker" | "callout" | "shape" | "text" | "badge" | "html", "content": string, "position"?: {"x"?: string, "y"?: string}, "styles"?: Record<string, string>, "animation"?: "bounce" | "pulse" | "spin" | "fade" | "none"}}
+28. {"type": "ADD_DYNAMIC_OVERLAY", "overlay": {"componentId"?: "stat-card" | "quote-card" | "lower-third" | "cta-banner" | "checklist", "start": number, "end": number, "type": "sticker" | "callout" | "shape" | "text" | "badge" | "html", "content": string, "position"?: {"x"?: string, "y"?: string}, "styles"?: Record<string, string>, "animation"?: "bounce" | "pulse" | "spin" | "fade" | "slide" | "none"}}
 29. {"type": "CLEAR_DYNAMIC_OVERLAYS"}
 30. {"type": "SET_BACKGROUND_MUSIC", "trackId"?: string | null, "volume"?: number, "autoDucking"?: boolean} (available tracks: 'lofi-chill-01', 'lofi-chill-02', 'lofi-chill-03', 'phonk-hype-01', 'phonk-hype-02', 'cinematic-01', 'cinematic-02', 'upbeat-tech-01', 'upbeat-tech-02', 'ambient-01', 'ambient-02', or null to remove)
 
@@ -154,7 +155,10 @@ Supported actions:
     - User: "tambahkan stiker panah di detik 5" -> emit {"type": "ADD_DYNAMIC_OVERLAY", "overlay": {"start": 5, "end": 8, "type": "sticker", "content": "👉", "position": {"x": "50%", "y": "60%"}, "animation": "bounce"}}
     - User: "beri badge 'DISKON 70%' di atas" -> emit {"type": "ADD_DYNAMIC_OVERLAY", "overlay": {"start": 0, "end": 5, "type": "badge", "content": "🔥 DISKON 70%", "position": {"x": "50%", "y": "20%"}, "animation": "pulse"}}
     - User: "gelapkan video aslinya" -> emit {"type": "SET_DYNAMIC_STYLE", "target": "video", "styles": {"filter": "brightness(70%) contrast(110%)"}}
-    - User asks for custom data cards, racing grids (Moto3, F1, MotoGP), scoreboards, leaderboards, stats cards, or lower thirds:
+    - For repeatable motion components, prefer the local catalog below. Keep content concise, choose a safe-zone position, and set a short duration appropriate to the scene.
+      ${JSON.stringify(PRODUCER_COMPONENT_CATALOG)}
+    - For stats, quotes, speaker IDs, CTA, or up to three takeaways, use the matching catalog componentId. Do not invent catalog IDs. For unsupported requests, use existing generic overlay types.
+    - User asks for custom data cards, racing grids (Moto3, F1, MotoGP), scoreboards, or leaderboards:
       -> emit {"type": "ADD_DYNAMIC_OVERLAY", "overlay": {"start": 0, "end": 6, "type": "html", "content": "<div style=\"background: rgba(10, 15, 29, 0.92); border: 1.5px solid rgba(0, 240, 255, 0.4); border-radius: 14px; padding: 12px 16px; color: #fff; width: 280px; font-family: 'Segoe UI', sans-serif; backdrop-filter: blur(14px); box-shadow: 0 12px 36px rgba(0,0,0,0.85);\">...</div>", "position": {"x": "50%", "y": "35%"}, "animation": "fade"}}
       - **CRITICAL HTML RULE**: The 'content' field MUST be complete, valid, self-contained HTML starting with an outer &lt;div style="..."&gt; and ending with &lt;/div&gt;. NEVER output raw CSS fragments, trailing quotes, or unclosed HTML tags into 'content'!
       - For simple text callouts or badges: use plain text in 'content' (NEVER put HTML/CSS into 'callout' or 'badge').
@@ -265,13 +269,19 @@ ${
       const json = parseLlmJson(cleaned) as Record<string, unknown>;
 
       const reply = typeof json.reply === 'string' ? json.reply : 'Perubahan telah diterapkan ke editor video.';
-      const actions: ProducerAction[] = Array.isArray(json.actions)
+      let actions: ProducerAction[] = Array.isArray(json.actions)
         ? (json.actions as ProducerAction[]).filter((a) => a && typeof a.type === 'string')
         : [];
 
       // Auto-sanitize and repair any dynamic overlays with HTML/CSS content
+      actions = actions.filter((a) => a.type !== 'ADD_DYNAMIC_OVERLAY' || (
+        Number.isFinite(a.overlay?.start) && Number.isFinite(a.overlay?.end) && a.overlay.start >= 0 && a.overlay.end > a.overlay.start
+      ));
       for (const a of actions) {
         if (a.type === 'ADD_DYNAMIC_OVERLAY' && a.overlay) {
+          const overlay = a.overlay;
+          if (overlay.componentId && !isProducerComponentId(overlay.componentId)) delete overlay.componentId;
+          overlay.end = Math.min(overlay.end, overlay.start + 12);
           const repaired = parseOrRepairHtmlOverlay(a.overlay.content);
           if (repaired) {
             a.overlay.content = repaired;
@@ -376,7 +386,7 @@ ${
           badges.push('🧹 Style Direset');
           break;
         case 'ADD_DYNAMIC_OVERLAY':
-          badges.push(a.overlay.type === 'html' ? '📊 +Widget: Data Card' : `🎨 +Overlay: ${a.overlay.type}`);
+          badges.push(a.overlay.componentId ? `✨ +Komponen: ${a.overlay.componentId}` : a.overlay.type === 'html' ? '📊 +Widget: Data Card' : `🎨 +Overlay: ${a.overlay.type}`);
           break;
         case 'CLEAR_DYNAMIC_OVERLAYS':
           badges.push('🧹 Overlay Dihapus');

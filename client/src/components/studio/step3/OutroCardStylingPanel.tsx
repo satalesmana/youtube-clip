@@ -490,8 +490,7 @@ export const OutroCardStylingPanel: React.FC<OutroCardStylingPanelProps> = ({
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: `radial-gradient(circle at 50% 50%, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.92) 100%)`,
-                backdropFilter: 'blur(10px)',
+                background: 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.34) 100%)',
               }}
             />
 
@@ -501,51 +500,32 @@ export const OutroCardStylingPanel: React.FC<OutroCardStylingPanelProps> = ({
                 position: 'relative',
                 zIndex: 1,
                 width: '100%',
-                maxWidth: '320px',
+                maxWidth: '72%',
+                boxSizing: 'border-box',
                 backgroundColor: currentPreset.cardBg,
                 border: currentPreset.cardBorder,
                 borderTop: `3.5px solid ${currentPreset.primaryColor}`,
-                borderRadius: '26px',
-                padding: '24px 18px',
+                borderRadius: '22px',
+                padding: '18px 14px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 textAlign: 'center',
                 boxShadow: currentPreset.glowColor ? `0 15px 40px rgba(0,0,0,0.8), 0 0 28px ${currentPreset.glowColor}` : '0 15px 40px rgba(0,0,0,0.8)',
-                gap: '14px',
+                gap: '10px',
                 transition: 'all 0.3s ease',
               }}
             >
-              {/* Badge Tag */}
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  backgroundColor: 'rgba(255,255,255,0.08)',
-                  color: currentPreset.primaryColor,
-                  padding: '4px 12px',
-                  borderRadius: '9999px',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  letterSpacing: '0.6px',
-                  textTransform: 'uppercase',
-                }}
-              >
-                <span>{currentPreset.badgeIcon}</span>
-                <span>{currentPreset.badgeLabel}</span>
-              </div>
-
-              {/* Avatar Circle with Ring and Verified Badge */}
-              <div style={{ position: 'relative' }}>
+              {/* Creator avatar; the handle below carries the account name. */}
+              <div>
                 <div
                   style={{
-                    width: '74px',
-                    height: '74px',
+                    width: '58px',
+                    height: '58px',
                     borderRadius: '50%',
                     background: `linear-gradient(135deg, ${currentPreset.primaryColor}, ${currentPreset.accentColor})`,
                     padding: '3px',
-                    boxShadow: `0 0 20px ${currentPreset.glowColor}`,
+                    boxShadow: `0 0 14px ${currentPreset.glowColor}`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -582,34 +562,13 @@ export const OutroCardStylingPanel: React.FC<OutroCardStylingPanelProps> = ({
                     )}
                   </div>
                 </div>
-                {/* Verified icon */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: '-2px',
-                    right: '-2px',
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: currentPreset.primaryColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: currentPreset.buttonTextColor,
-                    fontSize: '12px',
-                    fontWeight: 900,
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.7)',
-                  }}
-                >
-                  {selectedPreset === 'viral-neon' ? '⚡' : selectedPreset === 'comment-debate' ? '💬' : selectedPreset === 'subscribe-bell' ? '🔔' : selectedPreset === 'link-in-bio' ? '🔗' : '✓'}
-                </div>
               </div>
 
               {/* Channel & CTA text */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                 <span
                   style={{
-                    fontSize: '17px',
+                    fontSize: '15px',
                     fontWeight: 900,
                     color: '#FFFFFF',
                     letterSpacing: '0.4px',
@@ -620,7 +579,7 @@ export const OutroCardStylingPanel: React.FC<OutroCardStylingPanelProps> = ({
                 </span>
                 <span
                   style={{
-                    fontSize: '12.5px',
+                    fontSize: '12px',
                     color: 'rgba(255, 255, 255, 0.85)',
                     lineHeight: 1.35,
                     maxWidth: '260px',
@@ -635,17 +594,17 @@ export const OutroCardStylingPanel: React.FC<OutroCardStylingPanelProps> = ({
                 style={{
                   background: currentPreset.buttonGradient,
                   color: currentPreset.buttonTextColor,
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 900,
                   letterSpacing: '0.5px',
-                  padding: '10px 24px',
+                  padding: '8px 18px',
                   borderRadius: '9999px',
                   boxShadow: `0 0 20px ${currentPreset.glowColor}`,
                   textTransform: 'uppercase',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  marginTop: '4px',
+                  marginTop: '2px',
                 }}
               >
                 <span>{effectiveBtn}</span>

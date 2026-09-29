@@ -75,6 +75,7 @@ export type ProducerAction =
       type: 'ADD_DYNAMIC_OVERLAY';
       overlay: {
         id?: string;
+        componentId?: string;
         start: number;
         end: number;
         type: 'sticker' | 'callout' | 'shape' | 'text' | 'badge' | 'html';
@@ -94,6 +95,7 @@ export type ProducerAction =
 
 export interface DynamicOverlayItem {
   id: string;
+  componentId?: string;
   start: number;
   end: number;
   type: 'sticker' | 'callout' | 'shape' | 'text' | 'badge' | 'html';

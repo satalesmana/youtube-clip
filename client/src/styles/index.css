@@ -5321,6 +5321,14 @@ textarea:focus {
   transform: translateX(-50%);
 }
 
+.timeline-ruler-marker-end {
+  transform: none;
+}
+
+.timeline-ruler-marker-end .timeline-ruler-marker-label {
+  transform: translateX(-100%);
+}
+
 .timeline-ruler-marker-label {
   font-size: 9px;
   color: var(--text-sub);
@@ -5366,6 +5374,7 @@ textarea:focus {
 /* ── Track Rows ─────────────────────────────────────────────── */
 .timeline-track-row {
   display: flex;
+  width: 100%;
   height: 44px;
   border-bottom: 1px solid var(--border-dim);
   align-items: stretch;
@@ -5376,9 +5385,9 @@ textarea:focus {
 }
 
 .timeline-track-label {
-  width: 90px;
-  min-width: 90px;
-  padding: 0 8px;
+  width: 110px;
+  min-width: 110px;
+  padding: 0 10px;
   font-size: 10px;
   font-weight: 700;
   color: var(--text-sub);
@@ -5461,7 +5470,7 @@ textarea:focus {
   height: 100%;
   overflow: hidden;
   cursor: crosshair;
-  min-width: 100%;
+  min-width: 0;
 }
 
 /* ── Blocks ──────────────────────────────────────────────────── */
@@ -5481,7 +5490,7 @@ textarea:focus {
   text-overflow: ellipsis;
   padding: 0 8px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  transition: filter 0.1s ease, outline 0.1s ease;
+  transition: filter 0.1s ease, outline 0.1s ease, transform 0.1s ease;
 }
 
 .timeline-block:hover {
@@ -5490,9 +5499,16 @@ textarea:focus {
 
 .timeline-block.dragging {
   cursor: grabbing !important;
-  filter: brightness(1.2);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  z-index: 10;
+  filter: brightness(1.25);
+  box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0, 0, 0, 0.6);
+  z-index: 20;
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.timeline-block div[title*="titik awal"]:hover,
+.timeline-block div[title*="titik akhir"]:hover {
+  background: rgba(255, 255, 255, 0.45) !important;
 }
 
 .timeline-block.selected {
@@ -5599,6 +5615,118 @@ textarea:focus {
   background: #FFFFFF;
   width: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+/* ── Live Remotion editor layout ─────────────────────────────── */
+.remotion-editor-shell {
+  padding: clamp(14px, 2vw, 24px) !important;
+  border-color: var(--border) !important;
+  background: linear-gradient(145deg, #121b24 0%, #0d141c 100%) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.remotion-editor-workspace {
+  align-items: start !important;
+  gap: clamp(14px, 1.6vw, 20px) !important;
+}
+
+.remotion-editor-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.remotion-editor-render-button {
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 7px 14px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.remotion-editor-render-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.remotion-editor-render-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.remotion-editor-stage-column {
+  align-items: stretch !important;
+}
+
+.remotion-editor-canvas-stage {
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42) !important;
+}
+
+.remotion-editor-inspector {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-focus) transparent;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.remotion-editor-inspector-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  backdrop-filter: blur(14px);
+}
+
+@media (max-width: 1200px) {
+  .remotion-editor-workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .remotion-editor-inspector {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .remotion-editor-inspector-tabs {
+    top: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .remotion-editor-shell {
+    border-radius: var(--radius-lg) !important;
+    padding: 12px !important;
+    margin-inline: -8px;
+  }
+
+  .remotion-editor-header-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .remotion-editor-workspace {
+    gap: 12px !important;
+  }
+
+  .remotion-editor-inspector {
+    padding: 12px !important;
+  }
+
+  .remotion-editor-inspector-tabs {
+    overflow-x: auto;
+  }
+
+  .remotion-editor-inspector-tabs > button {
+    min-width: 104px;
+  }
 }
 
 /* ── Floating Questions / AI Producer Coordination ───────────── */

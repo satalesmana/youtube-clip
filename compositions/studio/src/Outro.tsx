@@ -52,8 +52,8 @@ function getPresetConfig(presetId: string | undefined, _theme: Theme): PresetThe
         badgeIcon: '⚡',
         badgeBg: 'rgba(255, 0, 127, 0.25)',
         badgeColor: '#00F0FF',
-        defaultCta: 'Jangan lewatkan momen seru berikutnya! Aktifkan notifikasi sekarang.',
-        defaultBtn: '⚡ IKUTI & NOTIFIKASI',
+        defaultCta: 'Ikuti agar tak ketinggalan momen viral.',
+        defaultBtn: 'IKUTI',
         cardBg: 'rgba(10, 12, 22, 0.92)',
         cardBorder: '2px solid #00F0FF',
         cardBorderTop: '4px solid #FF007F',
@@ -74,8 +74,8 @@ function getPresetConfig(presetId: string | undefined, _theme: Theme): PresetThe
         badgeIcon: '✦',
         badgeBg: 'rgba(255, 255, 255, 0.08)',
         badgeColor: '#E2E8F0',
-        defaultCta: 'Dapatkan rangkuman wawasan mendalam dan perspektif baru setiap hari.',
-        defaultBtn: 'Langganan Sekarang →',
+        defaultCta: 'Ikuti untuk insight praktis berikutnya.',
+        defaultBtn: 'LANGGANAN',
         cardBg: 'rgba(15, 23, 42, 0.94)',
         cardBorder: '1px solid rgba(255, 255, 255, 0.2)',
         cardBorderTop: '2px solid #F8FAFC',
@@ -96,8 +96,8 @@ function getPresetConfig(presetId: string | undefined, _theme: Theme): PresetThe
         badgeIcon: '💬',
         badgeBg: 'rgba(255, 229, 0, 0.2)',
         badgeColor: '#FFE500',
-        defaultCta: 'Bagaimana menurutmu? Tulis pendapat atau pengalamanmu di kolom komentar!',
-        defaultBtn: '💬 TULIS KOMENTAR SEKARANG',
+        defaultCta: 'Punya pendapat? Tulis di komentar.',
+        defaultBtn: 'KOMENTAR',
         cardBg: 'rgba(18, 20, 28, 0.92)',
         cardBorder: '1.5px solid rgba(255, 229, 0, 0.45)',
         cardBorderTop: '4px solid #FFE500',
@@ -118,8 +118,8 @@ function getPresetConfig(presetId: string | undefined, _theme: Theme): PresetThe
         badgeIcon: '🔔',
         badgeBg: 'rgba(255, 0, 0, 0.25)',
         badgeColor: '#FFD700',
-        defaultCta: 'Dukung channel ini agar terus berkembang! Klik tombol subscribe sekarang.',
-        defaultBtn: '🔔 SUBSCRIBE SEKARANG',
+        defaultCta: 'Ikuti untuk video berikutnya.',
+        defaultBtn: 'SUBSCRIBE',
         cardBg: 'rgba(20, 14, 18, 0.92)',
         cardBorder: '1.5px solid rgba(255, 0, 0, 0.5)',
         cardBorderTop: '4px solid #FF0000',
@@ -140,8 +140,8 @@ function getPresetConfig(presetId: string | undefined, _theme: Theme): PresetThe
         badgeIcon: '🔗',
         badgeBg: 'rgba(16, 185, 129, 0.25)',
         badgeColor: '#10B981',
-        defaultCta: 'Mau akses materi lengkap dan panduan praktisnya? Tonton link lengkapnya di bio!',
-        defaultBtn: '🔗 CEK LINK DI BIO 👇',
+        defaultCta: 'Lihat panduan lengkap di bio.',
+        defaultBtn: 'CEK LINK DI BIO',
         cardBg: 'rgba(12, 24, 22, 0.92)',
         cardBorder: '1.5px solid rgba(16, 185, 129, 0.5)',
         cardBorderTop: '4px solid #10B981',
@@ -163,8 +163,8 @@ function getPresetConfig(presetId: string | undefined, _theme: Theme): PresetThe
         badgeIcon: '✨',
         badgeBg: 'rgba(0, 242, 254, 0.18)',
         badgeColor: '#00F2FE',
-        defaultCta: 'Suka konten ini? Ikuti untuk update harian!',
-        defaultBtn: '+ IKUTI SEKARANG',
+        defaultCta: 'Ikuti untuk tips berikutnya.',
+        defaultBtn: 'IKUTI',
         cardBg: 'rgba(15, 18, 28, 0.88)',
         cardBorder: '1.5px solid rgba(255, 255, 255, 0.14)',
         cardBorderTop: '3.5px solid #00F2FE',
@@ -184,9 +184,9 @@ function getPresetConfig(presetId: string | undefined, _theme: Theme): PresetThe
 /**
  * Modern High-Converting Creator Outro Card with Preset Styles
  * - Soft cinematic vignette backdrop (non-destructive over video)
- * - Floating glassmorphic / neon / editorial card with smooth entrance spring
+ * - Floating glassmorphic / neon / editorial card with a restrained entrance
  * - Custom creator avatar & verified badge
- * - Customizable headline CTA text and kinetic pulsing action button
+ * - Customizable headline CTA text and a one-time action button reveal
  */
 export const Outro: React.FC<OutroProps> = ({
   theme,
@@ -208,29 +208,25 @@ export const Outro: React.FC<OutroProps> = ({
     extrapolateRight: 'clamp',
   });
 
-  // Spring animation for the floating card pop-in
+  // A restrained, one-time entrance keeps attention on the CTA without
+  // making the card feel like a looping notification.
   const cardSpring = spring({
     frame,
     fps,
-    config: { damping: 13, stiffness: 130, mass: 0.8 },
+    config: { damping: 22, stiffness: 140, mass: 0.8 },
   });
-  const cardScale = interpolate(cardSpring, [0, 1], [0.85, 1]);
-  const cardY = interpolate(cardSpring, [0, 1], [50, 0]);
+  const cardScale = interpolate(cardSpring, [0, 1], [0.96, 1]);
+  const cardY = interpolate(cardSpring, [0, 1], [28, 0]);
 
-  // Subtle breathing pulse on the action button
-  const pulse = interpolate(
-    Math.sin((frame / fps) * Math.PI * 2.2),
-    [-1, 1],
-    [0.97, 1.03],
-  );
-
-  // Gentle fade-to-black on the very last 8 frames
-  const fadeOut = interpolate(
-    frame,
-    [Math.max(0, durationFrames - 8), durationFrames],
-    [0, 0.75],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-  );
+  // Reveal the action after the card settles, then hold it still and readable.
+  const buttonDelayFrames = Math.min(Math.round(0.18 * fps), Math.max(0, durationFrames - 1));
+  const buttonSpring = spring({
+    frame: Math.max(0, frame - buttonDelayFrames),
+    fps,
+    config: { damping: 24, stiffness: 150, mass: 0.75 },
+  });
+  const buttonScale = interpolate(buttonSpring, [0, 1], [0.96, 1]);
+  const buttonOpacity = interpolate(buttonSpring, [0, 1], [0, 1]);
 
   const displayHandle = channelName ? channelName.replace(/^@/, '') : 'kreator';
   const resolvedLogoSrc = logoSrc ? toAssetUrl(logoSrc) : staticFile('creator-logo.png');
@@ -239,12 +235,10 @@ export const Outro: React.FC<OutroProps> = ({
 
   return (
     <AbsoluteFill style={{ overflow: 'hidden', pointerEvents: 'none' }}>
-      {/* Layer 1: Cinematic dark vignette backdrop (non-destructive, preserves video underneath) */}
+      {/* Layer 1: Light contrast veil keeps the video scene visible under the CTA. */}
       <AbsoluteFill
         style={{
-          background: `radial-gradient(circle at 50% 50%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,${cfg.vignetteDarkness}) 100%)`,
-          backdropFilter: 'blur(14px)',
-          WebkitBackdropFilter: 'blur(14px)',
+          background: `radial-gradient(circle at 50% 50%, rgba(0,0,0,0.08) 0%, rgba(0,0,0,${cfg.vignetteDarkness * 0.4}) 100%)`,
           opacity: fadeIn,
         }}
       />
@@ -256,60 +250,40 @@ export const Outro: React.FC<OutroProps> = ({
           alignItems: 'center',
           opacity: fadeIn,
           transform: `translateY(${cardY}px) scale(${cardScale})`,
-          paddingLeft: 36,
-          paddingRight: 36,
+          paddingLeft: 24,
+          paddingRight: 24,
         }}
       >
         <div
           style={{
             width: '100%',
-            maxWidth: width * 0.88,
+            maxWidth: width * 0.72,
+            boxSizing: 'border-box',
             backgroundColor: cfg.cardBg,
             backdropFilter: 'blur(26px)',
             WebkitBackdropFilter: 'blur(26px)',
             border: cfg.cardBorder,
             borderTop: cfg.cardBorderTop,
-            borderRadius: 34,
-            padding: '36px 28px',
+            borderRadius: 28,
+            padding: '24px 22px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             textAlign: 'center',
             boxShadow: cfg.cardGlow,
-            gap: 18,
+            gap: 12,
           }}
         >
-          {/* Top Pill Badge */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              backgroundColor: cfg.badgeBg,
-              color: cfg.badgeColor,
-              padding: '6px 14px',
-              borderRadius: 9999,
-              fontSize: 14,
-              fontWeight: 800,
-              letterSpacing: '1px',
-              textTransform: 'uppercase',
-              fontFamily: HOOK_FONT,
-            }}
-          >
-            <span>{cfg.badgeIcon}</span>
-            <span>{cfg.badgeText}</span>
-          </div>
-
-          {/* Avatar Ring with Verified Icon */}
-          <div style={{ position: 'relative' }}>
+          {/* Creator avatar and handle identify the account without a fake verification mark. */}
+          <div>
             <div
               style={{
-                width: 104,
-                height: 104,
+                width: 80,
+                height: 80,
                 borderRadius: '50%',
                 background: cfg.ringGradient,
                 padding: 3.5,
-                boxShadow: `0 0 26px ${cfg.badgeColor}55`,
+                boxShadow: `0 0 20px ${cfg.badgeColor}55`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -327,35 +301,14 @@ export const Outro: React.FC<OutroProps> = ({
                 }}
               />
             </div>
-            {/* Verified badge icon */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                right: 0,
-                width: 30,
-                height: 30,
-                borderRadius: '50%',
-                backgroundColor: cfg.verifiedBg,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: cfg.verifiedColor,
-                fontSize: 16,
-                fontWeight: 900,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
-              }}
-            >
-              {cfg.verifiedIcon}
-            </div>
           </div>
 
           {/* Channel Name & Call to Action Headline */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <div
               style={{
                 fontFamily: HOOK_FONT,
-                fontSize: 36,
+                fontSize: 29,
                 fontWeight: 900,
                 color: '#FFFFFF',
                 letterSpacing: '0.5px',
@@ -367,7 +320,7 @@ export const Outro: React.FC<OutroProps> = ({
             <div
               style={{
                 fontFamily: FONT,
-                fontSize: 23,
+                fontSize: 19,
                 color: 'rgba(255, 255, 255, 0.82)',
                 maxWidth: 500,
                 lineHeight: 1.35,
@@ -380,19 +333,20 @@ export const Outro: React.FC<OutroProps> = ({
           {/* High-Converting Animated Follow/Action Button */}
           <div
             style={{
-              marginTop: 6,
-              transform: `scale(${pulse})`,
+              marginTop: 2,
+              transform: `scale(${buttonScale})`,
+              opacity: buttonOpacity,
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 10,
+              gap: 8,
               background: cfg.btnBg,
               color: cfg.btnColor,
               fontFamily: HOOK_FONT,
-              fontSize: 27,
+              fontSize: 21,
               fontWeight: 900,
               letterSpacing: '1px',
-              padding: '16px 42px',
+              padding: '12px 30px',
               borderRadius: 9999,
               boxShadow: cfg.btnShadow,
               border: cfg.btnBorder || 'none',
@@ -404,8 +358,6 @@ export const Outro: React.FC<OutroProps> = ({
         </div>
       </AbsoluteFill>
 
-      {/* Layer 3: Ultra subtle end fade */}
-      <AbsoluteFill style={{ backgroundColor: '#000000', opacity: fadeOut }} />
     </AbsoluteFill>
   );
 };
