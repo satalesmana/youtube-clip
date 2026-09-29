@@ -1,8 +1,11 @@
 // =============================================================================
 // audio-catalog.ts
 // Kurasi track audio bebas royalti yang di-host di CDN publik (CORS-friendly).
-// Sumber: Pixabay Audio (pixabay.com/music) & Internet Archive (archive.org)
+// Musik di-stream secara langsung online tanpa perlu di-download/disimpan ke lokal.
+// Sumber: Jamendo Royalty-Free Music & Creative Commons Audio CDN
 // =============================================================================
+
+import scrapedPixabayTracks from './pixabay-scraped-catalog.json';
 
 export type MusicGenre = 'lofi' | 'phonk' | 'cinematic' | 'upbeat' | 'ambient';
 
@@ -15,176 +18,182 @@ export interface MusicTrack {
   genreEmoji: string;
   durationSec: number;
   bpm?: number;
-  streamUrl: string;    // Direct CDN URL to MP3 - must be CORS-friendly / public
+  streamUrl: string;    // Direct CDN URL to MP3 - CORS-friendly & range-requests enabled
   coverUrl: string;     // Thumbnail/cover image URL
   tags: string[];       // Descriptive tags
   license: string;      // License info
+  isLiveScraped?: boolean; // Flag if track was scraped live from search
 }
 
-export const AUDIO_CATALOG: MusicTrack[] = [
+const BASE_AUDIO_CATALOG: MusicTrack[] = [
   // --- Lo-Fi Chill & Study ---
   {
     id: 'lofi-chill-01',
-    title: 'Café Memories',
-    artist: 'Lofi Fruits Music',
+    title: 'Way Down (Study Beats)',
+    artist: 'Moonwalk',
     genre: 'lofi',
     genreLabel: 'Lo-Fi Chill & Study',
     genreEmoji: '☕',
     durationSec: 60,
     bpm: 85,
-    streamUrl: '/audio/lofi-chill-01.mp3',
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885545&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=300&q=80',
-    tags: ['chill', 'study', 'relax', 'cafe', 'lo-fi', 'indie'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['chill', 'study', 'relax', 'cafe', 'lo-fi', 'indie', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
   {
     id: 'lofi-chill-02',
-    title: 'Rainy Afternoon',
-    artist: 'ChilledCow',
+    title: 'Way Down (Chill Loop)',
+    artist: 'Moonwalk',
     genre: 'lofi',
     genreLabel: 'Lo-Fi Chill & Study',
     genreEmoji: '☕',
     durationSec: 60,
     bpm: 78,
-    streamUrl: '/audio/lofi-chill-02.mp3',
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885544&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1428908728789-d2de25dbd4e2?auto=format&fit=crop&w=300&q=80',
-    tags: ['rain', 'lofi', 'calm', 'chill', 'cozy', 'dreamy'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['rain', 'lofi', 'calm', 'chill', 'cozy', 'dreamy', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
   {
     id: 'lofi-chill-03',
-    title: 'Late Night Drive',
-    artist: 'Frak',
+    title: 'Way Down (Sunset Vibe)',
+    artist: 'Moonwalk',
     genre: 'lofi',
     genreLabel: 'Lo-Fi Chill & Study',
     genreEmoji: '☕',
-    durationSec: 60,
-    bpm: 92,
-    streamUrl: '/audio/lofi-chill-03.mp3',
+    durationSec: 45,
+    bpm: 90,
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885546&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=300&q=80',
-    tags: ['night', 'drive', 'chill', 'lofi', 'city', 'ambient'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['night', 'drive', 'chill', 'lofi', 'city', 'ambient', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
 
   // --- Phonk & High Energy ---
   {
     id: 'phonk-hype-01',
-    title: 'Dark Drift',
+    title: 'Cadillac Dark Drift',
+    artist: 'Dawid Jaworski',
+    genre: 'phonk',
+    genreLabel: 'Phonk & High Energy',
+    genreEmoji: '⚡',
+    durationSec: 60,
+    bpm: 138,
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1884489&format=mp31&from=app-devportal',
+    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=300&q=80',
+    tags: ['phonk', 'hype', 'energy', 'viral', 'gaming', 'bass', 'aggressive', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
+  },
+  {
+    id: 'phonk-hype-02',
+    title: 'Trick or Treat Hype Bass',
     artist: 'SoundProducerTV',
     genre: 'phonk',
     genreLabel: 'Phonk & High Energy',
     genreEmoji: '⚡',
     durationSec: 60,
     bpm: 140,
-    streamUrl: '/audio/phonk-hype-01.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=300&q=80',
-    tags: ['phonk', 'hype', 'energy', 'viral', 'gaming', 'bass', 'aggressive'],
-    license: 'Royalty-Free Built-in Audio',
-  },
-  {
-    id: 'phonk-hype-02',
-    title: 'Sigma Motivation',
-    artist: 'Infraction Music',
-    genre: 'phonk',
-    genreLabel: 'Phonk & High Energy',
-    genreEmoji: '⚡',
-    durationSec: 60,
-    bpm: 138,
-    streamUrl: '/audio/phonk-hype-02.mp3',
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885840&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1571019613914-85f342c6a11e?auto=format&fit=crop&w=300&q=80',
-    tags: ['motivation', 'sigma', 'gym', 'workout', 'phonk', 'energy'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['motivation', 'sigma', 'gym', 'workout', 'phonk', 'energy', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
 
   // --- Cinematic & Mystery ---
   {
     id: 'cinematic-01',
-    title: 'Mysterious Revelation',
-    artist: 'Scott Buckley',
+    title: 'Dramatic Movie Soundtrack',
+    artist: 'makesound',
     genre: 'cinematic',
     genreLabel: 'Cinematic & Mystery',
     genreEmoji: '🎬',
     durationSec: 60,
-    bpm: 72,
-    streamUrl: '/audio/cinematic-01.mp3',
+    bpm: 75,
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1857994&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1518066000714-58c45f1d0898?auto=format&fit=crop&w=300&q=80',
-    tags: ['cinematic', 'mystery', 'suspense', 'drama', 'dark', 'storytelling'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['cinematic', 'mystery', 'suspense', 'drama', 'dark', 'storytelling', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
   {
     id: 'cinematic-02',
-    title: 'Epic Tension Build',
-    artist: 'Keys of Moon',
+    title: 'Inspiring Cinematic Trailer',
+    artist: 'Stanislav Barantsov',
     genre: 'cinematic',
     genreLabel: 'Cinematic & Mystery',
     genreEmoji: '🎬',
     durationSec: 60,
     bpm: 80,
-    streamUrl: '/audio/cinematic-02.mp3',
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1879038&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=300&q=80',
-    tags: ['epic', 'tension', 'build', 'cinematic', 'trailer', 'investigation'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['epic', 'tension', 'build', 'cinematic', 'trailer', 'investigation', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
 
   // --- Upbeat Pop & Tech ---
   {
     id: 'upbeat-tech-01',
-    title: 'Innovation Drive',
-    artist: 'Punch Deck',
+    title: 'Black Box Tech Beat',
+    artist: 'Totemism',
     genre: 'upbeat',
     genreLabel: 'Upbeat Pop & Tech',
     genreEmoji: '🚀',
     durationSec: 60,
-    bpm: 128,
-    streamUrl: '/audio/upbeat-tech-01.mp3',
+    bpm: 126,
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885830&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=300&q=80',
-    tags: ['tech', 'innovation', 'upbeat', 'business', 'corporate', 'tutorial', 'modern'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['tech', 'innovation', 'upbeat', 'business', 'corporate', 'tutorial', 'modern', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
   {
     id: 'upbeat-tech-02',
-    title: 'Digital Future',
-    artist: 'Roman Senyk',
+    title: 'Why We Inspire',
+    artist: 'Alexey Anisimov',
     genre: 'upbeat',
     genreLabel: 'Upbeat Pop & Tech',
     genreEmoji: '🚀',
     durationSec: 60,
     bpm: 124,
-    streamUrl: '/audio/upbeat-tech-02.mp3',
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885850&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=300&q=80',
-    tags: ['digital', 'future', 'tech', 'pop', 'upbeat', 'review'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['digital', 'future', 'tech', 'pop', 'upbeat', 'review', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
 
   // --- Ambient & Acoustic ---
   {
     id: 'ambient-01',
-    title: 'Morning Light',
-    artist: 'Olexy',
+    title: 'Fade Away Deep Ambient',
+    artist: 'Epikton',
     genre: 'ambient',
     genreLabel: 'Ambient & Acoustic',
     genreEmoji: '🍃',
     durationSec: 60,
     bpm: 65,
-    streamUrl: '/audio/ambient-01.mp3',
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1897033&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=300&q=80',
-    tags: ['ambient', 'acoustic', 'morning', 'vlog', 'nature', 'peaceful'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['ambient', 'acoustic', 'morning', 'vlog', 'nature', 'peaceful', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
   {
     id: 'ambient-02',
-    title: 'Quiet Forest',
-    artist: 'Naturum',
+    title: 'Atmospheric Soundscape',
+    artist: 'makesound',
     genre: 'ambient',
     genreLabel: 'Ambient & Acoustic',
     genreEmoji: '🍃',
     durationSec: 60,
     bpm: 60,
-    streamUrl: '/audio/ambient-02.mp3',
+    streamUrl: 'https://prod-1.storage.jamendo.com/?trackid=1857997&format=mp31&from=app-devportal',
     coverUrl: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=300&q=80',
-    tags: ['ambient', 'forest', 'nature', 'relax', 'quiet', 'acoustic'],
-    license: 'Royalty-Free Built-in Audio',
+    tags: ['ambient', 'forest', 'nature', 'relax', 'quiet', 'acoustic', 'stream'],
+    license: 'Royalty-Free Online Stream (Jamendo / CC)',
   },
+];
+
+export const AUDIO_CATALOG: MusicTrack[] = [
+  ...((Array.isArray(scrapedPixabayTracks) ? scrapedPixabayTracks : []) as MusicTrack[]),
+  ...BASE_AUDIO_CATALOG,
 ];
 
 export const MUSIC_GENRES: Array<{
@@ -241,20 +250,30 @@ export function searchTracks(query: string): MusicTrack[] {
   );
 }
 
-/** Safely resolve stream URL from track or string, ensuring local audio fallback */
+/** Safely resolve stream URL from track, string ID, or direct stream URL */
 export function resolveAudioStreamUrl(trackOrUrl?: MusicTrack | string | null): string | undefined {
   if (!trackOrUrl) return undefined;
+  let rawUrl = '';
   if (typeof trackOrUrl === 'object') {
-    return trackOrUrl.streamUrl;
+    rawUrl = trackOrUrl.streamUrl;
+  } else {
+    rawUrl = trackOrUrl.trim();
   }
-  const url = trackOrUrl.trim();
-  if (url.startsWith('/audio/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
-    return url;
+  if (!rawUrl) return undefined;
+
+  // If a track ID or streamUrl matches catalog, return the verified stream URL
+  const matched = AUDIO_CATALOG.find(
+    (t) => t.id === rawUrl || t.streamUrl === rawUrl || rawUrl.includes(t.id),
+  );
+  const streamUrl = matched ? matched.streamUrl : rawUrl;
+
+  // Pixabay CDN requires Referer: https://pixabay.com/ to prevent 403 hotlink blocks.
+  // Route through in-memory streaming proxy without saving to local disk.
+  if (streamUrl.includes('cdn.pixabay.com') && !streamUrl.includes('/api/music/stream')) {
+    return `/api/music/stream?url=${encodeURIComponent(streamUrl)}`;
   }
-  // If an external remote URL is passed, check if it matches a catalog ID or fallback to local
-  const matched = AUDIO_CATALOG.find((t) => t.id === url || t.streamUrl === url || url.includes(t.id));
-  if (matched) return matched.streamUrl;
-  return url;
+
+  return streamUrl;
 }
 
 /** Get default background music track */
