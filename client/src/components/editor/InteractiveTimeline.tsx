@@ -12,20 +12,45 @@ export interface BrollBlock {
   color?: string;
 }
 
+/** Represents one AI-producer dynamic overlay on the timeline */
+export interface AiOverlayBlock {
+  id: string;
+  startSec: number;
+  durationSec: number;
+  /** human-readable label, e.g. overlay content or type */
+  label: string;
+  overlayType: 'sticker' | 'callout' | 'shape' | 'text' | 'badge' | 'html';
+}
+
 export interface InteractiveTimelineProps {
   playerRef: React.RefObject<PlayerRef | null>;
   durationSec: number;
   fps: number;
   // Track states
   enableHookIntro: boolean;
+  onEnableHookIntroChange?: (enabled: boolean) => void;
   hookDurationSec: number; // default 3.5
   enableBroll: boolean;
+  onEnableBrollChange?: (enabled: boolean) => void;
   brollBlocks: BrollBlock[];
   enableMusic: boolean;
+  onEnableMusicChange?: (enabled: boolean) => void;
   musicTrackLabel?: string; // e.g. "☕ Café Memories"
   musicVolume?: number; // 0–100
   enableOutro: boolean;
   outroDurationSec: number;
+  // AI Overlay track
+  aiOverlayBlocks?: AiOverlayBlock[];
+  onAiOverlayMove?: (id: string, newStartSec: number) => void;
+  onAiOverlayResize?: (id: string, newDurationSec: number) => void;
+  onAiOverlayDelete?: (id: string) => void;
+  // Narration Track
+  outputMode?: 'reel' | 'narration';
+  narrationAudioUrl?: string;
+  synthesizingTts?: boolean;
+  // Volume Controls
+  sourceVolume?: number;
+  onSourceVolumeChange?: (volume: number) => void;
   // Callbacks
   onSeek: (sec: number) => void;
   onBrollBlockMove: (id: string, newStartSec: number) => void;
@@ -75,6 +100,7 @@ interface ContextMenuState {
 const SNAP_PX_THRESHOLD = 12;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
+const MIN_CLIP_DURATION = 0.5;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -91,6 +117,18 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   musicVolume = 25,
   enableOutro,
   outroDurationSec,
+  aiOverlayBlocks = [],
+  onAiOverlayMove,
+  onAiOverlayResize,
+  onAiOverlayDelete,
+  outputMode = 'reel',
+  narrationAudioUrl,
+  synthesizingTts = false,
+  sourceVolume,
+  onSourceVolumeChange,
+  onEnableHookIntroChange,
+  onEnableBrollChange,
+  onEnableMusicChange,
   onSeek,
   onBrollBlockMove,
   onBrollBlockResize,
@@ -101,6 +139,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   const [currentSec, setCurrentSec] = useState(0);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const [brollDrag, setBrollDrag] = useState<BrollDragState | null>(null);
+  const [aiOverlayDrag, setAiOverlayDrag] = useState<BrollDragState | null>(null);
   const [volumeDrag, setVolumeDrag] = useState<VolumeDragState | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
@@ -110,9 +149,10 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     duration: '',
   });
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [snappingEnabled, setSnappingEnabled] = useState(true);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [activeSnapSec, setActiveSnapSec] = useState<number | null>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [contextMenu, setContextMenu] = useState<(ContextMenuState & { track: 'broll' | 'ai' }) | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
@@ -121,12 +161,15 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   // Refs to avoid stale closures
   const isDraggingPlayheadRef = useRef(false);
   const brollDragRef = useRef<BrollDragState | null>(null);
+  const aiOverlayDragRef = useRef<BrollDragState | null>(null);
   const volumeDragRef = useRef<VolumeDragState | null>(null);
   const currentSecRef = useRef(0);
   const zoomLevelRef = useRef(1);
+  const zoomAnchorRef = useRef<{ zoom: number; sec: number; viewportX: number } | null>(null);
 
   isDraggingPlayheadRef.current = isDraggingPlayhead;
   brollDragRef.current = brollDrag;
+  aiOverlayDragRef.current = aiOverlayDrag;
   volumeDragRef.current = volumeDrag;
   currentSecRef.current = currentSec;
   zoomLevelRef.current = zoomLevel;
@@ -137,6 +180,12 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
 
   // Snap points (in seconds)
   const snapPoints = [0, hookEnd, outroStart, durationSec];
+  const clipSnapPoints: Array<{ sec: number; id?: string }> = [
+    ...snapPoints.map((sec) => ({ sec })),
+    { sec: currentSecRef.current },
+    ...brollBlocks.flatMap((block) => [{ sec: block.startSec, id: block.id }, { sec: block.startSec + block.durationSec, id: block.id }]),
+    ...aiOverlayBlocks.flatMap((block) => [{ sec: block.startSec, id: `ai:${block.id}` }, { sec: block.startSec + block.durationSec, id: `ai:${block.id}` }]),
+  ];
 
   // ── RAF Sync with Player ────────────────────────────────────────────────────
   useEffect(() => {
@@ -160,11 +209,19 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.25 : 0.8;
+      const rect = contentAreaRef.current?.getBoundingClientRect();
+      if (rect) {
+        const scrollLeft = scrollContainerRef.current?.scrollLeft ?? 0;
+        const viewportX = e.clientX - rect.left;
+        const contentX = viewportX + scrollLeft;
+        const width = rect.width;
+        zoomAnchorRef.current = { zoom: zoomLevelRef.current, sec: (contentX / (width * zoomLevelRef.current)) * durationSec, viewportX };
+      }
       setZoomLevel((prev) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev * factor)));
     };
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
-  }, []);
+  }, [durationSec]);
 
   // ── Close context menu on outside click ─────────────────────────────────────
   useEffect(() => {
@@ -190,6 +247,11 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
             if (p?.isPlaying?.()) p.pause?.();
             else p?.play?.();
           } catch (_) {/* ignore */}
+          break;
+        }
+        case 'n':
+        case 'N': {
+          setSnappingEnabled((enabled) => !enabled);
           break;
         }
         case 'ArrowLeft': {
@@ -241,17 +303,6 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     return contentAreaRef.current?.getBoundingClientRect() ?? null;
   }, []);
 
-  // ── Helper: sec → left px within zoomed content ──────────────────────────────
-  const secToLeftPx = useCallback(
-    (sec: number): number => {
-      const rect = getContentRect();
-      const baseWidth = rect?.width ?? 600;
-      const totalWidth = baseWidth * zoomLevel;
-      return Math.min(totalWidth, (sec / durationSec) * totalWidth);
-    },
-    [durationSec, zoomLevel, getContentRect],
-  );
-
   // ── Helper: sec → percentage (for zoomed track inner positioning) ────────────
   const secToPercent = useCallback(
     (sec: number): string =>
@@ -266,6 +317,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       if (!rect) return 0;
       const scrollLeft = scrollContainerRef.current?.scrollLeft ?? 0;
       const totalWidth = rect.width * zoomLevelRef.current;
+      // The content element begins after the fixed track-label gutter.
       const posX = clientX - rect.left + scrollLeft;
       const ratio = Math.max(0, Math.min(1, posX / totalWidth));
       return ratio * durationSec;
@@ -275,28 +327,52 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
 
   // ── Snap helper ──────────────────────────────────────────────────────────────
   const snapSec = useCallback(
-    (sec: number, pxPerSec: number, bypassSnap?: boolean): number => {
-      if (bypassSnap) {
+    (sec: number, pxPerSec: number, bypassSnap?: boolean, excludedId?: string): number => {
+      if (!snappingEnabled || bypassSnap) {
         setActiveSnapSec(null);
         return sec;
       }
-      for (const point of snapPoints) {
-        const distPx = Math.abs(sec - point) * pxPerSec;
-        if (distPx < SNAP_PX_THRESHOLD) {
-          setActiveSnapSec(point);
-          return point;
+      let closest: number | null = null;
+      let closestDistance = SNAP_PX_THRESHOLD;
+      for (const point of clipSnapPoints) {
+        if (!Number.isFinite(point.sec) || point.id === excludedId) continue;
+        const distPx = Math.abs(sec - point.sec) * pxPerSec;
+        if (distPx < closestDistance) {
+          closest = point.sec;
+          closestDistance = distPx;
         }
+      }
+      if (closest !== null) {
+        setActiveSnapSec(closest);
+        return closest;
       }
       setActiveSnapSec(null);
       return sec;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [snapPoints.join(',')],
+    [snappingEnabled, JSON.stringify(clipSnapPoints)],
   );
+
+  // Keep the time under the playhead/cursor in the same viewport position when zooming.
+  useEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    const scrollEl = scrollContainerRef.current;
+    const contentEl = contentAreaRef.current;
+    if (anchor && scrollEl && contentEl) {
+      const width = contentEl.getBoundingClientRect().width;
+      const targetScroll = (anchor.sec / durationSec) * width * zoomLevel - anchor.viewportX;
+      scrollEl.scrollLeft = Math.max(0, targetScroll);
+      zoomAnchorRef.current = null;
+      return;
+    }
+    if (!scrollEl || !contentEl || zoomLevel <= 1) return;
+    const width = contentEl.getBoundingClientRect().width;
+    scrollEl.scrollLeft = Math.max(0, (currentSec / durationSec) * width * zoomLevel - scrollEl.clientWidth / 2);
+  }, [zoomLevel, durationSec]);
 
   // ── Playhead Mouse Down (on any track-content area) ──────────────────────────
   const handleTimelineMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      if ((e.target as HTMLElement).closest('button, input, [role="button"]')) return;
       // Ignore if clicking on a b-roll block or volume handle (they call e.stopPropagation)
       setIsDraggingPlayhead(true);
       setSelectedBlockId(null);
@@ -328,7 +404,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     }
   }, [currentSec, durationSec, zoomLevel, isDraggingPlayhead]);
 
-  // ── Global Mouse Move & Up (playhead + b-roll + volume drag) ─────────────────
+  // ── Global Mouse Move & Up (playhead + b-roll + ai-overlay + volume drag) ──
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       // Volume drag
@@ -351,6 +427,33 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         return;
       }
 
+      // AI overlay drag
+      const aiDrag = aiOverlayDragRef.current;
+      if (aiDrag) {
+        const rect = getContentRect();
+        if (!rect) return;
+        const totalWidth = rect.width * zoomLevelRef.current;
+        const pxPerSec = totalWidth / durationSec;
+        const deltaSec = (e.clientX - aiDrag.startMouseX) / pxPerSec;
+        const bypass = e.altKey;
+
+        if (aiDrag.type === 'move') {
+        const maxStart = Math.max(0, durationSec - aiDrag.startDuration);
+        const rawStart = Math.max(0, Math.min(maxStart, aiDrag.startSec + deltaSec));
+        const snappedStart = snapSec(rawStart, pxPerSec, bypass, `ai:${aiDrag.id}`);
+        const snappedEnd = snapSec(rawStart + aiDrag.startDuration, pxPerSec, bypass, `ai:${aiDrag.id}`) - aiDrag.startDuration;
+        const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
+        onAiOverlayMove?.(aiDrag.id, Math.max(0, Math.min(maxStart, candidate)));
+        } else {
+          const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - aiDrag.startSec);
+          const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, aiDrag.startDuration + deltaSec));
+          const snappedEnd = snapSec(aiDrag.startSec + rawDuration, pxPerSec, bypass, `ai:${aiDrag.id}`);
+          const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - aiDrag.startSec));
+          onAiOverlayResize?.(aiDrag.id, newDuration);
+        }
+        return;
+      }
+
       // B-roll drag
       const drag = brollDragRef.current;
       if (!drag) return;
@@ -363,19 +466,27 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       const bypass = e.altKey;
 
       if (drag.type === 'move') {
-        const rawStart = Math.max(0, Math.min(durationSec, drag.startSec + deltaSec));
-        const snapped = snapSec(rawStart, pxPerSec, bypass);
-        onBrollBlockMove(drag.id, snapped);
-      } else {
-        const newDuration = Math.max(0.5, drag.startDuration + deltaSec);
-        onBrollBlockResize(drag.id, newDuration);
+      const maxStart = Math.max(0, durationSec - drag.startDuration);
+      const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
+      const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
+      const snappedEnd = snapSec(rawStart + drag.startDuration, pxPerSec, bypass, drag.id) - drag.startDuration;
+      const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
+      onBrollBlockMove(drag.id, Math.max(0, Math.min(maxStart, candidate)));
+    } else {
+      const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - drag.startSec);
+      const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, drag.startDuration + deltaSec));
+      const snappedEnd = snapSec(drag.startSec + rawDuration, pxPerSec, bypass, drag.id);
+      const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - drag.startSec));
+      onBrollBlockResize(drag.id, newDuration);
       }
     };
 
     const handleMouseUp = () => {
       setIsDraggingPlayhead(false);
       setBrollDrag(null);
+      setAiOverlayDrag(null);
       setVolumeDrag(null);
+
       setActiveSnapSec(null);
     };
 
@@ -394,8 +505,12 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     onBrollBlockMove,
     onBrollBlockResize,
     onMusicVolumeChange,
+    onAiOverlayMove,
+    onAiOverlayResize,
     snapSec,
     getContentRect,
+    aiOverlayBlocks,
+    brollBlocks,
   ]);
 
   // ── Ruler Markers ────────────────────────────────────────────────────────────
@@ -462,9 +577,14 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     label: React.ReactNode,
     content: React.ReactNode,
     isFirst = false,
+    trackKey?: string,
+    trackControls?: React.ReactNode,
   ) => (
-    <div className="timeline-track-row">
-      <div className="timeline-track-label">{label}</div>
+    <div className={`timeline-track-row${trackKey ? ` timeline-track-${trackKey}` : ''}`}>
+      <div className="timeline-track-label" aria-label={`${trackKey ?? 'timeline'} track`}>
+        <span className="timeline-track-name">{label}</span>
+        {trackControls && <span className="timeline-track-controls">{trackControls}</span>}
+      </div>
       <div
         ref={isFirst ? contentAreaRef : undefined}
         className="timeline-track-content"
@@ -488,9 +608,11 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     </div>
   );
 
-  // Subtitle positioning
-  const subtitleLeft = secToPercent(hookEnd);
-  const subtitleWidth = secToPercent(outroStart - hookEnd);
+  // Subtitle track covers the content section in both reel and narration modes.
+  const subtitleStart = outputMode === 'reel' && enableHookIntro ? hookEnd : 0;
+  const subtitleEnd = Math.max(subtitleStart, outroStart);
+  const subtitleLeft = secToPercent(subtitleStart);
+  const subtitleWidth = secToPercent(subtitleEnd - subtitleStart);
 
   // ─── JSX ────────────────────────────────────────────────────────────────────
   return (
@@ -502,23 +624,48 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
           style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={() => {
-              onBrollBlockDelete?.(contextMenu.id);
-              setContextMenu(null);
-              if (selectedBlockId === contextMenu.id) setSelectedBlockId(null);
-            }}
-          >
-            🗑️ Hapus B-roll ini
-          </button>
-          <button
-            onClick={() => {
-              seekToBlock(contextMenu.id, brollBlocks.find(b => b.id === contextMenu.id)?.startSec ?? 0);
-              setContextMenu(null);
-            }}
-          >
-            ▶ Tuju ke blok ini
-          </button>
+          {contextMenu.track === 'ai' ? (
+            <>
+              <button
+                onClick={() => {
+                  onAiOverlayDelete?.(contextMenu.id);
+                  setContextMenu(null);
+                  if (selectedBlockId === `ai:${contextMenu.id}`) setSelectedBlockId(null);
+                }}
+              >
+                🗑️ Hapus AI UI ini
+              </button>
+              <button
+                onClick={() => {
+                  const block = aiOverlayBlocks.find((b) => b.id === contextMenu.id);
+                  if (block) seekToBlock(`ai:${block.id}`, block.startSec);
+                  setContextMenu(null);
+                }}
+              >
+                ▶ Tuju ke blok ini
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  onBrollBlockDelete?.(contextMenu.id);
+                  setContextMenu(null);
+                  if (selectedBlockId === contextMenu.id) setSelectedBlockId(null);
+                }}
+              >
+                🗑️ Hapus B-roll ini
+              </button>
+              <button
+                onClick={() => {
+                  seekToBlock(contextMenu.id, brollBlocks.find((b) => b.id === contextMenu.id)?.startSec ?? 0);
+                  setContextMenu(null);
+                }}
+              >
+                ▶ Tuju ke blok ini
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -580,6 +727,23 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         >
           1×
         </button>
+        <button
+          className="timeline-zoom-btn timeline-tool-btn"
+          onClick={() => setZoomLevel(1)}
+          title="Fit seluruh durasi timeline"
+          aria-label="Fit seluruh durasi timeline"
+        >
+          Fit
+        </button>
+        <button
+          className={`timeline-zoom-btn timeline-tool-btn${snappingEnabled ? ' active' : ''}`}
+          onClick={() => setSnappingEnabled((enabled) => !enabled)}
+          title={`Snapping ${snappingEnabled ? 'aktif' : 'nonaktif'} (N)`}
+          aria-pressed={snappingEnabled}
+        >
+          ⧲ Snap
+        </button>
+        <span className="timeline-a11y-hint" aria-live="polite">{snappingEnabled ? 'Snapping aktif' : 'Snapping nonaktif'}</span>
         <span
           style={{
             marginLeft: 'auto',
@@ -588,7 +752,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
             fontStyle: 'italic',
           }}
         >
-          ⌨ Space · ←→ ·  ⌥drag=no-snap · klik blok=seek
+          ⌨ Space · ←→ · N=snap · ⌥drag=no-snap · klik blok=seek
         </span>
       </div>
 
@@ -656,9 +820,9 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         {/* Inner tracks container (scrolls with ruler) */}
         <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
 
-          {/* ── TRACK 1: Hook + Subtitle + Outro ─────────────────────────── */}
+          {/* ── TRACK 1: Hook ────────────────────────────────────────────── */}
           {renderTrackRow(
-            <>⚡ Hook &<br />Subtitle</>,
+            <>⚡ Hook<br />Intro</>,
             <>
               {enableHookIntro && (
                 <div
@@ -688,34 +852,8 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                   ⚡ Hook
                 </div>
               )}
+              {enableOutro && outputMode === 'reel' && (
               <div
-                className={`timeline-block${selectedBlockId === '__subtitle__' ? ' selected' : ''}`}
-                style={{
-                  ...blockStyle(subtitleLeft, subtitleWidth, 'rgba(50,130,184,0.4)', { cursor: 'pointer' }),
-                  ...selectedOutline('__subtitle__'),
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  seekToBlock('__subtitle__', hookEnd);
-                }}
-                onMouseEnter={(e) =>
-                  setTooltip({
-                    visible: true,
-                    x: e.clientX,
-                    y: e.clientY,
-                    label: '💬 Subtitle Karaoke',
-                    duration: formatTimecode(outroStart - hookEnd),
-                  })
-                }
-                onMouseMove={(e) =>
-                  setTooltip((t) => ({ ...t, x: e.clientX, y: e.clientY }))
-                }
-                onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
-              >
-                💬 Subtitle
-              </div>
-              {enableOutro && (
-                <div
                   className={`timeline-block${selectedBlockId === '__outro__' ? ' selected' : ''}`}
                   style={{
                     ...blockStyle(secToPercent(outroStart), secToPercent(outroDurationSec), '#EC4899', { cursor: 'pointer' }),
@@ -744,9 +882,56 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
               )}
             </>,
             true, // isFirst → sets contentAreaRef
+            'visual',
+            <button type="button" className="timeline-track-toggle" aria-label={`${enableHookIntro ? 'Sembunyikan' : 'Tampilkan'} hook intro`} aria-pressed={enableHookIntro} title="Aktif/nonaktif hook intro" onMouseDown={(e) => e.stopPropagation()} onClick={() => onEnableHookIntroChange?.(!enableHookIntro)}>{enableHookIntro ? '●' : '○'}</button>,
           )}
 
-          {/* ── TRACK 2: B-Roll (Draggable) ──────────────────────────────── */}
+          {/* ── TRACK 2: Subtitle (shared by reel and narration) ──────────── */}
+          {renderTrackRow(
+            <>💬 Subtitle</>,
+            <div
+              className={`timeline-block${selectedBlockId === '__subtitle__' ? ' selected' : ''}`}
+              style={{
+                ...blockStyle(subtitleLeft, subtitleWidth, 'rgba(50,130,184,0.55)', { cursor: 'pointer', justifyContent: 'flex-start' }),
+                ...selectedOutline('__subtitle__'),
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`Subtitle, ${formatTimecode(subtitleStart)} sampai ${formatTimecode(subtitleEnd)}`}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seekToBlock('__subtitle__', subtitleStart); } }}
+              onClick={(e) => {
+                e.stopPropagation();
+                seekToBlock('__subtitle__', subtitleStart);
+              }}
+              onMouseEnter={(e) => setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: '💬 Subtitle Karaoke', duration: formatTimecode(subtitleEnd - subtitleStart) })}
+              onMouseMove={(e) => setTooltip((t) => ({ ...t, x: e.clientX, y: e.clientY }))}
+              onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
+            >
+              💬 Subtitle Karaoke
+            </div>,
+            false,
+            'subtitle',
+          )}
+
+          {/* ── TRACK: Outro ─────────────────────────────────────────────── */}
+          {enableOutro && outputMode === 'narration' && renderTrackRow(
+            <>🏁 Outro</>,
+            <div
+              className={`timeline-block${selectedBlockId === '__outro__' ? ' selected' : ''}`}
+              style={{ ...blockStyle(secToPercent(outroStart), secToPercent(outroDurationSec), '#EC4899', { cursor: 'pointer' }), ...selectedOutline('__outro__') }}
+              role="button"
+              tabIndex={0}
+              aria-label={`Outro CTA, durasi ${formatTimecode(outroDurationSec)}`}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seekToBlock('__outro__', outroStart); } }}
+              onClick={(e) => { e.stopPropagation(); seekToBlock('__outro__', outroStart); }}
+            >
+              🏁 Outro CTA
+            </div>,
+            false,
+            'outro',
+          )}
+
+          {/* ── TRACK 3: B-Roll (Draggable) ──────────────────────────────── */}
           {renderTrackRow(
             <>🎬 B-Roll<br />Overlays</>,
             <>
@@ -774,7 +959,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setContextMenu({ id: block.id, x: e.clientX, y: e.clientY });
+                        setContextMenu({ id: block.id, x: e.clientX, y: e.clientY, track: 'broll' });
                       }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
@@ -848,13 +1033,158 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                 </div>
               )}
             </>,
+            false,
+            'broll',
+            <button type="button" className="timeline-track-toggle" aria-label={`${enableBroll ? 'Nonaktifkan' : 'Aktifkan'} B-roll`} aria-pressed={enableBroll} title="Aktif/nonaktif B-roll" onMouseDown={(e) => e.stopPropagation()} onClick={() => onEnableBrollChange?.(!enableBroll)}>{enableBroll ? '●' : '○'}</button>,
           )}
 
-          {/* ── TRACK 3: Video Utama ──────────────────────────────────────── */}
+          {/* ── TRACK 3: AI Producer UI Overlays ─────────────────────────── */}
+          {renderTrackRow(
+            <>🤖 AI<br />UI</>,
+            <>
+              {aiOverlayBlocks.length > 0 ? (
+                aiOverlayBlocks.map((block) => {
+                  const isDragging = aiOverlayDrag?.id === block.id;
+                  const isSelected = selectedBlockId === `ai:${block.id}`;
+
+                  // Color by overlay type
+                  const typeColors: Record<string, string> = {
+                    sticker: '#F97316',
+                    callout: '#06B6D4',
+                    shape: '#8B5CF6',
+                    text: '#EC4899',
+                    badge: '#EAB308',
+                    html: '#10B981',
+                  };
+                  const bg = typeColors[block.overlayType] ?? '#64748B';
+
+                  // Type emoji
+                  const typeEmoji: Record<string, string> = {
+                    sticker: '😀',
+                    callout: '💬',
+                    shape: '🔷',
+                    text: '📝',
+                    badge: '🏷️',
+                    html: '🌐',
+                  };
+                  const emoji = typeEmoji[block.overlayType] ?? '🤖';
+
+                  return (
+                    <div
+                      key={block.id}
+                      className={`timeline-block${isDragging ? ' dragging' : ''}${isSelected ? ' selected' : ''}`}
+                      style={{
+                        ...blockStyle(
+                          secToPercent(block.startSec),
+                          secToPercent(block.durationSec),
+                          bg,
+                          {
+                            cursor: isDragging ? 'grabbing' : 'grab',
+                            paddingRight: '14px',
+                            backgroundImage: `repeating-linear-gradient(
+                              45deg,
+                              transparent,
+                              transparent 4px,
+                              rgba(255,255,255,0.08) 4px,
+                              rgba(255,255,255,0.08) 8px
+                            )`,
+                          },
+                        ),
+                        ...(isSelected ? { outline: '2px solid rgba(255,255,255,0.9)', outlineOffset: '1px', zIndex: 5 } : {}),
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        seekToBlock(`ai:${block.id}`, block.startSec);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setContextMenu({ id: block.id, x: e.clientX, y: e.clientY, track: 'ai' });
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setAiOverlayDrag({
+                          id: block.id,
+                          type: 'move',
+                          startMouseX: e.clientX,
+                          startSec: block.startSec,
+                          startDuration: block.durationSec,
+                        });
+                      }}
+                      onMouseEnter={(e) =>
+                        setTooltip({
+                          visible: true,
+                          x: e.clientX,
+                          y: e.clientY,
+                          label: `${emoji} ${block.label || block.overlayType}`,
+                          duration: `${formatTimecode(block.startSec)} → ${formatTimecode(block.startSec + block.durationSec)}`,
+                        })
+                      }
+                      onMouseMove={(e) =>
+                        setTooltip((t) => ({ ...t, x: e.clientX, y: e.clientY }))
+                      }
+                      onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
+                    >
+                      {emoji}{' '}
+                      {block.label.length > 10 ? block.label.slice(0, 10) + '…' : block.label}
+                      {/* Resize handle */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          width: '6px',
+                          height: '100%',
+                          cursor: 'col-resize',
+                          background: 'rgba(0,0,0,0.3)',
+                          borderRadius: '0 4px 4px 0',
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setAiOverlayDrag({
+                            id: block.id,
+                            type: 'resize',
+                            startMouseX: e.clientX,
+                            startSec: block.startSec,
+                            startDuration: block.durationSec,
+                          });
+                        }}
+                      />
+                    </div>
+                  );
+                })
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '10px',
+                    color: 'var(--text-sub)',
+                    fontStyle: 'italic',
+                    pointerEvents: 'none',
+                    gap: '4px',
+                  }}
+                >
+                  🤖 Belum ada UI dari AI Producer
+                </div>
+              )}
+            </>,
+            false,
+            'ai-overlay',
+          )}
+
+          {/* ── TRACK 4: Video Utama ──────────────────────────────────────── */}
+
           {renderTrackRow(
             <>🎥 Video<br />Utama</>,
             <div
               className={`timeline-block${selectedBlockId === '__video__' ? ' selected' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-label={`Track video utama, durasi ${formatTimecode(durationSec)}, volume ${sourceVolume ?? 100} persen`}
               style={{
                 ...blockStyle('0%', '100%', '#10B981', { cursor: 'pointer', justifyContent: 'flex-start' }),
                 ...selectedOutline('__video__'),
@@ -868,7 +1198,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                   visible: true,
                   x: e.clientX,
                   y: e.clientY,
-                  label: '🎥 Video Klip Utama',
+                  label: outputMode === 'narration' ? `🎥 Video Klip Utama (Ducking Vol: ${sourceVolume ?? 25}%)` : `🎥 Video Klip Utama (Vol: ${sourceVolume ?? 100}%)`,
                   duration: formatTimecode(durationSec),
                 })
               }
@@ -878,15 +1208,141 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
               onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
             >
               🎥 Video Klip Utama
+              {sourceVolume !== undefined && (
+                <span style={{ opacity: 0.85, fontSize: '9px', marginLeft: '6px' }}>
+                  {outputMode === 'narration' ? `(Ducking: ${sourceVolume}%)` : `(Vol: ${sourceVolume}%)`}
+                </span>
+              )}
+
+              {/* Source volume quick bar */}
+              {onSourceVolumeChange && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: '6px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '46px',
+                    height: '6px',
+                    background: 'rgba(255,255,255,0.25)',
+                    borderRadius: '3px',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                  }}
+                  title="Klik untuk set volume video"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const newVol = Math.round(Math.max(0, Math.min(100, (clickX / rect.width) * 100)));
+                    onSourceVolumeChange(newVol);
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${sourceVolume ?? 25}%`,
+                      background: 'rgba(255,255,255,0.9)',
+                      borderRadius: '3px',
+                    }}
+                  />
+                </div>
+              )}
             </div>,
+            false,
+            'video',
           )}
 
-          {/* ── TRACK 4: Background Music ─────────────────────────────────── */}
+          {/* ── TRACK: AI Narration Voice (when in narration mode) ─────────── */}
+          {outputMode === 'narration' &&
+            renderTrackRow(
+              <>🎙️ Narasi<br />Suara AI</>,
+              synthesizingTts ? (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#67E8F9',
+                    background: 'rgba(6, 182, 212, 0.12)',
+                    border: '1px dashed #06B6D4',
+                    borderRadius: '6px',
+                  }}
+                >
+                  ⏳ Mensintesis Audio Narasi AI...
+                </div>
+              ) : narrationAudioUrl ? (
+                <div
+                  className={`timeline-block timeline-audio-clip${selectedBlockId === '__narration__' ? ' selected' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Track narasi AI, durasi ${formatTimecode(durationSec)}`}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seekToBlock('__narration__', 0); } }}
+                  style={{
+                    ...blockStyle('0%', '100%', 'linear-gradient(90deg, #0284C7 0%, #06B6D4 100%)', {
+                      cursor: 'pointer',
+                      justifyContent: 'flex-start',
+                      gap: '6px',
+                      paddingLeft: '10px',
+                    }),
+                    ...selectedOutline('__narration__'),
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    seekToBlock('__narration__', 0);
+                  }}
+                  onMouseEnter={(e) =>
+                    setTooltip({
+                      visible: true,
+                      x: e.clientX,
+                      y: e.clientY,
+                      label: '🎙️ Audio Narasi AI (TTS)',
+                      duration: formatTimecode(durationSec),
+                    })
+                  }
+                  onMouseMove={(e) =>
+                    setTooltip((t) => ({ ...t, x: e.clientX, y: e.clientY }))
+                  }
+                  onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
+                >
+                  🎙️ Audio Narasi AI (TTS Suara Baru)
+                </div>
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '10.5px',
+                    color: '#FDE68A',
+                    background: 'rgba(245, 158, 11, 0.10)',
+                    border: '1px dashed rgba(245, 158, 11, 0.4)',
+                    borderRadius: '6px',
+                  }}
+                >
+                  ⚠️ Audio narasi belum disintesis
+                </div>
+              ),
+              false,
+              'narration',
+            )}
+
+          {/* ── TRACK 5: Background Music ─────────────────────────────────── */}
           {renderTrackRow(
             <>🎵 Musik<br />BG</>,
             enableMusic ? (
               <div
-                className={`timeline-block${selectedBlockId === '__music__' ? ' selected' : ''}`}
+                className={`timeline-block timeline-audio-clip${selectedBlockId === '__music__' ? ' selected' : ''}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Track musik ${musicTrackLabel ?? 'Background Music'}, volume ${musicVolume} persen`}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seekToBlock('__music__', 0); } }}
                 style={{
                   ...blockStyle('0%', '100%', 'linear-gradient(90deg, #A855F7 0%, #7C3AED 100%)', {
                     cursor: 'pointer',
@@ -978,6 +1434,9 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                 Tidak ada musik — tambahkan dari panel 🎵
               </div>
             ),
+            false,
+            'music',
+            <button type="button" className="timeline-track-toggle" aria-label={`${enableMusic ? 'Nonaktifkan' : 'Aktifkan'} musik`} aria-pressed={enableMusic} title="Aktif/nonaktif musik latar" onMouseDown={(e) => e.stopPropagation()} onClick={() => onEnableMusicChange?.(!enableMusic)}>{enableMusic ? '●' : '○'}</button>,
           )}
         </div>
       </div>
@@ -1008,6 +1467,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
             { color: '#3282B8', label: 'Hook' },
             { color: 'rgba(50,130,184,0.5)', label: 'Subtitle' },
             { color: '#F59E0B', label: 'B-Roll' },
+            { color: 'linear-gradient(90deg,#F97316,#06B6D4,#EC4899)', label: 'AI UI' },
             { color: '#10B981', label: 'Video' },
             { color: '#A855F7', label: 'Musik' },
             { color: '#EC4899', label: 'Outro' },

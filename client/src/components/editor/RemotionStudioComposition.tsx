@@ -11,6 +11,8 @@ import {
   Video,
 } from 'remotion';
 import { resolveAudioStreamUrl } from '../../lib/audio-catalog';
+import { Outro } from '../../../../compositions/studio/src/Outro';
+import type { Theme } from '../../../../compositions/studio/src/design';
 
 export interface RemotionStudioCompositionProps {
   videoSrc?: string;
@@ -54,6 +56,8 @@ export interface RemotionStudioCompositionProps {
   outroCtaText?: string;
   outroButtonText?: string;
   outroDuration?: number;
+  outroPreset?: string;
+  outroLogoUrl?: string;
   channelName?: string;
   // Audio / Music props
   musicSrc?: string;          // CDN URL atau stream URL musik latar
@@ -61,6 +65,10 @@ export interface RemotionStudioCompositionProps {
   musicStartFromSec?: number; // trim start of music track, default 0
   autoDucking?: boolean;      // musik mengecil saat video ada narasi
   sourceVolume?: number;      // 0–1 volume suara asli, default 1
+  narrationAudioUrl?: string; // URL audio narasi AI TTS
+  narrationVolume?: number;   // 0–1 volume narasi, default 1
+  outputMode?: 'reel' | 'narration';
+  videoStartFromSec?: number; // trim start of video element, default 0
   // Dynamic CSS Styles & Universal Overlays (Zero-Code Dynamic Extensibility)
   dynamicStyles?: Record<string, React.CSSProperties>;
   dynamicOverlays?: Array<{
@@ -144,6 +152,8 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   outroCtaText = 'Suka video ini? Follow untuk update tips harian!',
   outroButtonText = 'Follow',
   outroDuration = 3,
+  outroPreset = 'creator-glass',
+  outroLogoUrl,
   channelName = '@kreator',
   // Audio / Music props
   musicSrc,
@@ -151,6 +161,10 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   musicStartFromSec = 0,
   autoDucking = true,
   sourceVolume = 1,
+  narrationAudioUrl,
+  narrationVolume = 1,
+  outputMode = 'reel',
+  videoStartFromSec = 0,
   // Dynamic CSS & Universal Overlays
   dynamicStyles = {},
   dynamicOverlays = [],
@@ -199,6 +213,18 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
 
   const outroTranslateY = interpolate(outroSpring, [0, 1], [150, 0]);
   const outroOpacity = interpolate(outroSpring, [0, 1], [0, 1]);
+  const outroTheme: Theme = {
+    id: 'live-preview-outro',
+    accent: '#38BDF8',
+    accent2: '#A78BFA',
+    cardBg: 'rgba(15, 23, 42, 0.9)',
+    cardText: '#FFFFFF',
+    cardStroke: 'rgba(255,255,255,0.2)',
+    stroke: '#000000',
+    fill: '#FFFFFF',
+    gradient: ['#0F172A', '#1E293B'],
+    surface: '#0A0E1A',
+  };
 
   // ---------------------------------------------------------------------------
   // 3. Subtitles (Real Voice-Synced Transcript or Fallback Simulation)
@@ -213,9 +239,10 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   // ---------------------------------------------------------------------------
   const baseMusicVol = Math.max(0, Math.min(1, musicVolume ?? 0.25));
   // Detect speech presence
-  const isSpeechActive = hasRealCaptions
-    ? Boolean(activeCaption)
-    : (!isHookActive && !isOutroActive);
+  const isSpeechActive =
+    outputMode === 'narration'
+      ? Boolean(narrationAudioUrl || activeCaption)
+      : (hasRealCaptions ? Boolean(activeCaption) : (!isHookActive && !isOutroActive));
 
   // When auto-ducking is enabled and someone speaks, duck music to 35% of set volume.
   // During speech pauses or hook/outro, music volume returns to 100%.
@@ -333,6 +360,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
         <AbsoluteFill style={{ overflow: 'hidden' }}>
           <Video
             src={videoSrc}
+            startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
             style={{
               width: '100%',
               height: '100%',
@@ -374,7 +402,8 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
         >
           <Video
             src={videoSrc}
-            volume={sourceVolume ?? 1}
+            startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
+            volume={isRenderedVideo ? 1 : (outputMode === 'narration' ? (sourceVolume ?? 0.25) : 1)}
             style={{
               width: '100%',
               height: '100%',
@@ -499,30 +528,6 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                     </div>
                   </AbsoluteFill>
                 )}
-
-                {/* Sleek B-Roll indicator badge */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '60px',
-                    left: '40px',
-                    zIndex: 10,
-                    background: 'rgba(15, 23, 42, 0.85)',
-                    border: '1.5px solid rgba(56, 189, 248, 0.6)',
-                    borderRadius: '999px',
-                    padding: '6px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    backdropFilter: 'blur(10px)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  }}
-                >
-                  <span style={{ fontSize: '14px' }}>🎬</span>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.5px' }}>
-                    B-ROLL • {broll.query.toUpperCase()}
-                  </span>
-                </div>
               </AbsoluteFill>
             </Sequence>
           );
@@ -637,8 +642,9 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                 style={{
                   textAlign: 'center',
                   display: 'inline-flex',
-                  alignItems: 'baseline',
-                  gap: '12px',
+                  alignItems: 'flex-end',
+                  columnGap: '12px',
+                  rowGap: '10px',
                   flexWrap: 'wrap',
                   justifyContent: 'center',
                   background: 'rgba(0, 0, 0, 0.55)',
@@ -663,7 +669,6 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                     : isPast
                     ? '#FFFFFF'
                     : 'rgba(255, 255, 255, 0.65)';
-                  const scale = isCurrent ? 1.14 : 1.0;
                   const shadowGlow = isCurrent
                     ? isHighlight
                       ? '0 0 24px rgba(0,229,255,0.9), '
@@ -671,21 +676,24 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                     : '';
                   const outline =
                     '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 6px 16px rgba(0,0,0,0.9)';
+                  // Gunakan fontSize langsung (bukan scale) agar tidak collapse gap
+                  const wordFontSize = isCurrent ? Math.round(baseFontSize * 1.08) : baseFontSize;
 
                   return (
                     <span
                       key={k}
                       style={{
                         fontFamily: "'Archivo Black', 'Impact', sans-serif",
-                        fontSize: `${baseFontSize}px`,
+                        fontSize: `${wordFontSize}px`,
+                        lineHeight: 1.2,
                         fontWeight: 900,
                         textTransform: 'uppercase',
                         color,
                         textShadow: `${shadowGlow}${outline}`,
-                        transform: `scale(${scale})`,
                         display: 'inline-block',
-                        transition: 'all 0.08s ease',
-                        margin: '0 3px',
+                        transition: 'font-size 0.08s ease, color 0.08s ease',
+                        margin: '0 4px',
+                        paddingBottom: isCurrent ? '2px' : '0',
                       }}
                     >
                       {word}
@@ -700,11 +708,12 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                   textAlign: 'center',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '10px',
+                  columnGap: '16px',
+                  rowGap: '10px',
                   flexWrap: 'wrap',
                   justifyContent: 'center',
                   background: 'rgba(0, 0, 0, 0.6)',
-                  padding: '12px 20px',
+                  padding: '12px 24px',
                   borderRadius: '16px',
                   backdropFilter: 'blur(8px)',
                 }}
@@ -725,6 +734,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                     border = '2px solid #334155';
                   }
 
+                  // Gunakan fontSize langsung agar spacing konsisten
+                  const wordFontSize = isCurrent
+                    ? Math.round(baseFontSize * 0.99)
+                    : Math.round(baseFontSize * 0.94);
+
                   return (
                     <span
                       key={k}
@@ -733,16 +747,16 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                         background: bg,
                         color,
                         border,
-                        padding: isCurrent ? '6px 14px' : isPast ? '4px 10px' : '4px 6px',
+                        padding: isCurrent ? '7px 15px' : '6px 14px',
                         borderRadius: '10px',
-                        fontSize: `${Math.round(baseFontSize * 0.94)}px`,
+                        fontSize: `${wordFontSize}px`,
+                        lineHeight: 1.2,
                         fontWeight: 900,
                         textTransform: 'uppercase',
                         boxShadow: isCurrent ? '0 8px 24px rgba(16,185,129,0.5)' : 'none',
-                        transform: isCurrent ? 'scale(1.08)' : 'scale(1)',
                         display: 'inline-block',
-                        transition: 'all 0.08s ease',
-                        margin: '0 3px',
+                        transition: 'font-size 0.08s ease, background 0.08s ease',
+                        margin: '0 4px',
                       }}
                     >
                       {word}
@@ -761,26 +775,36 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                   backdropFilter: 'blur(12px)',
                   textAlign: 'center',
                   maxWidth: '850px',
+                  display: 'inline-flex',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center',
+                  alignItems: 'flex-end',
+                  columnGap: '10px',
+                  rowGap: '8px',
                 }}
               >
                 {realWords.map((word, k) => {
                   const isCurrent = k === currentSpokenIdx;
                   const isPast = k < currentSpokenIdx;
                   const color = isCurrent ? '#38BDF8' : isPast ? '#FFFFFF' : 'rgba(255, 255, 255, 0.55)';
+                  // fontSize langsung untuk menghindari gap rapat akibat scale
+                  const wordFontSize = isCurrent
+                    ? Math.round(baseFontSize * 0.92)
+                    : Math.round(baseFontSize * 0.88);
 
                   return (
                     <span
                       key={k}
                       style={{
                         fontFamily: "'Inter', sans-serif",
-                        fontSize: `${Math.round(baseFontSize * 0.88)}px`,
+                        fontSize: `${wordFontSize}px`,
+                        lineHeight: 1.3,
                         fontWeight: isCurrent ? 800 : 600,
                         color,
-                        margin: '0 4px',
+                        margin: '0 3px',
                         display: 'inline-block',
-                        transform: isCurrent ? 'scale(1.06)' : 'scale(1)',
                         textShadow: isCurrent ? '0 0 16px rgba(56,189,248,0.7)' : 'none',
-                        transition: 'all 0.08s ease',
+                        transition: 'font-size 0.08s ease, color 0.08s ease',
                       }}
                     >
                       {word}
@@ -796,7 +820,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                 textAlign: 'center',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '14px',
+                gap: '20px',
                 flexWrap: 'wrap',
                 justifyContent: 'center',
                 background: 'rgba(0, 0, 0, 0.45)',
@@ -814,7 +838,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                   color: '#FFE600',
                   textShadow:
                     '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 6px 16px rgba(0,0,0,0.8)',
-                  transform: 'scale(1.12)',
+                  transform: 'translateY(-4px) scale(1.06)',
                   display: 'inline-block',
                 }}
               >
@@ -841,7 +865,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                 textAlign: 'center',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: '16px',
                 flexWrap: 'wrap',
                 justifyContent: 'center',
               }}
@@ -857,6 +881,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                   fontWeight: 900,
                   textTransform: 'uppercase',
                   boxShadow: '0 8px 24px rgba(16,185,129,0.5)',
+                  transform: 'translateY(-4px) scale(1.04)',
                 }}
               >
                 {fallbackActiveWord}
@@ -913,69 +938,21 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {isOutroActive && (
         <AbsoluteFill
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0 48px',
             transform: `translateY(${outroTranslateY}px)`,
             opacity: outroOpacity,
             zIndex: 50,
-            background: 'rgba(10, 14, 20, 0.88)',
-            backdropFilter: 'blur(20px)',
             ...dynamicStyles.outro,
           }}
         >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #0F4C75 0%, #3282B8 100%)',
-              borderRadius: '28px',
-              padding: '40px',
-              textAlign: 'center',
-              boxShadow: '0 24px 60px rgba(0,0,0,0.85)',
-              border: '2px solid rgba(187, 225, 250, 0.3)',
-              maxWidth: '860px',
-              width: '100%',
-            }}
-          >
-            <div style={{ fontSize: '32px', marginBottom: '12px' }}>✨</div>
-            <h2
-              style={{
-                margin: '0 0 12px',
-                fontSize: '44px',
-                fontWeight: 900,
-                color: '#FFFFFF',
-                lineHeight: 1.2,
-              }}
-            >
-              {outroCtaText}
-            </h2>
-            <div
-              style={{
-                fontSize: '24px',
-                color: '#BBE1FA',
-                fontWeight: 700,
-                marginBottom: '28px',
-              }}
-            >
-              {channelName}
-            </div>
-            <div
-              style={{
-                display: 'inline-block',
-                background: '#FFFFFF',
-                color: '#0F4C75',
-                padding: '16px 48px',
-                borderRadius: '999px',
-                fontSize: '28px',
-                fontWeight: 900,
-                textTransform: 'uppercase',
-                boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              }}
-            >
-              {outroButtonText} →
-            </div>
-          </div>
+          <Outro
+            theme={outroTheme}
+            channelName={channelName}
+            durationFrames={Math.max(1, Math.round(outroDuration * fps))}
+            logoSrc={outroLogoUrl}
+            preset={outroPreset}
+            ctaText={outroCtaText}
+            buttonText={outroButtonText}
+          />
         </AbsoluteFill>
       )}
 
@@ -1092,12 +1069,22 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {/* -------------------------------------------------------------------- */}
       {/* LAYER 7: Background Music Audio Track                                 */}
       {/* -------------------------------------------------------------------- */}
-      {resolvedMusicSrc && (
+      {resolvedMusicSrc && !isRenderedVideo && (
         <Audio
           src={resolvedMusicSrc}
           volume={effectiveMusicVolume}
           startFrom={Math.round((musicStartFromSec ?? 0) * fps)}
           loop
+        />
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* LAYER 8: AI Narration Voice Track (New Narration Mode)                */}
+      {/* -------------------------------------------------------------------- */}
+      {outputMode === 'narration' && narrationAudioUrl && !isRenderedVideo && (
+        <Audio
+          src={narrationAudioUrl}
+          volume={narrationVolume ?? 1}
         />
       )}
     </AbsoluteFill>

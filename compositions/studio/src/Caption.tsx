@@ -170,11 +170,17 @@ export const Caption: React.FC<{
         }
 
         const scale = isCurrent
-          ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.07, 1.04], {
+          ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.05, 1.03], {
               extrapolateLeft: 'clamp',
               extrapolateRight: 'clamp',
             })
           : 1.0;
+        const translateY = isCurrent
+          ? interpolate(wordSpring, [0, 0.7, 1], [0, -4, -2], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            })
+          : 0;
 
         return (
           <span
@@ -182,9 +188,9 @@ export const Caption: React.FC<{
             style={{
               color,
               display: 'inline-block',
-              transform: `scale(${scale})`,
+              transform: `translateY(${translateY}px) scale(${scale})`,
               transformOrigin: 'center bottom',
-              margin: '0 2px',
+              margin: '0 4px',
               textShadow: isCurrent ? '0 0 16px rgba(255, 229, 0, 0.5)' : undefined,
             }}
           >
@@ -205,11 +211,17 @@ export const Caption: React.FC<{
         }
 
         const scale = isCurrent
-          ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.05, 1.03], {
+          ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.04, 1.02], {
               extrapolateLeft: 'clamp',
               extrapolateRight: 'clamp',
             })
           : 1.0;
+        const translateY = isCurrent
+          ? interpolate(wordSpring, [0, 0.7, 1], [0, -3, -1], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            })
+          : 0;
 
         return (
           <span
@@ -217,9 +229,9 @@ export const Caption: React.FC<{
             style={{
               color,
               display: 'inline-block',
-              transform: `scale(${scale})`,
+              transform: `translateY(${translateY}px) scale(${scale})`,
               transformOrigin: 'center bottom',
-              margin: '0 2px',
+              margin: '0 4px',
               textShadow: isCurrent
                 ? '0 0 14px rgba(163, 230, 53, 0.6), 0 2px 8px rgba(0, 0, 0, 0.9)'
                 : '0 2px 8px rgba(0, 0, 0, 0.85)',
@@ -237,11 +249,17 @@ export const Caption: React.FC<{
       let shadowGlow = '';
 
       const scale = isCurrent
-        ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.09, 1.06], {
+        ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.06, 1.04], {
             extrapolateLeft: 'clamp',
             extrapolateRight: 'clamp',
           })
         : 1.0;
+      const translateY = isCurrent
+        ? interpolate(wordSpring, [0, 0.7, 1], [0, -5, -2], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          })
+        : 0;
 
       if (isCurrent) {
         color = isHighlight ? '#00E5FF' : '#FFE500';
@@ -267,9 +285,9 @@ export const Caption: React.FC<{
           style={{
             color,
             display: 'inline-block',
-            transform: `scale(${scale})`,
+            transform: `translateY(${translateY}px) scale(${scale})`,
             transformOrigin: 'center bottom',
-            margin: '0 2px',
+            margin: '0 5px',
             textShadow: `${shadowGlow}${outline}`,
           }}
         >
@@ -293,8 +311,8 @@ export const Caption: React.FC<{
           flexWrap: 'wrap',
           justifyContent: 'center',
           alignItems: 'baseline',
-          columnGap: isClean ? '10px' : isHormozi ? '12px' : '14px',
-          rowGap: '6px',
+          columnGap: isClean ? '16px' : isHormozi ? '18px' : '22px',
+          rowGap: '10px',
           fontSize: fitted,
           lineHeight: isHormozi ? 1.1 : isClean ? 1.25 : 1.16,
           textAlign: 'center',

@@ -7,6 +7,7 @@ export const FloatingQuestions: React.FC = () => {
     <>
       <button
         type="button"
+        className="floating-questions-btn"
         style={{
           position: 'fixed',
           bottom: '24px',
@@ -24,7 +25,7 @@ export const FloatingQuestions: React.FC = () => {
           alignItems: 'center',
           gap: '8px',
           zIndex: 1000,
-          transition: 'all 0.2s ease',
+          transition: 'right 0.3s ease, transform 0.2s ease, opacity 0.2s ease, background 0.15s ease',
         }}
         onClick={() => setOpen(!open)}
         title="Bantuan & Panduan Cepat"
@@ -35,6 +36,7 @@ export const FloatingQuestions: React.FC = () => {
 
       {open && (
         <div
+          className="floating-questions-popup"
           style={{
             position: 'fixed',
             bottom: '76px',
@@ -47,6 +49,7 @@ export const FloatingQuestions: React.FC = () => {
             boxShadow: '0 20px 48px rgba(0,0,0,0.65)',
             zIndex: 1001,
             color: '#ffffff',
+            transition: 'right 0.3s ease, transform 0.2s ease, opacity 0.2s ease',
           }}
         >
           <div

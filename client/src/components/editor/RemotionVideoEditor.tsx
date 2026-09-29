@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import {
   RemotionStudioComposition,
@@ -6,11 +6,13 @@ import {
 } from './RemotionStudioComposition';
 import { InteractiveTimeline, type BrollBlock } from './InteractiveTimeline';
 import { MusicLibraryPanel } from './MusicLibraryPanel';
+import { CanvasOverlayEditor } from './CanvasOverlayEditor';
 import { resolveAudioStreamUrl } from '../../lib/audio-catalog';
 import type { useClipTransform } from '../../hooks/useClipTransform';
 import type { useAiProducer } from '../../hooks/useAiProducer';
 import { formatTimecode } from '../studio/studioUtils';
 import { resolveBrollMediaAsset, resolveStockBrollUrl } from '../../lib/stock-broll';
+
 
 // =============================================================================
 // Static Presets Data & Preset Card Component
@@ -151,16 +153,21 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     updateBrollPlacement,
     enableIntroOutro,
     setEnableIntroOutro,
+    outroPreset,
     outroCtaText,
     outroButtonText,
     outroDuration,
     outroChannelName,
+    outroLogoUrl,
     clips,
     selectedClipIndex,
     downloadedVideo,
     transcript,
     dynamicStyles,
     dynamicOverlays,
+    setDynamicOverlays,
+    addDynamicOverlay,
+    removeDynamicOverlay,
     startTransform,
     runningTransform,
     selectedMusicTrack,
@@ -180,20 +187,38 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
   // Drop zone state
   const [isDragOverCanvas, setIsDragOverCanvas] = useState<boolean>(false);
 
+  // Canvas Overlay Editor
+  const [canvasEditorOpen, setCanvasEditorOpen] = useState(false);
+  const [currentTimeSec, setCurrentTimeSec] = useState(0);
+
+  const fps = 30;
+
+  // Sync currentTimeSec from player frame
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    const onFrameUpdate = (e: { detail: { frame: number } }) => {
+      setCurrentTimeSec(e.detail.frame / fps);
+    };
+    player.addEventListener('frameupdate', onFrameUpdate as any);
+    return () => player.removeEventListener('frameupdate', onFrameUpdate as any);
+  }, [fps]);
+
   // Selected clip resolution
   const activeClip =
     selectedClipIndex !== null && clips[selectedClipIndex]
       ? clips[selectedClipIndex]
       : clips[0] || undefined;
 
+  const clipBaseDuration = activeClip?.duration || 30;
   const videoDurationSec =
     transform.transformResult?.duration ||
     (typeof transform.transformResult?.outputVideo === 'object'
       ? (transform.transformResult.outputVideo as any)?.durationSeconds
       : undefined) ||
-    activeClip?.duration ||
-    30;
-  const fps = 30;
+    (transform.outputMode === 'narration' && transform.ttsDurationSeconds
+      ? Math.max(clipBaseDuration, transform.ttsDurationSeconds)
+      : clipBaseDuration);
   const durationInFrames = Math.max(90, Math.round(videoDurationSec * fps));
 
   // Active clip boundaries in source video
@@ -273,6 +298,168 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     return captions;
   }, [transcript, activeClip]);
 
+  // Derive real voice-synced captions for narration mode (AI script sections)
+  const narrationCaptions = useMemo(() => {
+    if (transform.outputMode !== 'narration' || !transform.scriptDraft?.sections?.length) {
+      return [];
+    }
+
+    const sections = transform.scriptDraft.sections;
+    const ttsSections = transform.ttsSections;
+
+    const captions: Array<{
+      start: number;
+      end: number;
+      text: string;
+      highlightWords?: string[];
+      wordTimings: Array<{ word: string; start: number; end: number }>;
+    }> = [];
+
+    // If we have precise TTS section timings:
+    if (ttsSections && ttsSections.length === sections.length) {
+      let offset = 0;
+      for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+        const sec = sections[sIdx]!;
+        const timing = ttsSections[sIdx]!;
+        const secDur = timing.durationSeconds || Math.max(2, sec.text.split(/\s+/).length / 2.5);
+        const secStart = offset;
+        const secEnd = offset + secDur;
+        offset = secEnd;
+
+        // Skip hook in captions if hook intro card is enabled, to avoid duplicate text
+        if (enableHookIntro && (sec.type === 'hook' || sIdx === 0)) {
+          continue;
+        }
+
+        const words = (sec.text || '').trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) continue;
+
+        const rawTimings = timing.wordTimings ?? [];
+        if (rawTimings.length > 0) {
+          const CHUNK_SIZE = 4;
+          for (let i = 0; i < words.length; i += CHUNK_SIZE) {
+            const chunk = words.slice(i, i + CHUNK_SIZE);
+            const startIdx = Math.min(rawTimings.length - 1, Math.floor((i / words.length) * rawTimings.length));
+            const endIdx = Math.min(rawTimings.length - 1, Math.floor(((i + chunk.length) / words.length) * rawTimings.length) - 1);
+            const first = rawTimings[startIdx]!;
+            const last = rawTimings[Math.max(startIdx, endIdx)]!;
+            const chunkTimings = rawTimings.slice(startIdx, Math.max(startIdx + 1, endIdx + 1));
+
+            const alignedTimings = chunk.map((word, k) => {
+              const tStartIdx = Math.min(chunkTimings.length - 1, Math.floor((k / chunk.length) * chunkTimings.length));
+              const tEndIdx = Math.min(chunkTimings.length - 1, Math.floor(((k + 1) / chunk.length) * chunkTimings.length) - 1);
+              const wFirst = chunkTimings[tStartIdx]!;
+              const wLast = chunkTimings[Math.max(tStartIdx, tEndIdx)]!;
+              return {
+                word,
+                start: Number(wFirst.start.toFixed(3)),
+                end: Number(Math.max(wLast.end, wFirst.start + 0.05).toFixed(3)),
+              };
+            });
+
+            captions.push({
+              start: Number(first.start.toFixed(2)),
+              end: Number(Math.max(last.end, first.start + 0.1).toFixed(2)),
+              text: chunk.join(' '),
+              highlightWords: chunk.filter((w) => /\d/.test(w) || w.length >= 7),
+              wordTimings: alignedTimings,
+            });
+          }
+        } else {
+          // Fallback: distribute evenly across secDur
+          const CHUNK_SIZE = 4;
+          for (let i = 0; i < words.length; i += CHUNK_SIZE) {
+            const chunk = words.slice(i, i + CHUNK_SIZE);
+            const cStart = secStart + (i / words.length) * secDur;
+            const cEnd = secStart + (Math.min(i + CHUNK_SIZE, words.length) / words.length) * secDur;
+            const wDur = (cEnd - cStart) / Math.max(1, chunk.length);
+            const alignedTimings = chunk.map((word, k) => ({
+              word,
+              start: Number((cStart + k * wDur).toFixed(2)),
+              end: Number((cStart + (k + 1) * wDur).toFixed(2)),
+            }));
+            captions.push({
+              start: Number(cStart.toFixed(2)),
+              end: Number(cEnd.toFixed(2)),
+              text: chunk.join(' '),
+              highlightWords: chunk.filter((w) => /\d/.test(w) || w.length >= 7),
+              wordTimings: alignedTimings,
+            });
+          }
+        }
+      }
+    } else {
+      // Estimated distribution across estimated duration
+      let curSecTime = 0;
+      const totalWords = sections.reduce((sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length, 0);
+      const estTotalDur = transform.ttsDurationSeconds || Math.max(15, totalWords / 2.5);
+
+      sections.forEach((sec, sIdx) => {
+        const words = (sec.text || '').trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) return;
+        const secRatio = words.length / Math.max(1, totalWords);
+        const secDur = secRatio * estTotalDur;
+        const secStart = curSecTime;
+        const secEnd = curSecTime + secDur;
+        curSecTime = secEnd;
+
+        if (enableHookIntro && (sec.type === 'hook' || sIdx === 0)) {
+          return;
+        }
+
+        const CHUNK_SIZE = 4;
+        for (let i = 0; i < words.length; i += CHUNK_SIZE) {
+          const chunk = words.slice(i, i + CHUNK_SIZE);
+          const cStart = secStart + (i / words.length) * secDur;
+          const cEnd = secStart + (Math.min(i + CHUNK_SIZE, words.length) / words.length) * secDur;
+          const wDur = (cEnd - cStart) / Math.max(1, chunk.length);
+          const alignedTimings = chunk.map((word, k) => ({
+            word,
+            start: Number((cStart + k * wDur).toFixed(2)),
+            end: Number((cStart + (k + 1) * wDur).toFixed(2)),
+          }));
+          captions.push({
+            start: Number(cStart.toFixed(2)),
+            end: Number(cEnd.toFixed(2)),
+            text: chunk.join(' '),
+            highlightWords: chunk.filter((w) => /\d/.test(w) || w.length >= 7),
+            wordTimings: alignedTimings,
+          });
+        }
+      });
+    }
+
+    return captions;
+  }, [
+    transform.outputMode,
+    transform.scriptDraft,
+    transform.ttsSections,
+    transform.ttsDurationSeconds,
+    enableHookIntro,
+  ]);
+
+  // Auto-synthesize TTS narration if user in narration mode and audio not yet available
+  useEffect(() => {
+    if (
+      transform.outputMode === 'narration' &&
+      !transform.ttsAudioUrl &&
+      !transform.synthesizingTts &&
+      transform.scriptDraft?.sections?.length &&
+      !transform.scriptError
+    ) {
+      transform.startSynthesizeTts().catch((err) => {
+        console.warn('[RemotionVideoEditor] Auto TTS synthesis error:', err);
+      });
+    }
+  }, [
+    transform.outputMode,
+    transform.ttsAudioUrl,
+    transform.synthesizingTts,
+    transform.scriptDraft,
+    transform.scriptError,
+    transform.startSynthesizeTts,
+  ]);
+
   // Dimensions based on aspect ratio
   const { compWidth, compHeight, playerAspectRatio } = useMemo(() => {
     switch (aspectRatio) {
@@ -285,12 +472,16 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     }
   }, [aspectRatio]);
 
-  // Video source
+  // Video source — urutan prioritas:
+  // 1. Video sudah dirender (hasil transform)
+  // 2. previewUrl klip dari server (ada jika clip sudah di-preview)
+  // 3. Source video yang didownload via /api/media/{videoId}/downloads/{videoId}.mp4
+  const rawPreviewUrl = activeClip?.previewUrl || '';
   const videoSrc =
     transform.transformResult?.videoUrl ||
-    activeClip?.previewUrl ||
+    (rawPreviewUrl || undefined) ||
     (downloadedVideo?.videoId
-      ? `/api/media/${downloadedVideo.videoId}/clips/clip-001.mp4`
+      ? `/api/media/${downloadedVideo.videoId}/downloads/${downloadedVideo.videoId}.mp4`
       : undefined);
 
   const thumbnailUrl =
@@ -299,6 +490,11 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     (downloadedVideo?.videoId
       ? `https://img.youtube.com/vi/${downloadedVideo.videoId}/hqdefault.jpg`
       : undefined);
+
+  // Debug log di development
+  if (import.meta.env.DEV) {
+    console.debug('[RemotionEditor] videoSrc:', videoSrc, '| thumbnailUrl:', thumbnailUrl, '| rawPreviewUrl:', rawPreviewUrl);
+  }
 
   // Normalized B-Roll Placements: rebased to 0 relative to activeClip.start for live player sync
   const normalizedBrollList = useMemo(() => {
@@ -357,6 +553,19 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     [normalizedBrollList],
   );
 
+  // AI Overlay blocks derived from dynamicOverlays for InteractiveTimeline
+  const aiOverlayBlocks = useMemo(
+    () =>
+      dynamicOverlays.map((o) => ({
+        id: o.id,
+        startSec: o.start,
+        durationSec: Math.max(0.5, o.end - o.start),
+        label: o.content ? (o.content.length > 24 ? o.content.slice(0, 24) + '…' : o.content) : o.type,
+        overlayType: o.type,
+      })),
+    [dynamicOverlays],
+  );
+
   // Composition props (reactive)
   const compositionProps: RemotionStudioCompositionProps = useMemo(
     () => ({
@@ -376,7 +585,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       templateId,
       subtitleSize,
       subtitleText: activeClip?.title,
-      captions: clipCaptions,
+      captions: transform.outputMode === 'narration' && narrationCaptions.length > 0 ? narrationCaptions : clipCaptions,
       isRenderedVideo: Boolean(
         transform.transformResult?.videoUrl &&
         videoSrc === transform.transformResult.videoUrl,
@@ -390,15 +599,21 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         posterUrl: b.posterUrl,
       })),
       enableIntroOutro,
+      outroPreset,
       outroCtaText: outroCtaText || 'Follow untuk update tips video berikutnya!',
       outroButtonText: outroButtonText || 'Follow',
       outroDuration: outroDuration || 3,
       channelName: outroChannelName || downloadedVideo?.channelTitle || '@kreator',
+      outroLogoUrl: outroLogoUrl || undefined,
       // Music & Audio
       musicSrc: resolveAudioStreamUrl(selectedMusicTrack?.streamUrl),
       musicVolume: musicVolume / 100,
       autoDucking,
-      sourceVolume: (transform.sourceVolume ?? 100) / 100,
+      sourceVolume: transform.outputMode === 'narration' ? ((transform.sourceVolume ?? 25) / 100) : 1,
+      narrationAudioUrl: transform.outputMode === 'narration' ? (transform.ttsAudioUrl || undefined) : undefined,
+      narrationVolume: 1,
+      outputMode: transform.outputMode,
+      videoStartFromSec: (videoSrc && videoSrc.includes('/downloads/')) ? clipStart : 0,
       // Dynamic Styles & Universal Overlays
       dynamicStyles,
       dynamicOverlays,
@@ -421,14 +636,20 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       templateId,
       subtitleSize,
       clipCaptions,
+      narrationCaptions,
+      transform.outputMode,
+      transform.ttsAudioUrl,
+      clipStart,
       transform.transformResult,
       enableBroll,
       normalizedBrollList,
       enableIntroOutro,
+      outroPreset,
       outroCtaText,
       outroButtonText,
       outroDuration,
       outroChannelName,
+      outroLogoUrl,
       downloadedVideo?.channelTitle,
       selectedMusicTrack,
       musicVolume,
@@ -563,6 +784,212 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       </div>
 
       {/* -------------------------------------------------------------------- */}
+      {/* MODE & AUDIO STATUS BAR                                              */}
+      {/* -------------------------------------------------------------------- */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 16px',
+          marginBottom: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '12px' }}>
+          <span
+            style={{
+              padding: '3px 10px',
+              borderRadius: '999px',
+              fontSize: '11px',
+              fontWeight: 800,
+              background: transform.outputMode === 'narration' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+              border: `1px solid ${transform.outputMode === 'narration' ? '#06B6D4' : '#10B981'}`,
+              color: transform.outputMode === 'narration' ? '#67E8F9' : '#6EE7B7',
+            }}
+          >
+            {transform.outputMode === 'narration' ? '🎙️ Mode Narasi AI Baru' : '🎞️ Mode Klip Sorotan (Audio Asli)'}
+          </span>
+
+          {/* Quick Volume Slider for Source Audio (Ducking in narration mode) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              padding: '4px 10px',
+            }}
+          >
+            <span style={{ fontSize: '11.5px', color: 'var(--text-main)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              🔊 {transform.outputMode === 'narration' ? 'Audio Asli (Ducking):' : 'Volume Asli:'}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={transform.sourceVolume ?? 25}
+              onChange={(e) => transform.setSourceVolume(Number(e.target.value))}
+              style={{ width: '85px', cursor: 'pointer', accentColor: 'var(--accent)' }}
+              title="Atur volume suara asli video"
+            />
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: (transform.sourceVolume ?? 25) === 0 ? '#EF4444' : 'var(--ice)',
+                minWidth: '34px',
+              }}
+            >
+              {(transform.sourceVolume ?? 25) === 0 ? 'Mute' : `${transform.sourceVolume ?? 25}%`}
+            </span>
+            {(transform.sourceVolume ?? 25) > 0 ? (
+              <button
+                type="button"
+                onClick={() => transform.setSourceVolume(0)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '0 2px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  color: 'var(--text-sub)',
+                }}
+                title="Mute suara asli"
+              >
+                🔇
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => transform.setSourceVolume(25)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '0 2px',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: 'var(--accent)',
+                }}
+                title="Reset volume ke 25%"
+              >
+                🔉 25%
+              </button>
+            )}
+          </div>
+
+          {transform.outputMode === 'narration' && (
+            <>
+              {transform.synthesizingTts ? (
+                <span style={{ color: '#67E8F9', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span className="spinner" style={{ width: '12px', height: '12px' }} />
+                  Sedang mensintesis narasi suara AI...
+                </span>
+              ) : transform.ttsAudioUrl ? (
+                <span style={{ color: '#10B981', fontWeight: 600 }}>
+                  ✓ Narasi AI aktif & tersinkron
+                </span>
+              ) : (
+                <span style={{ color: '#F59E0B', fontWeight: 600 }}>
+                  ⚠️ Narasi belum dibuat
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        {transform.outputMode === 'narration' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {transform.hasUnsavedScript && (
+              <span style={{ fontSize: '11px', color: '#F59E0B', fontStyle: 'italic' }}>
+                Naskah diedit — perbarui suara
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={transform.synthesizingTts || !transform.scriptDraft?.sections?.length}
+              onClick={() => {
+                transform.startSynthesizeTts().catch((err) => {
+                  alert('Gagal mensintesis audio TTS: ' + (err instanceof Error ? err.message : String(err)));
+                });
+              }}
+              style={{
+                background: transform.ttsAudioUrl ? 'rgba(6, 182, 212, 0.15)' : 'var(--accent)',
+                border: '1px solid #06B6D4',
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                padding: '5px 12px',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              {transform.synthesizingTts ? '⏳ Mensintesis...' : transform.ttsAudioUrl ? '🔄 Sinkronkan Ulang Suara' : '🎙️ Buat Suara Narasi AI'}
+            </button>
+          </div>
+        )}
+      </div>
+
+
+      {/* -------------------------------------------------------------------- */}
+      {/* ERROR BANNER — tampil langsung jika render gagal                     */}
+      {/* -------------------------------------------------------------------- */}
+      {transform.transformError && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '12px',
+            background: 'rgba(239, 68, 68, 0.10)',
+            border: '1.5px solid rgba(239, 68, 68, 0.55)',
+            borderRadius: 'var(--radius-md)',
+            padding: '14px 18px',
+            marginBottom: '8px',
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: '13px', color: '#EF4444', marginBottom: '4px' }}>
+              ⚠️ Render Gagal
+            </div>
+            <p style={{ margin: 0, fontSize: '12.5px', color: '#FCA5A5', lineHeight: 1.55, wordBreak: 'break-word' }}>
+              {transform.transformError}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={transform.runningTransform}
+            onClick={() => transform.startTransform()}
+            style={{
+              flexShrink: 0,
+              background: 'rgba(239, 68, 68, 0.20)',
+              border: '1px solid rgba(239, 68, 68, 0.55)',
+              color: '#FCA5A5',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            🔄 Coba Ulang
+          </button>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------------- */}
       {/* UNIFIED 2-COLUMN LAYOUT: Left: Canvas & Timeline | Right: Inspector   */}
       {/* -------------------------------------------------------------------- */}
       <div
@@ -577,74 +1004,116 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         {/* LEFT / CENTER COLUMN: Player Canvas + Interactive Timeline         */}
         {/* ================================================================== */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', minWidth: 0, width: '100%' }}>
-          {/* Drop-enabled player wrapper */}
+          {/* Player wrapper — position:relative so canvas overlay is absolute inside */}
+          {/* Extra right padding reserved for library panel when canvas editor open */}
           <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragOverCanvas(true);
-            }}
-            onDragLeave={() => setIsDragOverCanvas(false)}
-            onDrop={handleCanvasDrop}
             style={{
               width: '100%',
-              maxWidth: aspectRatio === '9:16' ? '340px' : aspectRatio === '1:1' ? '420px' : '100%',
-              aspectRatio: playerAspectRatio,
-              borderRadius: 'var(--radius-lg)',
-              overflow: 'hidden',
-              border: isDragOverCanvas
-                ? '2px dashed var(--accent)'
-                : '2px solid var(--border)',
-              boxShadow: isDragOverCanvas
-                ? 'var(--shadow-glow)'
-                : '0 16px 40px rgba(0, 0, 0, 0.65)',
-              background: '#0A0E14',
-              position: 'relative',
-              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+              display: 'flex',
+              justifyContent: 'center',
+              paddingRight: canvasEditorOpen ? '80px' : '0',
+              transition: 'padding-right 0.2s ease',
             }}
           >
-            <Player
-              ref={playerRef}
-              component={RemotionStudioComposition}
-              inputProps={compositionProps}
-              durationInFrames={durationInFrames}
-              fps={fps}
-              compositionWidth={compWidth}
-              compositionHeight={compHeight}
-              style={{ width: '100%', height: '100%' }}
-              controls
-              loop
-              autoPlay={false}
-            />
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!canvasEditorOpen) setIsDragOverCanvas(true);
+              }}
+              onDragLeave={() => setIsDragOverCanvas(false)}
+              onDrop={handleCanvasDrop}
+              style={{
+                width: '100%',
+                maxWidth: aspectRatio === '9:16' ? '340px' : aspectRatio === '1:1' ? '420px' : '100%',
+                aspectRatio: playerAspectRatio,
+                borderRadius: 'var(--radius-lg)',
+                overflow: 'visible', // allow library panel to extend outside
+                border: isDragOverCanvas
+                  ? '2px dashed var(--accent)'
+                  : canvasEditorOpen
+                    ? '2px solid rgba(50,130,184,0.7)'
+                    : '2px solid var(--border)',
+                boxShadow: isDragOverCanvas
+                  ? 'var(--shadow-glow)'
+                  : canvasEditorOpen
+                    ? '0 0 0 4px rgba(50,130,184,0.18), 0 16px 40px rgba(0, 0, 0, 0.65)'
+                    : '0 16px 40px rgba(0, 0, 0, 0.65)',
+                background: '#0A0E14',
+                position: 'relative',
+                transition: 'border-color 0.15s ease, box-shadow 0.2s ease',
+              }}
+            >
+              {/* Inner clip for the player itself */}
+              <div style={{ position: 'absolute', inset: 0, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+                <Player
+                  ref={playerRef}
+                  component={RemotionStudioComposition}
+                  inputProps={compositionProps}
+                  durationInFrames={durationInFrames}
+                  fps={fps}
+                  compositionWidth={compWidth}
+                  compositionHeight={compHeight}
+                  style={{ width: '100%', height: '100%' }}
+                  controls
+                  loop
+                  autoPlay={false}
+                />
+              </div>
 
-            {/* Drag-over overlay */}
-            {isDragOverCanvas && (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'rgba(50, 130, 184, 0.35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  pointerEvents: 'none',
-                }}
-              >
+              {/* Preset drag-over overlay (only when canvas editor is closed) */}
+              {isDragOverCanvas && !canvasEditorOpen && (
                 <div
                   style={{
-                    background: 'rgba(10, 14, 20, 0.85)',
-                    border: '2px dashed var(--accent)',
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(50, 130, 184, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 10,
                     borderRadius: 'var(--radius-lg)',
-                    padding: '16px 24px',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    color: '#BBE1FA',
-                    textAlign: 'center',
                   }}
                 >
-                  🎯 Lepaskan untuk Mengubah Preset
+                  <div
+                    style={{
+                      background: 'rgba(10, 14, 20, 0.85)',
+                      border: '2px dashed var(--accent)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '16px 24px',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      color: '#BBE1FA',
+                      textAlign: 'center',
+                    }}
+                  >
+                    🎯 Lepaskan untuk Mengubah Preset
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* CanvasOverlayEditor — renders toggle button + overlay canvas + inspector + library */}
+              <CanvasOverlayEditor
+                open={canvasEditorOpen}
+                onToggle={() => setCanvasEditorOpen((v) => !v)}
+                overlays={dynamicOverlays}
+                overlayCount={dynamicOverlays.length}
+                videoDurationSec={videoDurationSec}
+                currentTimeSec={currentTimeSec}
+                onUpdateOverlay={(id, patch) =>
+                  setDynamicOverlays((prev) =>
+                    prev.map((o) => (o.id === id ? { ...o, ...patch } : o))
+                  )
+                }
+                onAddOverlay={(ov) =>
+                  addDynamicOverlay({
+                    ...ov,
+                    id: `canvas-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  })
+                }
+                onRemoveOverlay={removeDynamicOverlay}
+              />
+            </div>
           </div>
 
           {/* Timecode & Clip Info under Player */}
@@ -653,10 +1122,15 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               display: 'flex',
               justifyContent: 'space-between',
               width: '100%',
-              maxWidth: aspectRatio === '9:16' ? '340px' : aspectRatio === '1:1' ? '420px' : '100%',
+              maxWidth: aspectRatio === '9:16'
+                ? (canvasEditorOpen ? '420px' : '340px')
+                : aspectRatio === '1:1'
+                  ? (canvasEditorOpen ? '500px' : '420px')
+                  : '100%',
               fontSize: '12px',
               color: 'var(--text-sub)',
               padding: '0 4px',
+              transition: 'max-width 0.2s ease',
             }}
           >
             <span style={{ fontWeight: 600 }}>⏱️ Durasi: {formatTimecode(videoDurationSec)}</span>
@@ -674,14 +1148,26 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               durationSec={videoDurationSec}
               fps={fps}
               enableHookIntro={enableHookIntro}
+              onEnableHookIntroChange={setEnableHookIntro}
               hookDurationSec={3.5}
               enableBroll={enableBroll}
+              onEnableBrollChange={setEnableBroll}
               brollBlocks={brollBlocks}
+              aiOverlayBlocks={aiOverlayBlocks}
               enableMusic={selectedMusicTrack !== null}
+              onEnableMusicChange={(enabled) => {
+                if (!enabled) setSelectedMusicTrack(null);
+                else if (!selectedMusicTrack) setActiveTab('music');
+              }}
               musicTrackLabel={selectedMusicTrack ? selectedMusicTrack.title : undefined}
               musicVolume={musicVolume}
               enableOutro={enableIntroOutro}
               outroDurationSec={outroDuration || 3}
+              outputMode={transform.outputMode}
+              narrationAudioUrl={transform.outputMode === 'narration' ? (transform.ttsAudioUrl || undefined) : undefined}
+              synthesizingTts={transform.synthesizingTts}
+              sourceVolume={transform.sourceVolume}
+              onSourceVolumeChange={(vol) => transform.setSourceVolume(vol)}
               onSeek={(sec) => playerRef.current?.seekTo(Math.round(sec * fps))}
               onMusicVolumeChange={(vol) => setMusicVolume(vol)}
               onBrollBlockDelete={(id) => {
@@ -691,6 +1177,24 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                 if (idx !== -1) {
                   transform.removeBrollPlacement(idx);
                 }
+              }}
+              onAiOverlayDelete={(id) => removeDynamicOverlay(id)}
+              onAiOverlayMove={(id, newStart) => {
+                setDynamicOverlays((prev) =>
+                  prev.map((o) => {
+                    if (o.id !== id) return o;
+                    const dur = Math.max(0.5, o.end - o.start);
+                    return { ...o, start: newStart, end: newStart + dur };
+                  }),
+                );
+              }}
+              onAiOverlayResize={(id, newDur) => {
+                setDynamicOverlays((prev) =>
+                  prev.map((o) => {
+                    if (o.id !== id) return o;
+                    return { ...o, end: o.start + Math.max(0.5, newDur) };
+                  }),
+                );
               }}
               onBrollBlockMove={(id, newStart) => {
 
@@ -793,7 +1297,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               { id: 'editor' as const, label: '🤖 AI Co-Pilot' },
               { id: 'hook' as const, label: '⚡ Hook' },
               { id: 'subtitle' as const, label: '🎨 Subtitle' },
-              { id: 'music' as const, label: selectedMusicTrack ? '🎵 Musik (Aktif)' : '🎵 Musik' },
+              { id: 'music' as const, label: selectedMusicTrack ? '🔊 Audio & Musik (Aktif)' : '🔊 Audio & Musik' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1246,16 +1750,160 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             </div>
           )}
 
-          {/* TAB 4: Music */}
+          {/* TAB 4: Audio & Musik */}
           {activeTab === 'music' && (
-            <MusicLibraryPanel
-              selectedTrackId={selectedMusicTrack?.id ?? null}
-              musicVolume={musicVolume}
-              autoDucking={autoDucking}
-              onSelectTrack={(track) => setSelectedMusicTrack(track)}
-              onVolumeChange={setMusicVolume}
-              onAutoDuckingChange={setAutoDucking}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Audio Mixer Card */}
+              <div
+                style={{
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border-focus)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                  <span style={{ fontSize: '18px' }}>🎚️</span>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 800, color: '#FFFFFF' }}>
+                      Audio Mixer & Ducking
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-sub)' }}>
+                      Atur keseimbangan volume suara asli video, narasi AI, dan musik latar secara live.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Track 1: Suara Video Asli */}
+                <div
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
+                      🎥 Volume Suara Asli Video {transform.outputMode === 'narration' ? '(Ducking Latar)' : ''}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        color: (transform.sourceVolume ?? 25) === 0 ? '#EF4444' : 'var(--accent)',
+                      }}
+                    >
+                      {(transform.sourceVolume ?? 25) === 0 ? 'Mute (0%)' : `${transform.sourceVolume ?? 25}%`}
+                    </span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={transform.sourceVolume ?? 25}
+                    onChange={(e) => transform.setSourceVolume(Number(e.target.value))}
+                    style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--accent)', marginBottom: '8px' }}
+                  />
+
+                  {/* Preset quick buttons */}
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {[
+                      { label: '🔇 Mute (0%)', val: 0 },
+                      { label: '🔉 15% Subtil', val: 15 },
+                      { label: '✨ 25% Seimbang', val: 25 },
+                      { label: '🔊 50% Jelas', val: 50 },
+                      { label: '📢 100% Penuh', val: 100 },
+                    ].map((p) => (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => transform.setSourceVolume(p.val)}
+                        style={{
+                          background: (transform.sourceVolume ?? 25) === p.val ? 'var(--accent)' : 'var(--bg-input)',
+                          color: (transform.sourceVolume ?? 25) === p.val ? '#FFFFFF' : 'var(--text-sub)',
+                          border: `1px solid ${(transform.sourceVolume ?? 25) === p.val ? 'var(--border-focus)' : 'var(--border)'}`,
+                          borderRadius: '6px',
+                          padding: '3px 8px',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  {transform.outputMode === 'narration' && (
+                    <span style={{ display: 'block', fontSize: '10.5px', color: 'var(--text-sub)', marginTop: '6px', lineHeight: 1.35 }}>
+                      Suara video asli dikecilkan (ducking) agar suara narasi AI baru terdengar jelas dan dominan.
+                    </span>
+                  )}
+                </div>
+
+                {/* Track 2: Suara Narasi AI (Only in narration mode) */}
+                {transform.outputMode === 'narration' && (
+                  <div
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid rgba(6, 182, 212, 0.3)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#67E8F9' }}>
+                        🎙️ Suara Narasi AI Baru (TTS)
+                      </span>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: transform.ttsAudioUrl ? '#10B981' : '#F59E0B' }}>
+                        {transform.synthesizingTts ? '⏳ Mensintesis...' : transform.ttsAudioUrl ? '✓ Aktif (100%)' : '⚠️ Belum Disintesis'}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '11px', color: 'var(--text-sub)' }}>
+                      Suara narasi AI diputar pada volume penuh (100%) sebagai audio vokal utama.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={transform.synthesizingTts || !transform.scriptDraft?.sections?.length}
+                      onClick={() => {
+                        transform.startSynthesizeTts().catch((err) => {
+                          alert('Gagal mensintesis audio TTS: ' + (err instanceof Error ? err.message : String(err)));
+                        });
+                      }}
+                      style={{
+                        background: 'rgba(6, 182, 212, 0.15)',
+                        border: '1px solid #06B6D4',
+                        color: '#67E8F9',
+                        borderRadius: '6px',
+                        padding: '5px 12px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      {transform.synthesizingTts ? '⏳ Mensintesis...' : '🔄 Sinkronkan Ulang Audio Narasi'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Music Library Panel */}
+              <MusicLibraryPanel
+                selectedTrackId={selectedMusicTrack?.id ?? null}
+                musicVolume={musicVolume}
+                autoDucking={autoDucking}
+                onSelectTrack={(track) => setSelectedMusicTrack(track)}
+                onVolumeChange={setMusicVolume}
+                onAutoDuckingChange={setAutoDucking}
+              />
+            </div>
           )}
 
           {/* Master Render Button */}

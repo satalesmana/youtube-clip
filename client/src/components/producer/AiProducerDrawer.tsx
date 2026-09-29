@@ -77,7 +77,13 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => textareaRef.current?.focus(), 320);
+      document.body.classList.add('ai-producer-open');
+    } else {
+      document.body.classList.remove('ai-producer-open');
     }
+    return () => {
+      document.body.classList.remove('ai-producer-open');
+    };
   }, [isOpen]);
 
   const handleSend = () => {
@@ -115,11 +121,11 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
     top: 0,
     right: 0,
     height: '100vh',
-    width: '360px',
+    width: 'min(380px, 100vw)',
     background: 'var(--bg-card)',
     borderLeft: '1px solid var(--border)',
-    boxShadow: '-8px 0 32px rgba(0,0,0,0.4)',
-    zIndex: 999,
+    boxShadow: '-8px 0 32px rgba(0,0,0,0.5)',
+    zIndex: 1100, // Higher than FloatingQuestions (1000) so the drawer is never covered
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
