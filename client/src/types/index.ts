@@ -112,6 +112,7 @@ export interface ViralHook {
   rank?: number;
   hookText: string;
   hookType: string;
+  angle?: string;
   score: number;
   explanation?: string;
   previewUrl?: string;

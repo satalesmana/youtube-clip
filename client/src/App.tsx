@@ -1,16 +1,17 @@
-import { useState } from 'react';
-import { CaptionModal } from './components/history/CaptionModal';
-import { HistoryView } from './components/history/HistoryView';
-import { HomeView } from './components/home/HomeView';
+import { lazy, Suspense, useState } from 'react';
 import { FloatingQuestions } from './components/layout/FloatingQuestions';
 import { Sidebar } from './components/layout/Sidebar';
 import { Topbar } from './components/layout/Topbar';
-import { ResearchView } from './components/research/ResearchView';
-import { StudioView } from './components/studio/StudioView';
 import { useClipTransform } from './hooks/useClipTransform';
 import { useHealth } from './hooks/useHealth';
 import { useHistory } from './hooks/useHistory';
 import { useViralResearch } from './hooks/useViralResearch';
+
+const CaptionModal = lazy(() => import('./components/history/CaptionModal').then((module) => ({ default: module.CaptionModal })));
+const HistoryView = lazy(() => import('./components/history/HistoryView').then((module) => ({ default: module.HistoryView })));
+const HomeView = lazy(() => import('./components/home/HomeView').then((module) => ({ default: module.HomeView })));
+const ResearchView = lazy(() => import('./components/research/ResearchView').then((module) => ({ default: module.ResearchView })));
+const StudioView = lazy(() => import('./components/studio/StudioView').then((module) => ({ default: module.StudioView })));
 
 const TAB_BREADCRUMBS: Record<string, string> = {
   home: 'Beranda',
@@ -83,6 +84,7 @@ export function App() {
         />
 
         <main className="opus-main-content">
+          <Suspense fallback={<div className="studio-loading">Memuat…</div>}>
           {activeTab === 'home' && (
             <HomeView
               onStartClips={handleStartClipsFromUrl}
@@ -119,6 +121,7 @@ export function App() {
               onNavigateTab={handleNavigateTab}
             />
           )}
+          </Suspense>
         </main>
 
         <footer className="footer" style={{ borderTop: '1px solid var(--border)', padding: '20px 24px', textAlign: 'center', fontSize: '12px', color: 'var(--text-sub)' }}>
@@ -131,11 +134,11 @@ export function App() {
 
       {/* Caption Modal */}
       {captionModalData && (
-        <CaptionModal
+        <Suspense fallback={null}><CaptionModal
           videoId={captionModalData.videoId}
           videoTitle={captionModalData.title}
           onClose={() => setCaptionModalData(null)}
-        />
+        /></Suspense>
       )}
 
       {/* Video Preview Modal */}

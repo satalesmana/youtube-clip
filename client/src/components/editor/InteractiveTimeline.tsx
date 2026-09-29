@@ -748,6 +748,9 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   const subtitleEnd = durationSec;
   const subtitleLeft = secToPercent(subtitleStart);
   const subtitleWidth = secToPercent(subtitleEnd - subtitleStart);
+  const videoStart = outputMode === 'reel' && enableHookIntro ? hookEnd : 0;
+  const videoLeft = secToPercent(videoStart);
+  const videoWidth = secToPercent(Math.max(0, durationSec - videoStart));
 
   // ─── JSX ────────────────────────────────────────────────────────────────────
   return (
@@ -1366,14 +1369,14 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
               className={`timeline-block${selectedBlockId === '__video__' ? ' selected' : ''}`}
               role="button"
               tabIndex={0}
-              aria-label={`Track video utama, durasi ${formatTimecode(durationSec)}, volume ${sourceVolume ?? 100} persen`}
+              aria-label={`Track video utama, mulai ${formatTimecode(videoStart)}, durasi ${formatTimecode(durationSec - videoStart)}, volume ${sourceVolume ?? 100} persen`}
               style={{
-                ...blockStyle('0%', '100%', '#10B981', { cursor: 'pointer', justifyContent: 'flex-start' }),
+                ...blockStyle(videoLeft, videoWidth, '#10B981', { cursor: 'pointer', justifyContent: 'flex-start' }),
                 ...selectedOutline('__video__'),
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                seekToBlock('__video__', 0);
+                seekToBlock('__video__', videoStart);
               }}
               onMouseEnter={(e) =>
                 setTooltip({

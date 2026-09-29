@@ -13,6 +13,9 @@ import {
 import { resolveAudioStreamUrl } from '../../lib/audio-catalog';
 import { Outro } from '../../../../compositions/studio/src/Outro';
 import type { Theme } from '../../../../compositions/studio/src/design';
+import { CLIENT_PRESET_MAP } from '../../lib/visual-presets';
+import { parseHookTag, resolveBadgeStyle } from '../../lib/hook-tags';
+import type { AnimationPreset, CompositionLayout, TypographyVariant } from '../../types';
 
 export interface RemotionStudioCompositionProps {
   videoSrc?: string;
@@ -23,10 +26,15 @@ export interface RemotionStudioCompositionProps {
   enableHookIntro?: boolean;
   hookText?: string;
   hookTag?: string;
+  hookThumbnailUrl?: string;
+  hookPreviewVideoSrc?: string;
   visualPreset?: string;
   hookLayout?: string;
   hookAnimation?: string;
   hookTypography?: string;
+  hookHighlightWords?: string[];
+  hookDurationSec?: number;
+  sequenceHookIntro?: boolean;
   badgePreset?: string;
   badgeColor?: string;
   // Subtitle props
@@ -161,8 +169,15 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   enableHookIntro = true,
   hookText = 'Trik Rahasia Meningkatkan View 10x Lipat!',
   hookTag = '🔥 JANGAN DI-SKIP',
+  hookThumbnailUrl,
+  hookPreviewVideoSrc,
   visualPreset = 'kinetic-punch',
+  hookLayout = 'auto',
+  hookAnimation = 'auto',
   hookTypography = 'kinetic',
+  hookHighlightWords = [],
+  hookDurationSec: hookDurationProp = 3.5,
+  sequenceHookIntro = false,
   badgePreset = 'neon-outline',
   badgeColor = 'cyan',
   templateId = 'beast',
@@ -197,17 +212,31 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   dynamicOverlays = [],
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames: compositionDurationFrames } = useVideoConfig();
-
+  const { fps, width, durationInFrames: compositionDurationFrames } = useVideoConfig();
   const currentTimeSec = frame / fps;
+  const contentStartFrame = sequenceHookIntro ? Math.round(hookDurationProp * fps) : 0;
+  const contentTimeSec = sequenceHookIntro ? Math.max(0, currentTimeSec - hookDurationProp) : currentTimeSec;
+
+  const preset = CLIENT_PRESET_MAP[visualPreset as keyof typeof CLIENT_PRESET_MAP] ?? CLIENT_PRESET_MAP['kinetic-punch'];
+  const effectiveLayout = (hookLayout && hookLayout !== 'auto'
+    ? hookLayout
+    : preset.layout.toLowerCase().replace(/\s+/g, '-')) as CompositionLayout;
+  const effectiveAnimation = (hookAnimation && hookAnimation !== 'auto'
+    ? hookAnimation
+    : preset.animation.toLowerCase().replace(/\s+/g, '-')) as AnimationPreset;
+  const effectiveTypography = (hookTypography && hookTypography !== 'auto'
+    ? hookTypography
+    : preset.typography.toLowerCase().replace(/\s+/g, '-')) as TypographyVariant;
+
   const targetAspect = aspectRatio === '16:9' ? 16 / 9 : aspectRatio === '1:1' ? 1 : 9 / 16;
   let focusX = 0.5;
   let focusY = 0.5;
   if (faceFocusPoints.length > 0) {
-    const nextIndex = faceFocusPoints.findIndex((point) => point.time >= currentTimeSec);
+    const faceTimeSec = contentTimeSec;
+    const nextIndex = faceFocusPoints.findIndex((point) => point.time >= faceTimeSec);
     const left = nextIndex <= 0 ? faceFocusPoints[0]! : faceFocusPoints[nextIndex - 1]!;
     const right = nextIndex < 0 ? faceFocusPoints[faceFocusPoints.length - 1]! : faceFocusPoints[nextIndex]!;
-    const progress = Math.max(0, Math.min(1, (currentTimeSec - left.time) / Math.max(0.001, right.time - left.time)));
+    const progress = Math.max(0, Math.min(1, (faceTimeSec - left.time) / Math.max(0.001, right.time - left.time)));
     focusX = left.x + (right.x - left.x) * progress;
     focusY = left.y + (right.y - left.y) * progress;
   }
@@ -216,9 +245,9 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   // ---------------------------------------------------------------------------
   // 1. Hook Intro Animations (0s - 3.5s)
   // ---------------------------------------------------------------------------
-  const hookDurationSec = 3.5;
+  const hookDurationSec = hookDurationProp;
   const hookEndFrame = Math.round(hookDurationSec * fps);
-  const isHookActive = enableHookIntro && frame < hookEndFrame;
+  const isHookActive = enableHookIntro && !isRenderedVideo && frame < hookEndFrame;
 
   // Spring entry punch for the hook
   const hookSpring = spring({
@@ -227,8 +256,18 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     config: { damping: 14, stiffness: 120, mass: 0.8 },
   });
 
-  const hookScale = interpolate(hookSpring, [0, 1], [0.85, 1]);
-  const hookOpacity =
+  const hookProgress = interpolate(frame, [0, Math.max(1, Math.round(fps * 0.55))], [0, 1], { extrapolateRight: 'clamp' });
+  const cascadeProgress = Math.max(0, frame / Math.max(1, Math.round(fps * 0.18)));
+  const hookScale = effectiveAnimation === 'scale-burst'
+    ? interpolate(hookSpring, [0, 1], [0.45, 1])
+    : effectiveAnimation === 'spring-punch'
+      ? interpolate(hookSpring, [0, 1], [0.85, 1])
+      : 1;
+  const hookOpacity = effectiveAnimation === 'fade'
+    ? interpolate(frame, [0, Math.round(fps * 0.8)], [0, 1], { extrapolateRight: 'clamp' })
+    : effectiveAnimation === 'slide-up'
+      ? hookProgress
+      :
     frame < hookEndFrame - 15
       ? interpolate(frame, [0, 8], [0, 1], { extrapolateRight: 'clamp' })
       : interpolate(frame, [hookEndFrame - 15, hookEndFrame], [1, 0], {
@@ -267,7 +306,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   // ---------------------------------------------------------------------------
   const hasRealCaptions = Boolean(captions && captions.length > 0);
   const activeCaption = hasRealCaptions
-    ? captions.find((c) => currentTimeSec >= c.start && currentTimeSec <= c.end)
+    ? captions.find((c) => contentTimeSec >= c.start && contentTimeSec <= c.end)
     : undefined;
 
   // ---------------------------------------------------------------------------
@@ -275,10 +314,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   // ---------------------------------------------------------------------------
   const baseMusicVol = Math.max(0, Math.min(1, musicVolume ?? 0.25));
   // Detect speech presence
-  const isSpeechActive =
-    outputMode === 'narration'
+  const isSpeechActive = outputMode === 'reel' && isHookActive
+    ? false
+    : outputMode === 'narration'
       ? Boolean(narrationAudioUrl || activeCaption)
-      : (hasRealCaptions ? Boolean(activeCaption) : (!isHookActive && !isOutroActive));
+      : (hasRealCaptions ? Boolean(activeCaption) : !isOutroActive);
 
   // When auto-ducking is enabled and someone speaks, duck music to 35% of set volume.
   // During speech pauses or hook/outro, music volume returns to 100%.
@@ -292,7 +332,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   // When real captions are used, only display when speech is active for that timestamp.
   const showSubtitles =
     !isRenderedVideo &&
-    (!isHookActive || currentTimeSec > 2.0) &&
+    !isHookActive &&
     (hasRealCaptions ? Boolean(activeCaption) : !isOutroActive);
 
   // Default demo subtitle sentences if no custom text provided
@@ -304,7 +344,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     .filter(Boolean);
 
   // Cycling words every 0.35s (fallback only)
-  const wordCycleIndex = Math.floor((currentTimeSec * 2.8) % Math.max(1, sampleWords.length));
+  const wordCycleIndex = Math.floor((contentTimeSec * 2.8) % Math.max(1, sampleWords.length));
   const fallbackActiveWord = sampleWords[wordCycleIndex] || sampleWords[0] || 'Viral!';
 
   // Real word resolution
@@ -313,13 +353,13 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     : [];
 
   const realActiveWordIdx = activeCaption?.wordTimings
-    ? activeCaption.wordTimings.findIndex((w) => currentTimeSec >= w.start && currentTimeSec <= w.end)
+    ? activeCaption.wordTimings.findIndex((w) => contentTimeSec >= w.start && contentTimeSec <= w.end)
     : -1;
 
   const currentSpokenIdx = realActiveWordIdx !== -1
     ? realActiveWordIdx
     : (activeCaption?.wordTimings
-        ? activeCaption.wordTimings.filter((w) => currentTimeSec >= w.start).length - 1
+        ? activeCaption.wordTimings.filter((w) => contentTimeSec >= w.start).length - 1
         : 0);
 
   // Subtitle styling based on templateId
@@ -339,31 +379,12 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       ? 68
       : 48;
 
-  // ---------------------------------------------------------------------------
-  // 4. Badge Color Palette
-  // ---------------------------------------------------------------------------
-  const getBadgeColors = () => {
-    switch (badgeColor) {
-      case 'red':
-        return { bg: 'rgba(239, 68, 68, 0.2)', border: '#EF4444', text: '#FCA5A5' };
-      case 'yellow':
-        return { bg: 'rgba(245, 158, 11, 0.2)', border: '#F59E0B', text: '#FDE68A' };
-      case 'green':
-        return { bg: 'rgba(16, 185, 129, 0.2)', border: '#10B981', text: '#A7F3D0' };
-      case 'purple':
-        return { bg: 'rgba(168, 85, 247, 0.2)', border: '#A855F7', text: '#E9D5FF' };
-      case 'magenta':
-        return { bg: 'rgba(236, 72, 153, 0.2)', border: '#EC4899', text: '#FBCFE8' };
-      default: // cyan
-        return { bg: 'rgba(6, 182, 212, 0.2)', border: '#06B6D4', text: '#CFFAFE' };
-    }
-  };
-
-  const badgeColors = getBadgeColors();
+  const badgeStyle = resolveBadgeStyle(badgePreset as any, badgeColor as any, hookTag);
+  const parsedHookTag = parseHookTag(hookTag);
 
   // Typography font family helper
   const getFontFamily = () => {
-    switch (hookTypography) {
+    switch (effectiveTypography) {
       case 'montserrat':
       case 'stacked':
         return "'Montserrat', 'Inter', sans-serif";
@@ -373,6 +394,12 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       case 'poppins':
       case 'minimal':
         return "'Poppins', 'Segoe UI', sans-serif";
+      case 'archivo-black':
+        return "'Archivo Black', 'Impact', sans-serif";
+      case 'oswald':
+        return "'Oswald', 'Impact', sans-serif";
+      case 'barlow-condensed':
+        return "'Barlow Condensed', 'Impact', sans-serif";
       default:
         return "'Bebas Neue', 'Anton', sans-serif";
     }
@@ -391,7 +418,38 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {/* -------------------------------------------------------------------- */}
       {/* LAYER 1: Ambient Blurred Background (fills 9:16 vertical canvas)     */}
       {/* -------------------------------------------------------------------- */}
-      {videoSrc ? (
+      {sequenceHookIntro && isHookActive && hookPreviewVideoSrc ? (
+        <AbsoluteFill style={{ overflow: 'hidden' }}>
+          <Video
+            src={hookPreviewVideoSrc}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(48px) brightness(0.65)', transform: 'scale(1.2)' }}
+            muted
+            loop
+          />
+        </AbsoluteFill>
+      ) : sequenceHookIntro && isHookActive && (hookThumbnailUrl || thumbnailUrl) ? (
+        <AbsoluteFill
+          style={{
+            backgroundImage: `url(${hookThumbnailUrl || thumbnailUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(48px) brightness(0.65)',
+            transform: 'scale(1.2)',
+          }}
+        />
+      ) : videoSrc ? (
+        sequenceHookIntro ? (
+          <Sequence from={contentStartFrame}>
+            <AbsoluteFill style={{ overflow: 'hidden' }}>
+              <Video
+                src={videoSrc}
+                startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(48px) brightness(0.65)', transform: 'scale(1.2)' }}
+                muted
+              />
+            </AbsoluteFill>
+          </Sequence>
+        ) : (
         <AbsoluteFill style={{ overflow: 'hidden' }}>
           <Video
             src={videoSrc}
@@ -400,19 +458,20 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              filter: 'blur(36px) brightness(0.4)',
+              filter: 'blur(48px) brightness(0.65)',
               transform: 'scale(1.2)',
             }}
             muted
           />
         </AbsoluteFill>
+        )
       ) : thumbnailUrl ? (
         <AbsoluteFill
           style={{
             backgroundImage: `url(${thumbnailUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            filter: 'blur(36px) brightness(0.4)',
+            filter: 'blur(48px) brightness(0.65)',
             transform: 'scale(1.2)',
           }}
         />
@@ -423,33 +482,43 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
           }}
         />
       )}
+      {isHookActive && <AbsoluteFill style={{ zIndex: 2, background: 'linear-gradient(180deg, rgba(0,0,0,.7) 0%, transparent 35%, transparent 65%, rgba(0,0,0,.85) 100%)' }} />}
 
       {/* -------------------------------------------------------------------- */}
       {/* LAYER 2: Crisp Center Main Video                                    */}
       {/* -------------------------------------------------------------------- */}
-      {videoSrc ? (
-        <AbsoluteFill
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+      {sequenceHookIntro && isHookActive && hookPreviewVideoSrc ? (
+        <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Video
-            src={videoSrc}
-            startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
-            volume={sourceVolume ?? 1}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: faceFocusPoints.length > 0 ? 'cover' : 'contain',
-              objectPosition: getFocusObjectPosition(focusX, focusY, faceSourceAspectRatio * 1.08, targetAspect, faceFocusPoints.length > 0),
-              scale: faceFocusPoints.length > 0 ? 1.08 : 1,
-              ...dynamicStyles.video,
-            }}
+            src={hookPreviewVideoSrc}
+            style={{ width: '100%', height: '100%', objectFit: faceFocusPoints.length > 0 ? 'cover' : 'contain', objectPosition: getFocusObjectPosition(focusX, focusY, faceSourceAspectRatio * 1.08, targetAspect, faceFocusPoints.length > 0), scale: faceFocusPoints.length > 0 ? 1.08 : 1, ...dynamicStyles.video }}
+            muted
+            loop
           />
         </AbsoluteFill>
-      ) : thumbnailUrl ? (
+      ) : videoSrc ? (
+        sequenceHookIntro ? (
+          <Sequence from={contentStartFrame}>
+            <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Video
+                src={videoSrc}
+                startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
+                volume={sourceVolume ?? 1}
+                style={{ width: '100%', height: '100%', objectFit: faceFocusPoints.length > 0 ? 'cover' : 'contain', objectPosition: getFocusObjectPosition(focusX, focusY, faceSourceAspectRatio * 1.08, targetAspect, faceFocusPoints.length > 0), scale: faceFocusPoints.length > 0 ? 1.08 : 1, ...dynamicStyles.video }}
+              />
+            </AbsoluteFill>
+          </Sequence>
+        ) : (
+          <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Video
+              src={videoSrc}
+              startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
+              volume={sourceVolume ?? 1}
+              style={{ width: '100%', height: '100%', objectFit: faceFocusPoints.length > 0 ? 'cover' : 'contain', objectPosition: getFocusObjectPosition(focusX, focusY, faceSourceAspectRatio * 1.08, targetAspect, faceFocusPoints.length > 0), scale: faceFocusPoints.length > 0 ? 1.08 : 1, ...dynamicStyles.video }}
+            />
+          </AbsoluteFill>
+        )
+      ) : thumbnailUrl && !isHookActive ? (
         <AbsoluteFill
           style={{
             display: 'flex',
@@ -476,8 +545,8 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {/* -------------------------------------------------------------------- */}
       {enableBroll &&
         brollPlacements?.map((broll, bIdx) => {
-          const startFrame = Math.round(broll.start * fps);
-          const endFrame = Math.round(broll.end * fps);
+          const startFrame = Math.round((broll.start + (sequenceHookIntro ? hookDurationSec : 0)) * fps);
+          const endFrame = Math.round((broll.end + (sequenceHookIntro ? hookDurationSec : 0)) * fps);
           const durFrames = Math.max(1, endFrame - startFrame);
 
           return (
@@ -579,9 +648,10 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0 48px',
-            transform: `scale(${hookScale})`,
+            justifyContent: effectiveLayout === 'top-heavy' ? 'flex-start' : 'center',
+            padding: `0 ${width * 0.05}px`,
+            paddingTop: effectiveLayout === 'top-heavy' ? '14%' : effectiveLayout === 'data-focus' ? '22%' : '0',
+            transform: `${effectiveAnimation === 'slide-up' ? `translateY(${interpolate(hookProgress, [0, 1], [70, 0])}px) ` : ''}scale(${hookScale})`,
             opacity: hookOpacity,
             zIndex: 40,
             pointerEvents: 'none',
@@ -591,64 +661,92 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
           {hookTag && (
             <div
               style={{
-                marginBottom: '20px',
-                padding: '8px 24px',
-                borderRadius: '999px',
-                fontSize: '24px',
-                fontWeight: 800,
-                letterSpacing: '1px',
+                marginBottom: width * 0.016,
+                padding: `${width * 0.006}px ${width * 0.018}px`,
+                borderRadius: badgeStyle.borderRadius > 100 ? '999px' : `${badgeStyle.borderRadius}px`,
+                fontSize: width * 0.034,
+                fontWeight: badgeStyle.fontWeight,
+                letterSpacing: badgeStyle.letterSpacing,
                 textTransform: 'uppercase',
-                background:
-                  badgePreset === 'solid-impact'
-                    ? badgeColors.border
-                    : badgeColors.bg,
-                color:
-                  badgePreset === 'solid-impact' ? '#FFFFFF' : badgeColors.text,
-                border: `2px solid ${badgeColors.border}`,
-                boxShadow: `0 0 24px ${badgeColors.border}66`,
+                background: badgeStyle.bgColor,
+                color: badgeStyle.textColor,
+                border: `${badgeStyle.borderWidth}px solid ${badgeStyle.borderColor}`,
+                boxShadow: badgeStyle.boxShadow,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '8px',
+                gap: `${width * 0.007}px`,
               }}
             >
-              {hookTag}
+              <span>{hookTag.match(/^\p{Extended_Pictographic}/u)?.[0] || (parsedHookTag.iconName === 'flame' ? '🔥' : parsedHookTag.iconName === 'zap' ? '⚡' : '✦')}</span>
+              {parsedHookTag.cleanText}
             </div>
           )}
+
+          {preset.decoration === 'Burst' && <div style={{ position: 'absolute', inset: '8%', border: '8px dotted rgba(250,204,21,.55)', borderRadius: '50%', transform: `rotate(${frame * 0.25}deg)`, zIndex: -1 }} />}
+          {preset.decoration === 'Corner Frame' && <div style={{ position: 'absolute', inset: '18%', border: '4px solid rgba(255,255,255,.7)', borderRadius: 12, pointerEvents: 'none' }} />}
+          {preset.decoration === 'Question Mark' && <div style={{ fontSize: 112, lineHeight: 0.8, color: '#FACC15', fontWeight: 900, textShadow: '0 8px 28px #000', marginBottom: 12 }}>?</div>}
+          {preset.decoration === 'Arrow' && <div style={{ fontSize: 76, lineHeight: 0.8, color: '#FACC15', marginBottom: 14 }}>➜</div>}
+          {preset.decoration === 'Number Badge' && <div style={{ borderRadius: 999, background: '#F59E0B', color: '#111827', padding: '6px 18px', fontSize: 22, fontWeight: 900, marginBottom: 12 }}>STAT</div>}
+          {preset.decoration === 'Spark' && <div style={{ fontSize: 52, color: '#FDE047', marginBottom: 10 }}>✦ ✧ ✦</div>}
+          {preset.decoration === 'Scribble' && <div style={{ position: 'absolute', width: '76%', height: '54%', border: '4px dashed #FACC15', borderRadius: '48% 52% 45% 55%', transform: 'rotate(-5deg)', pointerEvents: 'none' }} />}
 
           {/* Kinetic Headline Box */}
           <div
             style={{
-              background:
-                visualPreset === 'bold-impact'
-                  ? 'rgba(0, 0, 0, 0.85)'
-                  : 'rgba(10, 14, 20, 0.75)',
-              border:
-                visualPreset === 'bold-impact'
-                  ? '3px solid #F59E0B'
-                  : '2px solid rgba(50, 130, 184, 0.6)',
-              borderRadius: '24px',
-              padding: '24px 36px',
+              background: preset.highlight === 'Box' ? 'rgba(10,14,20,.35)' : 'transparent',
+              border: preset.highlight === 'Box' ? '2px solid #06B6D4' : 'none',
+              borderRadius: effectiveLayout === 'full-screen-text' ? '8px' : '0',
+              padding: preset.highlight === 'Box' ? `${width * 0.012}px ${width * 0.018}px` : 0,
               textAlign: 'center',
-              backdropFilter: 'blur(16px)',
-              boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
-              maxWidth: '920px',
+              backdropFilter: preset.highlight === 'Box' ? 'blur(8px)' : undefined,
+              boxShadow: preset.highlight === 'Box' ? '0 0 16px rgba(6,182,212,.35)' : 'none',
+              maxWidth: effectiveLayout === 'full-screen-text' ? '100%' : '90%',
+              width: effectiveLayout === 'full-screen-text' ? '100%' : effectiveLayout === 'split-proof' ? '70%' : 'auto',
+              alignSelf: effectiveLayout === 'split-proof' ? 'flex-end' : 'center',
               ...dynamicStyles.hook,
             }}
           >
             <h1
               style={{
                 margin: 0,
-                fontSize: '56px',
-                lineHeight: 1.15,
-                fontWeight: 900,
-                textTransform: 'uppercase',
-                letterSpacing: '1.5px',
-                textShadow: '0 4px 16px rgba(0,0,0,0.9)',
+                fontSize: width * (effectiveLayout === 'full-screen-text' ? 0.12 : 0.10),
+                lineHeight: 1.05,
+                fontWeight: effectiveTypography === 'montserrat' || effectiveTypography === 'stacked' || effectiveTypography === 'poppins' || effectiveTypography === 'minimal' ? 800 : 900,
+                textTransform: effectiveTypography === 'minimal' || effectiveTypography === 'poppins' ? 'none' : 'uppercase',
+                letterSpacing: width * 0.0015,
+                WebkitTextStroke: `${Math.max(1, width * 0.001)}px rgba(0,0,0,.9)`,
+                textShadow: `0 ${width * 0.002}px ${width * 0.009}px rgba(0,0,0,.95)`,
                 color: '#FFFFFF',
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                columnGap: width * 0.012,
+                rowGap: width * 0.006,
                 ...dynamicStyles.hookText,
               }}
             >
-              {hookText}
+              {effectiveAnimation === 'word-cascade' ? hookText.split(/\s+/).map((word, wordIndex) => (
+                <React.Fragment key={`${word}-${wordIndex}`}>
+                  <span style={{ display: 'inline-block', opacity: interpolate(cascadeProgress - wordIndex, [0, 1], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }), transform: `translateY(${interpolate(cascadeProgress - wordIndex, [0, 1], [18, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}px)`, color: hookHighlightWords.includes(word.replace(/[.,!?…]/g, '')) ? '#FACC15' : '#FFFFFF' }}>{word}</span>{' '}
+                </React.Fragment>
+              )) : hookText.split(/\s+/).map((word, wordIndex) => {
+                const cleaned = word.replace(/[.,!?…]/g, '');
+                const highlighted = hookHighlightWords.some((highlight) => highlight.toLowerCase() === cleaned.toLowerCase()) || word.toUpperCase().includes((preset.demoKeyword || '').toUpperCase());
+                const highlightStyle: React.CSSProperties = preset.highlight === 'Neon Glow'
+                  ? { color: '#BBE1FA', textShadow: '0 0 16px #38BDF8, 0 0 6px #06B6D4, 0 2px 8px rgba(0,0,0,.9)' }
+                  : preset.highlight === 'Underline'
+                    ? { textDecoration: 'underline', textUnderlineOffset: width * 0.004, textDecorationColor: '#38BDF8', textDecorationThickness: Math.max(2, width * 0.001) }
+                    : preset.highlight === 'Background Chip'
+                      ? { background: '#38BDF8', color: '#000', padding: `0 ${width * 0.006}px`, borderRadius: width * 0.004, WebkitTextStroke: '0 transparent' }
+                      : preset.highlight === 'Brush'
+                        ? { background: 'linear-gradient(transparent 58%, #06B6D4 58%)', padding: `0 ${width * 0.005}px` }
+                        : preset.highlight === 'Stroke'
+                          ? { color: '#fff', WebkitTextStroke: `${width * 0.0014}px #F59E0B`, textShadow: '0 0 12px rgba(245,158,11,.6)' }
+                          : preset.highlight === 'Box'
+                            ? { border: `${width * 0.0016}px solid #06B6D4`, borderRadius: width * 0.004, padding: `0 ${width * 0.006}px` }
+                            : {};
+                return <span key={`${word}-${wordIndex}`} style={highlighted ? highlightStyle : undefined}>{word}</span>;
+              })}
             </h1>
           </div>
         </AbsoluteFill>
@@ -994,10 +1092,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {dynamicOverlays && dynamicOverlays.length > 0 && (
         <AbsoluteFill style={{ pointerEvents: 'none', zIndex: 45 }}>
           {dynamicOverlays.map((ov) => {
-            if (currentTimeSec < ov.start || currentTimeSec > ov.end) return null;
+            if (sequenceHookIntro && isHookActive) return null;
+            if (contentTimeSec < ov.start || contentTimeSec > ov.end) return null;
             const posX = ov.position?.x ?? '50%';
             const posY = ov.position?.y ?? (ov.componentId === 'lower-third' ? '74%' : ov.componentId === 'cta-banner' ? '68%' : '42%');
-            const localFrame = Math.max(0, frame - Math.round(ov.start * fps));
+            const localFrame = Math.max(0, Math.round(contentTimeSec * fps) - Math.round(ov.start * fps));
             const entrance = spring({ frame: localFrame, fps, config: { damping: 16, stiffness: 180, mass: 0.7 } });
 
             let animTransform = `translate(-50%, -50%) translateY(${interpolate(entrance, [0, 1], [24, 0])}px) scale(${interpolate(entrance, [0, 1], [0.92, 1])})`;

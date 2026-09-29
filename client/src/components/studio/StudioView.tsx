@@ -11,7 +11,9 @@ import { ClipDetailModal } from './modals/ClipDetailModal';
 import { HookDetailModal } from './modals/HookDetailModal';
 import { AiProducerDrawer } from '../producer/AiProducerDrawer';
 import { useAiProducer } from '../../hooks/useAiProducer';
-import { RemotionVideoEditor } from '../editor/RemotionVideoEditor';
+import { lazy, Suspense } from 'react';
+
+const RemotionVideoEditor = lazy(() => import('../editor/RemotionVideoEditor').then((module) => ({ default: module.RemotionVideoEditor })));
 
 type ClipTransformHook = ReturnType<typeof useClipTransform>;
 
@@ -402,11 +404,13 @@ export const StudioView: React.FC<StudioViewProps> = ({
 
       {/* STEP 4: Live Remotion Video Editor with Integrated AI Producer */}
       {step === 4 && (
+        <Suspense fallback={<div className="studio-loading">Memuat editor video…</div>}>
         <RemotionVideoEditor
           transform={transform}
           producer={producer}
           onOpenFullProducerDrawer={() => setIsProducerOpen(true)}
         />
+        </Suspense>
       )}
 
       {/* STEP 4: Master Output */}

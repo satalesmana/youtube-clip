@@ -1,9 +1,6 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Player, type PlayerRef } from '@remotion/player';
-import {
-  RemotionStudioComposition,
-  type RemotionStudioCompositionProps,
-} from './RemotionStudioComposition';
+import React, { lazy, Suspense, useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import type { PlayerRef } from '@remotion/player';
+import type { RemotionStudioCompositionProps } from './RemotionStudioComposition';
 import { InteractiveTimeline, type BrollBlock } from './InteractiveTimeline';
 import { MusicLibraryPanel } from './MusicLibraryPanel';
 import { CanvasOverlayEditor } from './CanvasOverlayEditor';
@@ -12,7 +9,11 @@ import type { useClipTransform } from '../../hooks/useClipTransform';
 import type { useAiProducer } from '../../hooks/useAiProducer';
 import { resolveBrollMediaAsset, resolveStockBrollUrl } from '../../lib/stock-broll';
 import { resolveClientOutroPreset } from '../../lib/outro-presets';
+import { resolvePresetIdFromHook } from '../../lib/visual-presets';
 import { api } from '../../services/api';
+
+const RemotionPlayer = lazy(() => import('@remotion/player').then((module) => ({ default: module.Player })));
+const RemotionStudioComposition = lazy(() => import('./RemotionStudioComposition').then((module) => ({ default: module.RemotionStudioComposition })));
 
 
 // =============================================================================
@@ -148,6 +149,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     selectedHookTypography,
     selectedHookBadgePreset,
     selectedHookBadgeColor,
+    selectedHookIndex,
+    hooks,
     enableBroll,
     setEnableBroll,
     brollPlacements,
@@ -217,7 +220,23 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       : clips[0] || undefined;
 
   const clipBaseDuration = activeClip?.duration || 30;
-  const videoDurationSec =
+  const selectedHook = selectedHookIndex !== null ? hooks[selectedHookIndex] : undefined;
+  const hookSourceStart = selectedHook?.source?.start;
+  const hookSourceEnd = hookSourceStart !== undefined && selectedHook?.source?.end !== undefined
+    ? Math.min(selectedHook.source.end, hookSourceStart + 3.5)
+    : undefined;
+  const hookDurationSec = hookSourceStart !== undefined && hookSourceEnd !== undefined && hookSourceEnd > hookSourceStart
+    ? hookSourceEnd - hookSourceStart
+    : Math.min(3.5, Math.max(0.5, selectedHook?.finalDurationSeconds ?? 3.5));
+  const clipStart = activeClip?.start ?? 0;
+  const clipEnd = activeClip?.end ?? (clipStart + clipBaseDuration);
+  const isRenderedOutput = Boolean(transform.transformResult?.videoUrl);
+  const sequenceHookIntro = enableHookIntro && transform.outputMode === 'reel' && !isRenderedOutput;
+  // Hook and selected clip are independent timeline segments. The clip always
+  // begins at its selected source range, even when it overlaps the hook range.
+  const sourceContentStartSec = clipStart;
+  const sourceRelativeContentStartSec = 0;
+  const baseVideoDurationSec =
     transform.transformResult?.duration ||
     (typeof transform.transformResult?.outputVideo === 'object'
       ? (transform.transformResult.outputVideo as any)?.durationSeconds
@@ -225,16 +244,17 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     (transform.outputMode === 'narration' && transform.ttsDurationSeconds
       ? Math.max(clipBaseDuration, transform.ttsDurationSeconds)
       : clipBaseDuration);
-  const durationInFrames = Math.max(90, Math.round(videoDurationSec * fps));
+  const contentDurationSec = sequenceHookIntro && activeClip
+    ? Math.max(0.5, clipEnd - sourceContentStartSec)
+    : baseVideoDurationSec;
+  const videoDurationSec = contentDurationSec;
+  const durationInFrames = Math.max(90, Math.round((contentDurationSec + (sequenceHookIntro ? hookDurationSec : 0)) * fps));
   const effectiveDurationSec = durationInFrames / fps;
+  const timelineContentOffsetSec = sequenceHookIntro ? hookDurationSec : 0;
   const effectiveOutroDurationSec = Math.min(
     Math.max(0, outroDuration || 3),
     effectiveDurationSec,
   );
-
-  // Active clip boundaries in source video
-  const clipStart = activeClip?.start ?? 0;
-  const clipEnd = activeClip?.end ?? (clipStart + videoDurationSec);
 
   // Derive real voice-synced transcript captions for the active clip
   const clipCaptions = useMemo(() => {
@@ -242,19 +262,19 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
     // Filter segments overlapping this clip range
     const segmentsInRange = transcript.segments.filter(
-      (s) => s.end > clipStart && s.start < clipEnd,
+      (s) => s.end > sourceContentStartSec && s.start < clipEnd,
     );
 
-    // Flatten words in range with timestamps rebased to clipStart (0-based)
+    // Flatten words in range with timestamps rebased to the first visible clip frame.
     const flatWords: Array<{ word: string; start: number; end: number }> = [];
     for (const seg of segmentsInRange) {
       if (seg.words && seg.words.length > 0) {
         for (const w of seg.words) {
-          if (w.end > clipStart && w.start < clipEnd) {
+          if (w.end > sourceContentStartSec && w.start < clipEnd) {
             flatWords.push({
               word: w.word,
-              start: Math.max(0, Number((w.start - clipStart).toFixed(2))),
-              end: Math.max(0.05, Number((w.end - clipStart).toFixed(2))),
+              start: Math.max(0, Number((w.start - sourceContentStartSec).toFixed(2))),
+              end: Math.max(0.05, Number((w.end - sourceContentStartSec).toFixed(2))),
             });
           }
         }
@@ -265,11 +285,11 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         words.forEach((w, i) => {
           const wStart = seg.start + i * wDur;
           const wEnd = seg.start + (i + 1) * wDur;
-          if (wEnd > clipStart && wStart < clipEnd) {
+          if (wEnd > sourceContentStartSec && wStart < clipEnd) {
             flatWords.push({
               word: w,
-              start: Math.max(0, Number((wStart - clipStart).toFixed(2))),
-              end: Math.max(0.05, Number((wEnd - clipStart).toFixed(2))),
+              start: Math.max(0, Number((wStart - sourceContentStartSec).toFixed(2))),
+              end: Math.max(0.05, Number((wEnd - sourceContentStartSec).toFixed(2))),
             });
           }
         });
@@ -307,7 +327,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     }
 
     return captions;
-  }, [transcript, activeClip]);
+  }, [transcript, activeClip, sourceContentStartSec, clipEnd]);
 
   // Derive real voice-synced captions for narration mode (AI script sections)
   const narrationCaptions = useMemo(() => {
@@ -566,12 +586,14 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
           relEnd = Math.min(videoDurationSec, Number(rawEnd.toFixed(2)));
         }
 
-        const durationSec = Math.max(1, Number((relEnd - relStart).toFixed(2)));
+        const durationSec = relEnd > relStart
+          ? Math.max(1, Number((relEnd - relStart).toFixed(2)))
+          : 0;
 
         return {
           id: (b as any).id || `broll-${i}`,
           start: relStart,
-          end: relEnd > relStart ? relEnd : relStart + durationSec,
+          end: relEnd > relStart ? relEnd : relStart,
           durationSec,
           query,
           assetUrl,
@@ -580,19 +602,19 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
           rawEnd,
         };
       })
-      .filter((b) => b.start < videoDurationSec && b.end > 0);
-  }, [brollPlacements, clipStart, videoDurationSec]);
+      .filter((b) => b.end > b.start && b.start < videoDurationSec);
+  }, [brollPlacements, clipStart, videoDurationSec, sequenceHookIntro, sourceRelativeContentStartSec]);
 
   // BrollBlocks derived for InteractiveTimeline
   const brollBlocks: BrollBlock[] = useMemo(
     () =>
       normalizedBrollList.map((b) => ({
         id: b.id,
-        startSec: b.start,
+        startSec: b.start + timelineContentOffsetSec,
         durationSec: b.durationSec,
         query: b.query,
       })),
-    [normalizedBrollList],
+    [normalizedBrollList, timelineContentOffsetSec],
   );
 
   // AI Overlay blocks derived from dynamicOverlays for InteractiveTimeline
@@ -600,12 +622,12 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     () =>
       dynamicOverlays.map((o) => ({
         id: o.id,
-        startSec: o.start,
+        startSec: o.start + timelineContentOffsetSec,
         durationSec: Math.max(0.5, o.end - o.start),
         label: o.content ? (o.content.length > 24 ? o.content.slice(0, 24) + '…' : o.content) : o.type,
         overlayType: o.type,
       })),
-    [dynamicOverlays],
+    [dynamicOverlays, timelineContentOffsetSec],
   );
 
   // Broll Placements memoized prop
@@ -623,27 +645,47 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
   // Hook Intro sub-props
   const hookIntroProps = useMemo(
-    () => ({
+    () => {
+      const visualPreset = selectedVisualPreset === 'auto'
+        ? resolvePresetIdFromHook(selectedHook?.hookType, selectedHook?.angle)
+        : selectedVisualPreset;
+      return ({
       enableHookIntro,
-      hookText: customHookText || activeClip?.title || 'Trik Rahasia Meningkatkan View!',
-      hookTag: customHookTag || '🔥 JANGAN DI-SKIP',
-      visualPreset: selectedVisualPreset || 'kinetic-punch',
-      hookLayout: selectedHookLayout || 'centered',
-      hookAnimation: selectedHookAnimation || 'spring-punch',
-      hookTypography: selectedHookTypography || 'kinetic',
+      hookText: customHookText || selectedHook?.hookText || activeClip?.title || 'Trik Rahasia Meningkatkan View!',
+      hookTag: customHookTag || selectedHook?.tag || '🔥 JANGAN DI-SKIP',
+      hookThumbnailUrl: selectedHook?.thumbnailUrl || selectedHook?.previewUrl?.replace(/\.mp4(\?.*)?$/, '.jpg$1') || thumbnailUrl,
+      // previewUrl is a standalone extracted segment and starts at t=0;
+      // only use it as the intro source, never apply sourceRange to it again.
+      hookPreviewVideoSrc: selectedHook?.previewUrl?.match(/\.mp4(?:\?.*)?$/i) ? selectedHook.previewUrl : undefined,
+      visualPreset,
+      hookLayout: selectedHookLayout,
+      hookAnimation: selectedHookAnimation,
+      hookTypography: selectedHookTypography,
+      hookHighlightWords: selectedHook?.highlightWords,
+      hookDurationSec,
+      sequenceHookIntro,
       badgePreset: selectedHookBadgePreset || 'neon-outline',
       badgeColor: selectedHookBadgeColor || 'cyan',
-    }),
+      });
+    },
     [
       enableHookIntro,
       customHookText,
+      customHookTag,
       activeClip?.title,
+      thumbnailUrl,
+      selectedHook?.previewUrl,
       selectedVisualPreset,
       selectedHookLayout,
       selectedHookAnimation,
       selectedHookTypography,
       selectedHookBadgePreset,
       selectedHookBadgeColor,
+      selectedHookIndex,
+      hooks,
+      selectedHook,
+      hookDurationSec,
+      sequenceHookIntro,
     ],
   );
 
@@ -705,15 +747,12 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       subtitleSize,
       subtitleText: activeClip?.title,
       captions: transform.outputMode === 'narration' && narrationCaptions.length > 0 ? narrationCaptions : clipCaptions,
-      isRenderedVideo: Boolean(
-        transform.transformResult?.videoUrl &&
-        videoSrc === transform.transformResult.videoUrl,
-      ),
+      isRenderedVideo: isRenderedOutput,
       enableBroll,
       brollPlacements: brollPlacementsProp,
       ...outroProps,
       ...audioProps,
-      videoStartFromSec: (videoSrc && videoSrc.includes('/downloads/')) ? clipStart : 0,
+      videoStartFromSec: videoSrc?.includes('/downloads/') ? clipStart : sourceRelativeContentStartSec,
       faceFocusPoints,
       faceSourceAspectRatio,
       dynamicStyles,
@@ -721,6 +760,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     }),
     [
       videoSrc,
+      isRenderedOutput,
       thumbnailUrl,
       effectiveDurationSec,
       aspectRatio,
@@ -1069,7 +1109,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             >
               {/* Inner clip for the player itself */}
               <div style={{ position: 'absolute', inset: 0, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-                <Player
+                <Suspense fallback={<div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: '#94A3B8' }}>Memuat pratinjau…</div>}>
+                <RemotionPlayer
                   ref={playerRef}
                   component={RemotionStudioComposition}
                   inputProps={compositionProps}
@@ -1082,6 +1123,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   loop
                   autoPlay={false}
                 />
+                </Suspense>
               </div>
 
               {/* Preset drag-over overlay (only when canvas editor is closed) */}
@@ -1171,7 +1213,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               onZoomLevelChange={setTimelineZoom}
               enableHookIntro={enableHookIntro}
               onEnableHookIntroChange={setEnableHookIntro}
-              hookDurationSec={3.5}
+              hookDurationSec={hookDurationSec}
               enableBroll={enableBroll}
               onEnableBrollChange={setEnableBroll}
               brollBlocks={brollBlocks}
@@ -1206,7 +1248,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   prev.map((o) => {
                     if (o.id !== id) return o;
                     const dur = Math.max(0.5, o.end - o.start);
-                    return { ...o, start: newStart, end: newStart + dur };
+                    const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
+                    return { ...o, start: contentStart, end: contentStart + dur };
                   }),
                 );
               }}
@@ -1222,7 +1265,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                 setDynamicOverlays((prev) =>
                   prev.map((o) => {
                     if (o.id !== id) return o;
-                    return { ...o, start: newStart, end: newStart + newDur };
+                    const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
+                    return { ...o, start: contentStart, end: contentStart + newDur };
                   }),
                 );
               }}
@@ -1238,16 +1282,17 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   const currentEnd =
                     (b as any).end ?? (b as any).endSec ?? (b as any).cue?.end ?? (currentStart + 3);
                   const dur = Math.max(1, currentEnd - currentStart);
-                  const newEnd = newStart + dur;
+                  const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
+                  const newEnd = contentStart + dur;
                   updateBrollPlacement(idx, {
                     ...b,
-                    start: newStart,
+                    start: contentStart,
                     end: newEnd,
-                    startSec: newStart,
+                    startSec: contentStart,
                     endSec: newEnd,
                     cue: b.cue
-                      ? { ...b.cue, start: newStart, end: newEnd }
-                      : { start: newStart, end: newEnd, query: (b as any).query || 'B-Roll' },
+                      ? { ...b.cue, start: contentStart, end: newEnd }
+                      : { start: contentStart, end: newEnd, query: (b as any).query || 'B-Roll' },
                   } as any);
                 }
               }}
@@ -1257,15 +1302,16 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                 );
                 if (idx !== -1) {
                   const b = brollPlacements[idx];
-                  const currentStart =
-                    (b as any).start ?? (b as any).startSec ?? (b as any).cue?.start ?? 0;
+                  const currentStart = normalizedBrollList.find((item) => item.id === id)?.start ?? 0;
                   const newEnd = currentStart + Math.max(1, newDur);
                   updateBrollPlacement(idx, {
                     ...b,
+                    start: currentStart,
                     end: newEnd,
+                    startSec: currentStart,
                     endSec: newEnd,
                     cue: b.cue
-                      ? { ...b.cue, end: newEnd }
+                      ? { ...b.cue, start: currentStart, end: newEnd }
                       : { start: currentStart, end: newEnd, query: (b as any).query || 'B-Roll' },
                   } as any);
                 }
@@ -1276,16 +1322,17 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                 );
                 if (idx !== -1) {
                   const b = brollPlacements[idx];
-                  const newEnd = newStart + newDur;
+                  const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
+                  const newEnd = contentStart + newDur;
                   updateBrollPlacement(idx, {
                     ...b,
-                    start: newStart,
+                    start: contentStart,
                     end: newEnd,
-                    startSec: newStart,
+                    startSec: contentStart,
                     endSec: newEnd,
                     cue: b.cue
-                      ? { ...b.cue, start: newStart, end: newEnd }
-                      : { start: newStart, end: newEnd, query: (b as any).query || 'B-Roll' },
+                      ? { ...b.cue, start: contentStart, end: newEnd }
+                      : { start: contentStart, end: newEnd, query: (b as any).query || 'B-Roll' },
                   } as any);
                 }
               }}
