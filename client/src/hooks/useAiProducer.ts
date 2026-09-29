@@ -6,6 +6,7 @@ import type {
   ProducerChatMessage,
   ProducerEditorContext,
   ProducerEditorSnapshot,
+  ProducerChatResponse,
 } from '../types/producer';
 import type { useClipTransform } from './useClipTransform';
 import { resolveStockBrollUrl } from '../lib/stock-broll';
@@ -54,6 +55,7 @@ export function useAiProducer(
 
   // ---- AI-suggested state -------------------------------------------------
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [remocnCandidates, setRemocnCandidates] = useState<NonNullable<ProducerChatResponse['remocnCandidates']>>([]);
   const [appliedBadges, setAppliedBadges] = useState<string[]>([]);
   const badgeClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -453,6 +455,7 @@ export function useAiProducer(
           currentContext,
         });
         setIsFallback(Boolean(response.fallback));
+        setRemocnCandidates(response.remocnCandidates ?? []);
 
         const validated = validateProducerActions(response.actions, {
           clipCount: transform.clips.length,
@@ -573,6 +576,7 @@ export function useAiProducer(
     setError(null);
     setIsFallback(false);
     setSuggestedQuestions([]);
+    setRemocnCandidates([]);
     setAppliedBadges([]);
     setUndoStack([]);
     if (badgeClearTimer.current) {
@@ -592,6 +596,7 @@ export function useAiProducer(
     isFallback,
     error,
     suggestedQuestions,
+    remocnCandidates,
     appliedBadges,
     undoStack,
     // Actions

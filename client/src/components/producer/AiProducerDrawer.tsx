@@ -65,6 +65,7 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [chipHover, setChipHover] = useState<string | null>(null);
+  const [copiedInstallCommand, setCopiedInstallCommand] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -454,6 +455,36 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
             </div>
           );
         })}
+
+        {producer.remocnCandidates.length > 0 && (
+          <section style={{ margin: '8px 2px', padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-panel)' }}>
+            <strong style={{ display: 'block', marginBottom: 5, fontSize: 12, color: 'var(--text)' }}>Kandidat dari katalog live Remocn</strong>
+            <p style={{ margin: '0 0 10px', fontSize: 11, lineHeight: 1.45, color: 'var(--text-sub)' }}>
+              Referensi ini belum terpasang di renderer lokal, jadi belum bisa dipakai di preview. Buka dokumentasi atau salin perintah registry untuk tahap integrasi developer.
+            </p>
+            {producer.remocnCandidates.map((candidate) => (
+              <div key={candidate.url} style={{ padding: '9px 0', borderTop: '1px solid var(--border)' }}>
+                <a href={candidate.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 700 }}>{candidate.name} ↗</a>
+                <p style={{ margin: '4px 0 7px', fontSize: 10, lineHeight: 1.4, color: 'var(--text-sub)', overflowWrap: 'anywhere' }}>{candidate.summary.slice(0, 240)}</p>
+                <code style={{ display: 'block', fontSize: 10, whiteSpace: 'normal', overflowWrap: 'anywhere', color: 'var(--text-sub)' }}>{candidate.registryCommand}</code>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(candidate.registryCommand);
+                      setCopiedInstallCommand(candidate.url);
+                    } catch {
+                      setCopiedInstallCommand(null);
+                    }
+                  }}
+                  style={{ marginTop: 6, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', fontSize: 10, cursor: 'pointer' }}
+                >
+                  {copiedInstallCommand === candidate.url ? 'Tersalin' : 'Salin perintah'}
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
 
         {/* Loading bubble */}
         {producer.isLoading && (

@@ -181,4 +181,5 @@ export interface ProducerChatResponse {
   suggestedQuestions?: string[];
   actionResults?: Array<{ actionType: string; status: 'applied' | 'rejected'; message?: string }>;
   fallback?: boolean;
+  remocnCandidates?: Array<{ name: string; url: string; summary: string; registryCommand: string }>;
 }
