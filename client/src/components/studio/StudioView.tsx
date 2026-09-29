@@ -78,6 +78,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
     scriptDraft,
     isScriptCached,
     draftingScript,
+    savingScript,
+    hasUnsavedScript,
+    lastSavedScriptAt,
+    saveScript,
     scriptError,
     ttsVoice,
     setTtsVoice,
@@ -325,6 +329,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
         updateScriptSection={updateScriptSection}
         addScriptSection={addScriptSection}
         removeScriptSection={removeScriptSection}
+        saveScript={saveScript}
+        savingScript={savingScript}
+        hasUnsavedScript={hasUnsavedScript}
+        lastSavedScriptAt={lastSavedScriptAt}
         enableHookIntro={enableHookIntro}
         setEnableHookIntro={setEnableHookIntro}
         selectedVisualPreset={selectedVisualPreset}

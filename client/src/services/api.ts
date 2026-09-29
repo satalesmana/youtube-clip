@@ -388,6 +388,9 @@ export const api = {
     success: boolean;
     cached: boolean;
     script: { language?: string; sections: ScriptSection[] } | null;
+    audioUrl?: string;
+    ttsSections?: any[];
+    durationSeconds?: number;
   }> {
     try {
       const res = await fetch(`/api/scripts/draft?videoId=${encodeURIComponent(videoId)}`);
@@ -395,22 +398,50 @@ export const api = {
         success?: boolean;
         cached?: boolean;
         script?: { language?: string; sections: ScriptSection[] };
+        audioUrl?: string;
+        ttsSections?: any[];
+        durationSeconds?: number;
       }>(res);
       return {
         success: Boolean(data.success),
         cached: Boolean(data.cached),
         script: data.script || null,
+        audioUrl: data.audioUrl,
+        ttsSections: data.ttsSections,
+        durationSeconds: data.durationSeconds,
       };
     } catch {
       return { success: false, cached: false, script: null };
     }
   },
 
+  async saveScriptDraft(payload: {
+    videoId?: string;
+    url?: string;
+    script: { language?: string; sections: ScriptSection[] };
+  }): Promise<{
+    success: boolean;
+    cached?: boolean;
+    savedAt?: string;
+    script?: { language?: string; sections: ScriptSection[] };
+  }> {
+    const res = await fetch('/api/scripts/draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId: payload.videoId,
+        youtubeUrl: payload.url,
+        script: payload.script,
+      }),
+    });
+    return await handleResponse(res);
+  },
+
   async synthesizeTts(payload: {
     url?: string;
     videoId?: string;
     ttsVoice?: string;
-    ttsProvider?: 'edge-tts' | 'openai';
+    ttsProvider?: 'edge-tts' | 'openai' | 'fish-audio';
     ttsRate?: string;
     customScript: { language?: string; sections: ScriptSection[] };
   }): Promise<{ audioUrl?: string; audioPath?: string; durationSeconds?: number; narration?: { url?: string } }> {
@@ -423,6 +454,36 @@ export const api = {
         ttsProvider: payload.ttsProvider,
         ttsRate: payload.ttsRate,
         customScript: payload.customScript,
+      }),
+    });
+    return await handleResponse(res);
+  },
+
+  async synthesizeSectionTts(payload: {
+    text: string;
+    spokenText?: string;
+    type?: string;
+    language?: string;
+    ttsVoice?: string;
+    ttsProvider?: 'edge-tts' | 'openai' | 'fish-audio';
+    ttsRate?: string;
+  }): Promise<{
+    success: boolean;
+    audioUrl: string;
+    durationSeconds: number;
+    wordTimings?: Array<{ word: string; start: number; end: number }>;
+  }> {
+    const res = await fetch('/api/tts/section', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: payload.text,
+        spokenText: payload.spokenText,
+        type: payload.type,
+        language: payload.language,
+        ttsVoice: payload.ttsVoice?.trim() || undefined,
+        ttsProvider: payload.ttsProvider,
+        ttsRate: payload.ttsRate,
       }),
     });
     return await handleResponse(res);

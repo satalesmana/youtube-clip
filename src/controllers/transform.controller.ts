@@ -20,7 +20,7 @@ import type { AngleGenerationResult, ContentAngle } from '../types/angle.js';
 import type { OriginalScript } from '../types/script.js';
 import type { VideoPlan } from '../types/video-plan.js';
 import type { TransformRequestInput } from '../schemas/transform.schema.js';
-import type { ScriptDraftRequestInput, TtsSynthesizeRequestInput } from '../schemas/script.schema.js';
+import type { ScriptDraftRequestInput, ScriptSaveRequestInput, TtsSynthesizeRequestInput } from '../schemas/script.schema.js';
 import type { RenderContext } from '../types/template.js';
 import type { AssStyleConfig } from '../types/subtitle.js';
 import type { ITemplateService } from '../template/template.service.js';
@@ -568,6 +568,17 @@ export class TransformController {
     }
 
     const mediaUrl = ttsResult.outputPath ? this.toMediaUrl(ttsResult.outputPath) : undefined;
+
+    // Persist this custom script and audio metadata into draft.json so subsequent reloads keep edits & audio
+    if (videoId && request.customScript?.sections?.length) {
+      void this.updateSavedScript(videoId, request.customScript, {
+        audioUrl: mediaUrl,
+        sections: ttsResult.sections,
+        durationSeconds: ttsResult.durationSeconds,
+      }).catch((err) => {
+        logger.warn({ err, videoId }, 'Could not sync custom script to draft.json during TTS synthesis');
+      });
+    }
 
     return {
       success: true,
@@ -1370,6 +1381,73 @@ export class TransformController {
     } catch (err) {
       this.deps.logger.warn({ err, videoId }, 'Failed to persist script draft to disk');
     }
+  }
+
+  /** Updates and saves an edited script draft to outputs/{videoId}/scripts/draft.json */
+  async updateSavedScript(
+    videoId: string,
+    script: {
+      language?: string;
+      sections: Array<{
+        type: any;
+        text: string;
+        spokenText?: string;
+        sourceQuote?: string;
+        evidence?: string[];
+        beatId?: string;
+      }>;
+    },
+    audioMeta?: {
+      audioUrl?: string;
+      sections?: TTSSectionTiming[];
+      durationSeconds?: number;
+    },
+  ): Promise<Record<string, unknown>> {
+    const existing = (await this.loadSavedScript(videoId)) || {};
+    const lang = script.language || (existing.language as string) || 'id';
+
+    const normalizedSections = script.sections.map((s) => ({
+      type: s.type,
+      text: s.text.trim(),
+      spokenText: s.spokenText?.trim() ? s.spokenText.trim() : s.text.trim(),
+      ...(s.sourceQuote ? { sourceQuote: s.sourceQuote } : {}),
+      ...(s.evidence ? { evidence: s.evidence } : {}),
+      ...(s.beatId ? { beatId: s.beatId } : {}),
+    }));
+
+    const existingScript = (existing.script as Record<string, unknown>) || {};
+    const audioUrl = audioMeta?.audioUrl ?? (existing.audioUrl as string | undefined);
+    const ttsSections = audioMeta?.sections ?? (existing.ttsSections as TTSSectionTiming[] | undefined);
+    const durationSeconds = audioMeta?.durationSeconds ?? (existing.durationSeconds as number | undefined);
+
+    const updated = {
+      ...existing,
+      videoId,
+      language: lang,
+      ...(audioUrl ? { audioUrl } : {}),
+      ...(ttsSections ? { ttsSections } : {}),
+      ...(durationSeconds ? { durationSeconds } : {}),
+      script: {
+        ...existingScript,
+        language: lang,
+        sections: normalizedSections,
+        ...(audioUrl ? { audioUrl } : {}),
+      },
+      savedAt: new Date().toISOString(),
+      userEdited: true,
+    };
+
+    await this.saveScriptDraft(videoId, updated);
+    return {
+      success: true,
+      cached: true,
+      videoId,
+      audioUrl,
+      ttsSections,
+      durationSeconds,
+      script: updated.script,
+      savedAt: updated.savedAt,
+    };
   }
 
   private async renderVideo(

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import type { ScriptSection } from '../../../types';
+import { api } from '../../../services/api';
 
 interface ScriptEditorPanelProps {
   scriptDraft: { language?: string; sections: ScriptSection[] } | null;
@@ -10,8 +11,8 @@ interface ScriptEditorPanelProps {
   setOutputLanguage: (lang: 'id' | 'en') => void;
   ttsVoice: string;
   setTtsVoice: (voice: string) => void;
-  sourceVolume: number;
-  setSourceVolume: (vol: number) => void;
+  sourceVolume?: number;
+  setSourceVolume?: (vol: number) => void;
   synthesizingTts: boolean;
   ttsAudioUrl: string | null;
   startDraftScript: (options?: { refresh?: boolean }) => void;
@@ -19,6 +20,10 @@ interface ScriptEditorPanelProps {
   updateScriptSection: (idx: number, updates: Partial<ScriptSection> | string) => void;
   addScriptSection: () => void;
   removeScriptSection: (idx: number) => void;
+  saveScript?: () => void;
+  savingScript?: boolean;
+  hasUnsavedScript?: boolean;
+  lastSavedScriptAt?: string | null;
 }
 
 export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
@@ -30,8 +35,6 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
   setOutputLanguage,
   ttsVoice,
   setTtsVoice,
-  sourceVolume,
-  setSourceVolume,
   synthesizingTts,
   ttsAudioUrl,
   startDraftScript,
@@ -39,7 +42,58 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
   updateScriptSection,
   addScriptSection,
   removeScriptSection,
+  saveScript,
+  savingScript,
+  hasUnsavedScript,
+  lastSavedScriptAt,
 }) => {
+  const [testingSectionIdx, setTestingSectionIdx] = useState<number | null>(null);
+  const [playingSectionIdx, setPlayingSectionIdx] = useState<number | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleTestSectionAudio = async (idx: number, sec: ScriptSection) => {
+    if (playingSectionIdx === idx) {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      setPlayingSectionIdx(null);
+      return;
+    }
+
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
+    setTestingSectionIdx(idx);
+    try {
+      const res = await api.synthesizeSectionTts({
+        text: sec.text,
+        spokenText: sec.spokenText,
+        type: sec.type,
+        language: outputLanguage,
+        ttsVoice,
+      });
+
+      if (res.audioUrl) {
+        const audio = new Audio(res.audioUrl);
+        currentAudioRef.current = audio;
+        setPlayingSectionIdx(idx);
+        audio.onended = () => {
+          setPlayingSectionIdx((curr) => (curr === idx ? null : curr));
+        };
+        audio.onerror = () => {
+          setPlayingSectionIdx(null);
+        };
+        await audio.play();
+      }
+    } catch (err) {
+      console.error('Gagal memutar audio seksi:', err);
+    } finally {
+      setTestingSectionIdx(null);
+    }
+  };
   return (
     <div className="script-editor-container" style={{ marginBottom: '26px' }}>
       <div className="script-editor-head">
@@ -48,7 +102,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
             <span style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
               📝 Draf Naskah &amp; Narator Suara AI
             </span>
-            {scriptDraft && isScriptCached && (
+            {scriptDraft && isScriptCached && !hasUnsavedScript && (
               <span
                 style={{
                   fontSize: '11px',
@@ -67,7 +121,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
                 💾 Dimuat dari cache disk
               </span>
             )}
-            {scriptDraft && !isScriptCached && (
+            {scriptDraft && !isScriptCached && !hasUnsavedScript && (
               <span
                 style={{
                   fontSize: '11px',
@@ -86,13 +140,71 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
                 ✨ Naskah AI Baru
               </span>
             )}
+            {scriptDraft && hasUnsavedScript && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  background: 'rgba(234, 179, 8, 0.12)',
+                  color: '#FACC15',
+                  border: '1px solid rgba(234, 179, 8, 0.3)',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+                title="Ada perubahan pada naskah yang belum tersimpan ke disk"
+              >
+                ✏️ Ada editan belum disimpan
+              </span>
+            )}
+            {scriptDraft && !hasUnsavedScript && lastSavedScriptAt && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: 'rgba(255, 255, 255, 0.45)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                }}
+              >
+                • Tersimpan {lastSavedScriptAt}
+              </span>
+            )}
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
             AI akan menyusun naskah pendek berstruktur kuat (Hook, Konteks, Komentar, Kesimpulan/CTA). Anda dapat mengedit teks naskah sebelum render.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {scriptDraft && scriptDraft.sections?.length > 0 && saveScript && (
+            <button
+              type="button"
+              className={`btn small ${hasUnsavedScript ? 'primary' : 'ghost'}`}
+              disabled={savingScript}
+              onClick={() => saveScript()}
+              title="Simpan draf teks naskah dan pelafalan TTS ke disk cache lokal"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                borderColor: hasUnsavedScript ? 'var(--primary)' : 'rgba(255, 255, 255, 0.15)',
+                background: hasUnsavedScript
+                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                  : 'rgba(255, 255, 255, 0.04)',
+                color: '#ffffff',
+                fontWeight: hasUnsavedScript ? 600 : 500,
+                boxShadow: hasUnsavedScript ? '0 0 12px rgba(14, 165, 233, 0.4)' : undefined,
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {savingScript ? '⏳ Menyimpan...' : hasUnsavedScript ? '💾 Simpan Perubahan' : '✓ Draf Tersimpan'}
+            </button>
+          )}
+
           {scriptDraft && scriptDraft.sections?.length > 0 ? (
             <button
               type="button"
@@ -201,11 +313,35 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               return (
                 <div key={sIdx} className="script-section-card">
                   <div className="script-section-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span className={`script-section-tag ${tagClass}`}>{tagLabel}</span>
                       <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--ice)' }}>Seksi #{sIdx + 1}</span>
                       <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.3)' }}>•</span>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{wordCount} kata</span>
+
+                      <button
+                        type="button"
+                        className="btn ghost small"
+                        disabled={testingSectionIdx === sIdx || synthesizingTts}
+                        onClick={() => handleTestSectionAudio(sIdx, sec)}
+                        title="Tes suara TTS khusus untuk seksi ini (otomatis disimpan ke cache lokal)"
+                        style={{
+                          fontSize: '11px',
+                          padding: '1px 8px',
+                          height: '22px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          borderColor: playingSectionIdx === sIdx ? '#A3E635' : 'rgba(255, 255, 255, 0.15)',
+                          color: playingSectionIdx === sIdx ? '#A3E635' : undefined,
+                        }}
+                      >
+                        {testingSectionIdx === sIdx
+                          ? '⏳ Memproses...'
+                          : playingSectionIdx === sIdx
+                            ? '⏸ Stop'
+                            : '🔊 Tes Seksi'}
+                      </button>
                     </div>
                     <button
                       type="button"
@@ -245,14 +381,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
                         <label className="script-col-label tts">
                           <span>🔊 Pelafalan Suara (TTS)</span>
                         </label>
-                        <button
-                          type="button"
-                          className="btn-copy-subtitle"
-                          onClick={() => updateScriptSection(sIdx, { spokenText: sec.text })}
-                          title="Salin teks dari subtitle ke kolom suara"
-                        >
-                          📋 Salin Subtitle
-                        </button>
+                        <span className="script-col-badge">Audio Narasi</span>
                       </div>
                       <textarea
                         className="script-textarea tts"
@@ -295,7 +424,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
         </div>
       )}
 
-      {/* Voice & Audio Mixing Panel */}
+      {/* Voice Configuration Panel */}
       <div className="tts-controls-panel">
         <div className="form-row">
           <div className="input-group">
@@ -306,25 +435,8 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               onChange={(e) => setTtsVoice(e.target.value)}
               placeholder="Kosongkan untuk default server (atau isi mis. id-ID-ArdiNeural, nova...)"
             />
-          </div>
-
-          <div className="input-group">
-            <label className="label-main">Volume Audio Asli di Latar (Ducking): {sourceVolume}%</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Mute</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={sourceVolume}
-                onChange={(e) => setSourceVolume(Number(e.target.value))}
-                style={{ flex: 1, cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '12px', color: 'var(--ice)', fontWeight: 600 }}>{sourceVolume}%</span>
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Suara asli video dikecilkan agar narasi terdengar jelas dan dominan.
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              💡 Pengaturan volume audio asli (ducking), narasi, dan musik diatur langsung di Step 4 (Live Preview Editor).
             </span>
           </div>
         </div>

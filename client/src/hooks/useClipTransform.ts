@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import type {
   BrollPlacementItem,
@@ -107,13 +107,35 @@ export function useClipTransform() {
   const [scriptDraft, setScriptDraft] = useState<{ language?: string; sections: ScriptSection[] } | null>(null);
   const [isScriptCached, setIsScriptCached] = useState<boolean>(false);
   const [draftingScript, setDraftingScript] = useState(false);
+  const [savingScript, setSavingScript] = useState(false);
+  const [hasUnsavedScript, setHasUnsavedScript] = useState(false);
+  const [lastSavedScriptAt, setLastSavedScriptAt] = useState<string | null>(null);
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [ttsVoice, setTtsVoice] = useState('');
   const [sourceVolume, setSourceVolume] = useState(25);
   const [synthesizingTts, setSynthesizingTts] = useState(false);
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const [ttsSections, setTtsSections] = useState<any[] | null>(null);
+  const [ttsDurationSeconds, setTtsDurationSeconds] = useState<number | null>(null);
   const audioMode: 'keep_original' | 'strip_original' | 'voice_over' =
     outputMode === 'reel' ? 'keep_original' : sourceVolume > 0 ? 'voice_over' : 'strip_original';
+
+  const currentVideoIdRef = useRef<string | undefined>(downloadedVideo?.videoId);
+
+  // Reset script draft state if active video changes
+  useEffect(() => {
+    const vid = downloadedVideo?.videoId;
+    if (currentVideoIdRef.current !== vid) {
+      currentVideoIdRef.current = vid;
+      setScriptDraft(null);
+      setIsScriptCached(false);
+      setHasUnsavedScript(false);
+      setLastSavedScriptAt(null);
+      setTtsAudioUrl(null);
+      setTtsSections(null);
+      setTtsDurationSeconds(null);
+    }
+  }, [downloadedVideo?.videoId]);
 
   // Auto-load saved script draft from disk cache when video is selected
   useEffect(() => {
@@ -128,6 +150,16 @@ export function useClipTransform() {
         }));
         setScriptDraft({ ...res.script, sections: normalizedSections });
         setIsScriptCached(true);
+        setHasUnsavedScript(false);
+        if (res.audioUrl) {
+          setTtsAudioUrl(res.audioUrl);
+        }
+        if (res.ttsSections) {
+          setTtsSections(res.ttsSections);
+        }
+        if (res.durationSeconds) {
+          setTtsDurationSeconds(res.durationSeconds);
+        }
       }
     }).catch(() => {
       // Non-fatal if no cache exists
@@ -453,6 +485,8 @@ export function useClipTransform() {
         })) ?? [];
         setScriptDraft({ ...res.script, sections: normalizedSections });
         setIsScriptCached(Boolean(res.cached));
+        setHasUnsavedScript(false);
+        setLastSavedScriptAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       }
       return res.script;
     } catch (err) {
@@ -464,15 +498,61 @@ export function useClipTransform() {
     }
   }, [url, downloadedVideo, outputLanguage, language, genre, customPrompt, selectedClipIndices, clips]);
 
+  const saveScript = useCallback(
+    async (scriptToSave?: { language?: string; sections: ScriptSection[] }) => {
+      const targetScript = scriptToSave ?? scriptDraft;
+      const vid = downloadedVideo?.videoId;
+      if (!targetScript || !vid) return;
+
+      setSavingScript(true);
+      try {
+        const res = await api.saveScriptDraft({
+          videoId: vid,
+          url: url.trim() || undefined,
+          script: targetScript,
+        });
+        if (res.success) {
+          setHasUnsavedScript(false);
+          setIsScriptCached(true);
+          setLastSavedScriptAt(
+            new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          );
+        }
+        return res;
+      } catch (err) {
+        console.error('Gagal menyimpan draf naskah ke disk:', err);
+        throw err;
+      } finally {
+        setSavingScript(false);
+      }
+    },
+    [downloadedVideo?.videoId, url, scriptDraft],
+  );
+
+  // Debounced auto-save to disk cache when user edits script sections
+  useEffect(() => {
+    if (!hasUnsavedScript || !scriptDraft || !downloadedVideo?.videoId) return;
+
+    const timer = setTimeout(() => {
+      void saveScript(scriptDraft);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [hasUnsavedScript, scriptDraft, downloadedVideo?.videoId, saveScript]);
+
   const startSynthesizeTts = useCallback(async () => {
     if (!scriptDraft || !scriptDraft.sections || scriptDraft.sections.length === 0) {
       throw new Error('Belum ada naskah untuk disintesis. Buat draf naskah AI terlebih dahulu.');
     }
     setSynthesizingTts(true);
     try {
+      const vid = downloadedVideo?.videoId;
+      if (vid && hasUnsavedScript) {
+        void saveScript(scriptDraft).catch(() => {});
+      }
       const res = await api.synthesizeTts({
         url: url.trim() || undefined,
-        videoId: downloadedVideo?.videoId,
+        videoId: vid,
         ttsVoice,
         customScript: scriptDraft,
       });
@@ -480,13 +560,21 @@ export function useClipTransform() {
       if (resolvedAudioUrl) {
         setTtsAudioUrl(resolvedAudioUrl);
       }
+      const sections = (res as any).sections || (res as any).narration?.sections;
+      if (sections) {
+        setTtsSections(sections);
+      }
+      const dur = (res as any).durationSeconds || (res as any).narration?.durationSeconds;
+      if (dur) {
+        setTtsDurationSeconds(dur);
+      }
       return res;
     } catch (err) {
       throw err;
     } finally {
       setSynthesizingTts(false);
     }
-  }, [url, downloadedVideo, ttsVoice, scriptDraft]);
+  }, [url, downloadedVideo, ttsVoice, scriptDraft, hasUnsavedScript, saveScript]);
 
   const updateScriptSection = useCallback((idx: number, updates: Partial<ScriptSection> | string) => {
     setScriptDraft((prev) => {
@@ -496,6 +584,7 @@ export function useClipTransform() {
       newSections[idx] = { ...newSections[idx], ...patch };
       return { ...prev, sections: newSections };
     });
+    setHasUnsavedScript(true);
   }, []);
 
   const addScriptSection = useCallback(() => {
@@ -510,6 +599,7 @@ export function useClipTransform() {
       }
       return { ...prev, sections: [...prev.sections, newSection] };
     });
+    setHasUnsavedScript(true);
   }, []);
 
   const removeScriptSection = useCallback((idx: number) => {
@@ -517,6 +607,7 @@ export function useClipTransform() {
       if (!prev) return prev;
       return { ...prev, sections: prev.sections.filter((_, i) => i !== idx) };
     });
+    setHasUnsavedScript(true);
   }, []);
 
   /**
@@ -814,6 +905,10 @@ export function useClipTransform() {
     scriptDraft,
     isScriptCached,
     draftingScript,
+    savingScript,
+    hasUnsavedScript,
+    lastSavedScriptAt,
+    saveScript,
     scriptError,
     ttsVoice,
     setTtsVoice,
@@ -821,6 +916,8 @@ export function useClipTransform() {
     setSourceVolume,
     synthesizingTts,
     ttsAudioUrl,
+    ttsSections,
+    ttsDurationSeconds,
     startDraftScript,
     startSynthesizeTts,
     updateScriptSection,

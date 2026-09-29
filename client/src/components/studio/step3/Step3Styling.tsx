@@ -47,6 +47,10 @@ interface Step3StylingProps {
   updateScriptSection: (idx: number, updates: Partial<ScriptSection> | string) => void;
   addScriptSection: () => void;
   removeScriptSection: (idx: number) => void;
+  saveScript?: () => void;
+  savingScript?: boolean;
+  hasUnsavedScript?: boolean;
+  lastSavedScriptAt?: string | null;
   // Hook Visual Preset & Styling
   enableHookIntro: boolean;
   setEnableHookIntro: (val: boolean) => void;
@@ -127,6 +131,10 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   updateScriptSection,
   addScriptSection,
   removeScriptSection,
+  saveScript,
+  savingScript,
+  hasUnsavedScript,
+  lastSavedScriptAt,
   enableHookIntro,
   setEnableHookIntro,
   selectedVisualPreset,
@@ -327,6 +335,10 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
               updateScriptSection={updateScriptSection}
               addScriptSection={addScriptSection}
               removeScriptSection={removeScriptSection}
+              saveScript={saveScript}
+              savingScript={savingScript}
+              hasUnsavedScript={hasUnsavedScript}
+              lastSavedScriptAt={lastSavedScriptAt}
             />
           )}
 

@@ -115,6 +115,37 @@ export const scriptDraftRequestSchema = z
 
 export type ScriptDraftRequestInput = z.infer<typeof scriptDraftRequestSchema>;
 
+/** Request schema for persisting edited script drafts (`PUT /api/scripts/draft`). */
+export const scriptSaveRequestSchema = z
+  .object({
+    /** YouTube URL to process. Mutually exclusive with videoId. */
+    youtubeUrl: z.string().optional(),
+    /** Existing processed video ID. Mutually exclusive with youtubeUrl. */
+    videoId: z.string().optional(),
+    /** Edited script content to persist. */
+    script: z.object({
+      language: z.string().optional(),
+      sections: z
+        .array(
+          z.object({
+            type: scriptSectionTypeSchema,
+            text: z.string().min(1),
+            spokenText: z.string().optional(),
+            sourceQuote: z.string().optional(),
+            evidence: z.array(z.string()).optional(),
+            beatId: z.string().optional(),
+          }),
+        )
+        .min(1),
+    }),
+  })
+  .refine((data) => Boolean(data.youtubeUrl) || Boolean(data.videoId), {
+    message: 'Provide at least one of: youtubeUrl OR videoId.',
+    path: ['youtubeUrl'],
+  });
+
+export type ScriptSaveRequestInput = z.infer<typeof scriptSaveRequestSchema>;
+
 /** Request schema for `POST /api/tts/synthesize`. */
 export const ttsSynthesizeRequestSchema = z
   .object({
@@ -122,8 +153,8 @@ export const ttsSynthesizeRequestSchema = z
     youtubeUrl: z.string().optional(),
     /** Existing processed video ID. Mutually exclusive with youtubeUrl. */
     videoId: z.string().optional(),
-    /** TTS provider selection (`edge-tts` or `openai`). */
-    ttsProvider: z.enum(['edge-tts', 'openai']).optional(),
+    /** TTS provider selection (`edge-tts`, `openai`, or `fish-audio`). */
+    ttsProvider: z.enum(['edge-tts', 'openai', 'fish-audio']).optional(),
     /** TTS voice identifier (e.g. "id-ID-ArdiNeural" or "nova"). */
     ttsVoice: z.string().optional(),
     /** TTS speaking rate adjustment (e.g. "-10%", "+0%", "+10%"). */
@@ -151,4 +182,17 @@ export const ttsSynthesizeRequestSchema = z
   });
 
 export type TtsSynthesizeRequestInput = z.infer<typeof ttsSynthesizeRequestSchema>;
+
+/** Request schema for `POST /api/tts/section`. */
+export const ttsSectionSynthesizeRequestSchema = z.object({
+  text: z.string().min(1),
+  spokenText: z.string().optional(),
+  type: scriptSectionTypeSchema.optional(),
+  language: z.string().optional(),
+  ttsProvider: z.enum(['edge-tts', 'openai', 'fish-audio']).optional(),
+  ttsVoice: z.string().optional(),
+  ttsRate: z.string().optional(),
+});
+
+export type TtsSectionSynthesizeRequestInput = z.infer<typeof ttsSectionSynthesizeRequestSchema>;
 
