@@ -182,7 +182,7 @@ export interface ProducerEditorContext {
 // ---------------------------------------------------------------------------
 
 export interface ProducerChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant';
   content: string;
 }
 
@@ -191,10 +191,49 @@ export interface ProducerChatRequest {
   currentContext: ProducerEditorContext;
 }
 
+export interface ProducerEditorSnapshot {
+  step: number;
+  genre: string;
+  outputMode: 'reel' | 'narration';
+  aspectRatio: '9:16' | '16:9' | '1:1';
+  enableBroll: boolean;
+  brollPlacements: import('../types').BrollPlacementItem[];
+  enableIntroOutro: boolean;
+  outroPreset: OutroPresetId;
+  outroCtaText: string;
+  outroButtonText: string;
+  outroDuration: number;
+  outroChannelName: string;
+  outroLogoUrl: string | null;
+  templateId: string;
+  subtitleSize: import('../types').SubtitleSize;
+  selectedMusicTrack: import('../lib/audio-catalog').MusicTrack | null;
+  musicVolume: number;
+  autoDucking: boolean;
+  dynamicStyles: Record<string, Record<string, string | number>>;
+  dynamicOverlays: DynamicOverlayItem[];
+  selectedClipIndices: number[];
+  clips: import('../types').ViralClip[];
+  ttsVoice: string;
+  sourceVolume: number;
+  selectedHookIndex: number | null;
+  customHookText: string;
+  customHookTag: string;
+  enableHookIntro: boolean;
+  selectedVisualPreset: VisualPresetSelection;
+  selectedHookLayout: CompositionLayout | 'auto';
+  selectedHookAnimation: AnimationPreset | 'auto';
+  selectedHookTypography: TypographyVariant | 'auto';
+  selectedHookBadgePreset: BadgePresetId;
+  selectedHookBadgeColor: BadgeColorVariant;
+}
+
 export interface ProducerChatResponse {
   success: boolean;
   reply: string;
   actions: ProducerAction[];
   appliedBadges?: string[];
   suggestedQuestions?: string[];
+  actionResults?: Array<{ actionType: string; status: 'applied' | 'rejected'; message?: string }>;
+  fallback?: boolean;
 }

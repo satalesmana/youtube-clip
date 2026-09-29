@@ -925,9 +925,11 @@ export function useClipTransform() {
     removeScriptSection,
     // Clips & Hooks
     clips,
+    setClips,
     selectedClipIndex,
     selectedClipIndices,
     selectClip,
+    setSelectedClipIndices,
     selectAllClips,
     clearSelectedClips,
     generatingClips,

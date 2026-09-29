@@ -2,6 +2,7 @@ export interface AiChatOptions {
   model: string;
   system?: string;
   prompt: string;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   temperature?: number;
   timeoutMs?: number;
   /** Fixed seed for deterministic output (same prompt + seed → same result). */

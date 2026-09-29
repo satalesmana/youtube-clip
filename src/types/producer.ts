@@ -48,7 +48,6 @@ export type ProducerAction =
   | { type: 'SET_TTS_VOICE'; voice: string }
   | { type: 'SET_SOURCE_VOLUME'; volume: number }
   | { type: 'SELECT_CLIPS'; indices: number[] }
-  | { type: 'TRIM_CLIP'; index: number; start: number; end: number }
   | { type: 'TRIGGER_GENERATE_HOOKS'; refresh?: boolean }
   | { type: 'TRIGGER_GENERATE_BROLL'; force?: boolean }
   | { type: 'TRIGGER_RENDER' }
@@ -164,7 +163,7 @@ export interface ProducerEditorContext {
 }
 
 export interface ProducerChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant';
   content: string;
 }
 
@@ -178,4 +177,6 @@ export interface ProducerChatResponse {
   actions: ProducerAction[];
   appliedBadges?: string[];
   suggestedQuestions?: string[];
+  actionResults?: Array<{ actionType: string; status: 'applied' | 'rejected'; message?: string }>;
+  fallback?: boolean;
 }

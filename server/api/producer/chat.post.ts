@@ -7,10 +7,10 @@ import { toHttpError } from '../../../src/utils/http-error.js';
 const producerChatSchema = z.object({
   messages: z.array(
     z.object({
-      role: z.enum(['user', 'assistant', 'system']),
-      content: z.string(),
+      role: z.enum(['user', 'assistant']),
+      content: z.string().trim().min(1).max(4000),
     }),
-  ),
+  ).min(1).max(12),
   currentContext: z.object({
     video: z
       .object({
@@ -20,7 +20,7 @@ const producerChatSchema = z.object({
         duration: z.number().optional(),
       })
       .optional(),
-    step: z.number().min(1).max(4),
+    step: z.number().int().min(1).max(4),
     aspectRatio: z.enum(['9:16', '16:9', '1:1']),
     genre: z.string(),
     outputMode: z.enum(['reel', 'narration']),
@@ -39,8 +39,8 @@ const producerChatSchema = z.object({
       enableHookIntro: z.boolean(),
     }),
     clips: z.object({
-      count: z.number(),
-      selectedIndices: z.array(z.number()),
+      count: z.number().int().min(0).max(100),
+      selectedIndices: z.array(z.number().int().min(0).max(100)).max(100),
       list: z
         .array(
           z.object({
@@ -53,11 +53,11 @@ const producerChatSchema = z.object({
             hook: z.string().optional(),
           }),
         )
-        .optional(),
+        .max(20).optional(),
     }),
     broll: z.object({
       enableBroll: z.boolean(),
-      count: z.number(),
+      count: z.number().int().min(0).max(100),
       placements: z
         .array(
           z.object({
@@ -68,7 +68,7 @@ const producerChatSchema = z.object({
             source: z.string().optional(),
           }),
         )
-        .optional(),
+        .max(20).optional(),
     }),
     outro: z.object({
       enableIntroOutro: z.boolean(),
@@ -77,6 +77,7 @@ const producerChatSchema = z.object({
       buttonText: z.string(),
       duration: z.number(),
       channelName: z.string(),
+      logoUrl: z.string().max(2048).nullable().optional(),
     }),
     audio: z.object({
       ttsVoice: z.string().optional(),
@@ -87,8 +88,19 @@ const producerChatSchema = z.object({
           volume: z.number().optional(),
           autoDucking: z.boolean().optional(),
         })
-        .optional(),
+      .optional(),
     }),
+    dynamicStyles: z.record(z.string(), z.record(z.string(), z.union([z.string().max(160), z.number().finite()]))).optional(),
+    dynamicOverlays: z.array(z.object({
+      id: z.string().default(() => crypto.randomUUID()),
+      start: z.number().finite(),
+      end: z.number().finite(),
+      type: z.enum(['sticker', 'callout', 'shape', 'text', 'badge', 'html']),
+      content: z.string().max(5000),
+      position: z.object({ x: z.union([z.string().max(40), z.number().finite()]).optional(), y: z.union([z.string().max(40), z.number().finite()]).optional() }).optional(),
+      styles: z.record(z.string(), z.union([z.string().max(160), z.number().finite()])).optional(),
+      animation: z.enum(['bounce', 'pulse', 'fade', 'slide', 'spin', 'none']).optional(),
+    })).max(20).optional(),
   }),
 });
 

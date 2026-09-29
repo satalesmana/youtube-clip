@@ -1,4 +1,4 @@
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { fitText } from '@remotion/layout-utils';
 import * as React from 'react';
 import { quickEnter } from './animation';
@@ -52,7 +52,30 @@ export const Caption: React.FC<{
 }> = ({ caption, theme, durationFrames, absoluteStartFrame, subtitleStyle = 'beast', subtitleSize = 'md' }) => {
   const frame = useCurrentFrame();
   const { width, fps } = useVideoConfig();
+  // Animate the caption block as one unit while keeping the existing per-word
+  // karaoke pop independent. Keep very short captions readable by shortening
+  // both transitions, and omit the exit entirely when there is no hold time.
+  const transitionFrames = Math.min(6, Math.max(1, Math.round(fps * 0.2)));
+  const enterFrames = Math.min(transitionFrames, Math.max(1, Math.floor(durationFrames / 2)));
+  const canExit = durationFrames > enterFrames + 2;
+  const exitFrames = canExit
+    ? Math.min(4, transitionFrames, Math.max(1, Math.floor((durationFrames - enterFrames) / 2)))
+    : 0;
   const enter = quickEnter(frame, fps);
+  const enterProgress = interpolate(frame, [0, enterFrames], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const exitProgress = exitFrames > 0
+    ? interpolate(frame, [durationFrames - exitFrames, durationFrames], [0, 1], {
+        easing: Easing.in(Easing.cubic),
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      })
+    : 0;
+  const blockOpacity = enterProgress * (1 - exitProgress);
+  const blockTranslateY = interpolate(enterProgress, [0, 1], [12, 0]) - exitProgress * 4;
 
   const highlightSet = new Set(
     (caption.highlightWords ?? []).map((w) => w.toLowerCase()),
@@ -63,6 +86,12 @@ export const Caption: React.FC<{
   const isHormozi = normalizedStyle === 'hormozi';
   const isClean = normalizedStyle === 'clean';
   const isBeast = !isHormozi && !isClean;
+  const springScale = interpolate(enter, [0, 1], [isClean ? 0.97 : 0.96, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+    output: 'perceptual-scale',
+  });
+  const blockScale = springScale - exitProgress * 0.01;
 
   // Word-sync karaoke: word timings are ABSOLUTE output seconds, so the
   // comparison must use the global timeline position (start frame + local
@@ -343,16 +372,9 @@ export const Caption: React.FC<{
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
               }
             : {}),
-          opacity: interpolate(enter, [0, 1], [0, 1]),
-          scale: interpolate(enter, [0, 1], [isClean ? 0.95 : 0.85, 1], {
-            extrapolateLeft: 'clamp',
-            extrapolateRight: 'clamp',
-            output: 'perceptual-scale',
-          }),
-          translate: interpolate(enter, [0, 1], ['0px 14px', '0px 0px'], {
-            extrapolateLeft: 'clamp',
-            extrapolateRight: 'clamp',
-          }),
+          opacity: blockOpacity,
+          scale: blockScale,
+          translate: `0px ${blockTranslateY}px`,
         }}
       >
         {renderWords()}

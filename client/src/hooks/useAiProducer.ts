@@ -1,14 +1,16 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import type { DownloadedVideo } from '../types';
 import type {
   ProducerAction,
   ProducerChatMessage,
   ProducerEditorContext,
+  ProducerEditorSnapshot,
 } from '../types/producer';
 import type { useClipTransform } from './useClipTransform';
 import { resolveStockBrollUrl } from '../lib/stock-broll';
 import { AUDIO_CATALOG } from '../lib/audio-catalog';
+import { validateProducerActions } from '../lib/producer-action-validation';
 
 // ---------------------------------------------------------------------------
 // Type helpers
@@ -47,6 +49,7 @@ export function useAiProducer(
   // ---- Chat history -------------------------------------------------------
   const [messages, setMessages] = useState<ProducerChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ---- AI-suggested state -------------------------------------------------
@@ -58,7 +61,20 @@ export function useAiProducer(
   // Each entry is an opaque snapshot of the editor context at a point in time.
   // We store them as ProducerEditorContext objects and replay them through
   // their individual setters on undo.
-  const [undoStack, setUndoStack] = useState<ProducerEditorContext[]>([]);
+  const [undoStack, setUndoStack] = useState<ProducerEditorSnapshot[]>([]);
+  const videoIdRef = useRef(downloadedVideo?.videoId);
+
+  useEffect(() => {
+    if (videoIdRef.current === downloadedVideo?.videoId) return;
+    videoIdRef.current = downloadedVideo?.videoId;
+    setMessages([]);
+    setError(null);
+    setSuggestedQuestions([]);
+    setAppliedBadges([]);
+    setUndoStack([]);
+    setIsFallback(false);
+    if (badgeClearTimer.current) clearTimeout(badgeClearTimer.current);
+  }, [downloadedVideo?.videoId]);
 
   // =========================================================================
   // buildContext — snapshot the current editor state for the AI
@@ -153,6 +169,43 @@ export function useAiProducer(
     };
   }, [transform, downloadedVideo]);
 
+  const captureSnapshot = useCallback((): ProducerEditorSnapshot => ({
+    step: transform.step,
+    genre: transform.genre,
+    outputMode: transform.outputMode,
+    aspectRatio: transform.aspectRatio,
+    enableBroll: transform.enableBroll,
+    brollPlacements: structuredClone(transform.brollPlacements),
+    enableIntroOutro: transform.enableIntroOutro,
+    outroPreset: transform.outroPreset,
+    outroCtaText: transform.outroCtaText,
+    outroButtonText: transform.outroButtonText,
+    outroDuration: transform.outroDuration,
+    outroChannelName: transform.outroChannelName,
+    outroLogoUrl: transform.outroLogoUrl,
+    templateId: transform.templateId,
+    subtitleSize: transform.subtitleSize,
+    selectedMusicTrack: transform.selectedMusicTrack ? { ...transform.selectedMusicTrack } : null,
+    musicVolume: transform.musicVolume,
+    autoDucking: transform.autoDucking,
+    dynamicStyles: structuredClone(transform.dynamicStyles),
+    dynamicOverlays: structuredClone(transform.dynamicOverlays),
+    selectedClipIndices: [...transform.selectedClipIndices],
+    clips: structuredClone(transform.clips),
+    ttsVoice: transform.ttsVoice,
+    sourceVolume: transform.sourceVolume,
+    selectedHookIndex: transform.selectedHookIndex,
+    customHookText: transform.customHookText,
+    customHookTag: transform.customHookTag,
+    enableHookIntro: transform.enableHookIntro,
+    selectedVisualPreset: transform.selectedVisualPreset,
+    selectedHookLayout: transform.selectedHookLayout,
+    selectedHookAnimation: transform.selectedHookAnimation,
+    selectedHookTypography: transform.selectedHookTypography,
+    selectedHookBadgePreset: transform.selectedHookBadgePreset,
+    selectedHookBadgeColor: transform.selectedHookBadgeColor,
+  }), [transform]);
+
   // =========================================================================
   // executeActions — apply a list of ProducerActions to the transform state
   // =========================================================================
@@ -163,6 +216,10 @@ export function useAiProducer(
         switch (a.type) {
           case 'SET_TEMPLATE_ID':
             transform.setTemplateId(a.templateId);
+            break;
+
+          case 'SET_GENRE':
+            transform.setGenre(a.value);
             break;
 
           case 'SET_ASPECT_RATIO':
@@ -307,10 +364,7 @@ export function useAiProducer(
             break;
 
           case 'SELECT_CLIPS':
-            // Reset selection then add each index in order
-            for (const idx of a.indices) {
-              transform.selectClip(idx);
-            }
+            transform.setSelectedClipIndices([...new Set(a.indices)]);
             break;
 
           case 'TRIGGER_GENERATE_HOOKS':
@@ -367,7 +421,7 @@ export function useAiProducer(
             break;
         }
       }
-    },
+  },
     [transform],
   );
 
@@ -381,6 +435,7 @@ export function useAiProducer(
       if (!trimmed || isLoading) return;
 
       setError(null);
+      setIsFallback(false);
 
       // Build the new conversation history (append user turn)
       const userTurn: ProducerChatMessage = { role: 'user', content: trimmed };
@@ -389,13 +444,30 @@ export function useAiProducer(
       setIsLoading(true);
 
       // Snapshot current state for undo BEFORE applying actions
-      const snapshot = buildContext();
+      const snapshot = captureSnapshot();
+      const currentContext = buildContext();
 
       try {
         const response = await api.chatWithAiProducer({
           messages: nextMessages.length > 10 ? nextMessages.slice(-10) : nextMessages,
-          currentContext: buildContext(),
+          currentContext,
         });
+        setIsFallback(Boolean(response.fallback));
+
+        const validated = validateProducerActions(response.actions, {
+          clipCount: transform.clips.length,
+          durationSec: downloadedVideo?.durationSeconds,
+        });
+        const renderExplicit = /\b(render|ekspor|export|buat video final|proses video sekarang)\b/i.test(trimmed) && !trimmed.includes('?');
+        const destructiveClearExplicit = /\b(hapus|bersihkan|kosongkan|clear|remove|hapuskan)\b/i.test(trimmed);
+        const safeActions = validated.actions.filter((action) => {
+          if (action.type === 'TRIGGER_RENDER') return renderExplicit;
+          if (action.type === 'CLEAR_BROLL') return destructiveClearExplicit && /b[- ]?roll|broll/i.test(trimmed);
+          if (action.type === 'CLEAR_DYNAMIC_OVERLAYS') return destructiveClearExplicit && /overlay|stiker|callout/i.test(trimmed);
+          if (action.type === 'CLEAR_DYNAMIC_STYLES') return destructiveClearExplicit && /style|gaya|efek|css/i.test(trimmed);
+          return true;
+        });
+        const intentRejected = validated.actions.length - safeActions.length;
 
         // Append assistant reply to history
         const assistantTurn: ProducerChatMessage = {
@@ -408,14 +480,14 @@ export function useAiProducer(
         setSuggestedQuestions(response.suggestedQuestions ?? []);
 
         // Handle badges
-        if (response.appliedBadges && response.appliedBadges.length > 0) {
+        if (safeActions.length > 0) {
           // Push undo snapshot before mutating state
           setUndoStack((prev) => {
             const next = [...prev, snapshot];
             return next.length > MAX_UNDO ? next.slice(next.length - MAX_UNDO) : next;
           });
 
-          setAppliedBadges(response.appliedBadges);
+          setAppliedBadges(response.appliedBadges?.length ? response.appliedBadges : safeActions.map((a) => a.type.replaceAll('_', ' ')));
 
           // Auto-clear badges after delay
           if (badgeClearTimer.current) clearTimeout(badgeClearTimer.current);
@@ -424,14 +496,10 @@ export function useAiProducer(
           }, BADGE_CLEAR_DELAY);
 
           // Execute the returned actions
-          executeActions(response.actions ?? []);
-        } else if (response.actions && response.actions.length > 0) {
-          // Actions without badges — still push undo and execute
-          setUndoStack((prev) => {
-            const next = [...prev, snapshot];
-            return next.length > MAX_UNDO ? next.slice(next.length - MAX_UNDO) : next;
-          });
-          executeActions(response.actions);
+          executeActions(safeActions);
+        }
+        if (validated.rejected + intentRejected > 0) {
+          setError(`${validated.rejected + intentRejected} aksi AI tidak diterapkan karena instruksi atau nilainya tidak valid.`);
         }
       } catch (err) {
         const msg =
@@ -443,7 +511,7 @@ export function useAiProducer(
         setIsLoading(false);
       }
     },
-    [messages, isLoading, buildContext, executeActions],
+    [messages, isLoading, buildContext, executeActions, captureSnapshot, transform.clips.length, downloadedVideo?.durationSeconds],
   );
 
   // =========================================================================
@@ -458,47 +526,39 @@ export function useAiProducer(
 
       // Replay the snapshot back into the transform setters
       transform.setStep(snapshot.step as any);
+      transform.setGenre(snapshot.genre);
       transform.setAspectRatio(snapshot.aspectRatio);
       transform.setOutputMode(snapshot.outputMode);
       transform.setTemplateId(snapshot.templateId);
-      transform.setCustomHookText(snapshot.hook.customHookText ?? '');
-      transform.setCustomHookTag(snapshot.hook.customHookTag ?? '');
-      transform.setEnableHookIntro(snapshot.hook.enableHookIntro);
-      transform.setSelectedVisualPreset(
-        (snapshot.hook.visualPreset ?? 'auto') as any,
-      );
-      transform.setSelectedHookLayout(
-        (snapshot.hook.layout ?? 'auto') as any,
-      );
-      transform.setSelectedHookAnimation(
-        (snapshot.hook.animation ?? 'auto') as any,
-      );
-      transform.setSelectedHookTypography(
-        (snapshot.hook.typography ?? 'auto') as any,
-      );
-      if (snapshot.hook.badgePreset) {
-        transform.setSelectedHookBadgePreset(snapshot.hook.badgePreset as any);
-      }
-      if (snapshot.hook.badgeColor) {
-        transform.setSelectedHookBadgeColor(snapshot.hook.badgeColor as any);
-      }
-      transform.setEnableBroll(snapshot.broll.enableBroll);
-      transform.setEnableIntroOutro(snapshot.outro.enableIntroOutro);
-      transform.setOutroPreset(snapshot.outro.preset as any);
-      transform.setOutroCtaText(snapshot.outro.ctaText);
-      transform.setOutroButtonText(snapshot.outro.buttonText);
-      transform.setOutroDuration(snapshot.outro.duration);
-      transform.setOutroChannelName(snapshot.outro.channelName);
-      if (snapshot.audio.ttsVoice !== undefined) {
-        transform.setTtsVoice(snapshot.audio.ttsVoice);
-      }
-      transform.setSourceVolume(snapshot.audio.sourceVolume);
-      if (snapshot.dynamicStyles) {
-        transform.setDynamicStyles(snapshot.dynamicStyles);
-      }
-      if (snapshot.dynamicOverlays) {
-        transform.setDynamicOverlays(snapshot.dynamicOverlays);
-      }
+      transform.setSubtitleSize(snapshot.subtitleSize);
+      transform.setBrollPlacements(structuredClone(snapshot.brollPlacements));
+      transform.setCustomHookText(snapshot.customHookText);
+      transform.setCustomHookTag(snapshot.customHookTag);
+      transform.setEnableHookIntro(snapshot.enableHookIntro);
+      transform.setSelectedHookIndex(snapshot.selectedHookIndex);
+      transform.setSelectedVisualPreset(snapshot.selectedVisualPreset);
+      transform.setSelectedHookLayout(snapshot.selectedHookLayout);
+      transform.setSelectedHookAnimation(snapshot.selectedHookAnimation);
+      transform.setSelectedHookTypography(snapshot.selectedHookTypography);
+      transform.setSelectedHookBadgePreset(snapshot.selectedHookBadgePreset);
+      transform.setSelectedHookBadgeColor(snapshot.selectedHookBadgeColor);
+      transform.setEnableBroll(snapshot.enableBroll);
+      transform.setEnableIntroOutro(snapshot.enableIntroOutro);
+      transform.setOutroPreset(snapshot.outroPreset);
+      transform.setOutroCtaText(snapshot.outroCtaText);
+      transform.setOutroButtonText(snapshot.outroButtonText);
+      transform.setOutroDuration(snapshot.outroDuration);
+      transform.setOutroChannelName(snapshot.outroChannelName);
+      transform.setOutroLogoUrl(snapshot.outroLogoUrl);
+      transform.setSelectedMusicTrack(snapshot.selectedMusicTrack ? { ...snapshot.selectedMusicTrack } : null);
+      transform.setMusicVolume(snapshot.musicVolume);
+      transform.setAutoDucking(snapshot.autoDucking);
+      transform.setTtsVoice(snapshot.ttsVoice);
+      transform.setSourceVolume(snapshot.sourceVolume);
+      transform.setDynamicStyles(structuredClone(snapshot.dynamicStyles));
+      transform.setDynamicOverlays(structuredClone(snapshot.dynamicOverlays));
+      transform.setSelectedClipIndices([...snapshot.selectedClipIndices]);
+      transform.setClips(structuredClone(snapshot.clips));
 
       return next;
     });
@@ -511,6 +571,7 @@ export function useAiProducer(
   const clearMessages = useCallback((): void => {
     setMessages([]);
     setError(null);
+    setIsFallback(false);
     setSuggestedQuestions([]);
     setAppliedBadges([]);
     setUndoStack([]);
@@ -528,6 +589,7 @@ export function useAiProducer(
     // State
     messages,
     isLoading,
+    isFallback,
     error,
     suggestedQuestions,
     appliedBadges,

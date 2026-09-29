@@ -35,9 +35,10 @@ export class RouterProvider implements IAiProvider {
       messages: options.system
         ? [
             { role: 'system', content: options.system },
+            ...(options.history ?? []),
             { role: 'user', content: options.prompt },
           ]
-        : [{ role: 'user', content: options.prompt }],
+        : [...(options.history ?? []), { role: 'user', content: options.prompt }],
     };
 
     this.logger.info({ model: options.model, messages: requestBody.messages }, 'LLM request');

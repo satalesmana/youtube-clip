@@ -74,11 +74,8 @@ export class ProducerService {
 
     // Sliding window: keep only the latest 8 messages to bound token consumption and latency
     const recentMessages = messages.length > 8 ? messages.slice(-8) : messages;
-    const conversationHistory = recentMessages
-      .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
-      .join('\n\n');
-
-    const userPrompt = `Conversation so far:\n${conversationHistory}\n\nRespond as the AI Producer with your JSON payload.`;
+    const latestMessage = recentMessages[recentMessages.length - 1];
+    const userPrompt = latestMessage?.role === 'user' ? latestMessage.content : 'Continue the conversation using the editor context.';
 
     try {
       const raw = await retry(
@@ -87,6 +84,7 @@ export class ProducerService {
             model: this.options.model,
             system: systemPrompt,
             prompt: userPrompt,
+            history: recentMessages.slice(0, -1),
             temperature: this.options.temperature,
             timeoutMs: this.options.timeoutMs,
             responseFormat: 'json_object',
@@ -104,7 +102,7 @@ export class ProducerService {
       return parsed;
     } catch (err) {
       this.logger.error({ err }, 'AI Producer chat invocation failed, generating fallback response');
-      return this.generateFallbackResponse(messages, currentContext);
+      return { ...this.generateFallbackResponse(messages, currentContext), fallback: true };
     }
   }
 
@@ -136,7 +134,6 @@ Supported actions:
 19. {"type": "SET_TTS_VOICE", "voice": string}
 20. {"type": "SET_SOURCE_VOLUME", "volume": number}
 21. {"type": "SELECT_CLIPS", "indices": number[]}
-22. {"type": "TRIM_CLIP", "index": number, "start": number, "end": number}
 23. {"type": "TRIGGER_GENERATE_HOOKS", "refresh"?: boolean}
 24. {"type": "TRIGGER_GENERATE_BROLL", "force"?: boolean}
 25. {"type": "TRIGGER_RENDER"}
@@ -371,9 +368,6 @@ ${
           break;
         case 'SET_STEP':
           badges.push(`📍 Step ${a.step}`);
-          break;
-        case 'TRIM_CLIP':
-          badges.push(`✂️ Trim Klip #${a.index + 1}`);
           break;
         case 'SET_DYNAMIC_STYLE':
           badges.push(`✨ Custom Style: ${a.target}`);
@@ -688,6 +682,17 @@ ${
     const lower = lastUserMsg.toLowerCase();
     const actions: ProducerAction[] = [];
 
+    // A deterministic fallback must not interpret questions or vague requests as editor commands.
+    if (/\?\s*$/.test(lastUserMsg) || /^(apa|bagaimana|gimana|kenapa|mengapa|bisakah|bisa kah|tolong jelaskan|jelaskan|menurutmu|apakah)\b/i.test(lower)) {
+      return {
+        reply: 'Layanan AI utama sedang tidak tersedia. Saya belum mengubah editor. Coba kirim instruksi langsung, misalnya “ubah rasio ke 9:16” atau “tambahkan B-roll tentang mobil pada detik 5”.',
+        actions: [],
+        appliedBadges: [],
+        suggestedQuestions: this.getDefaultSuggestedQuestions(context),
+        fallback: true,
+      };
+    }
+
     let reply = 'Tentu! Saya telah menganalisis instruksi Anda dan menyesuaikan konfigurasi video.';
 
     if (lower.includes('beast') || lower.includes('mrbeast')) {
@@ -841,6 +846,7 @@ ${
       actions,
       appliedBadges: this.deriveBadgesFromActions(actions),
       suggestedQuestions: this.getDefaultSuggestedQuestions(context),
+      fallback: true,
     };
   }
 }

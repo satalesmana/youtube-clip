@@ -59,7 +59,7 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
   onClose,
   producer,
   currentStep,
-  videoTitle: _videoTitle,
+  videoTitle,
   templateId,
   aspectRatio,
 }) => {
@@ -163,12 +163,12 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
     display: 'flex',
     alignItems: 'center',
     gap: '5px',
-    background: 'var(--success-dim)',
-    border: '1px solid rgba(16,185,129,0.3)',
+    background: producer.isLoading ? 'rgba(59,130,246,0.12)' : producer.isFallback ? 'rgba(245,158,11,0.12)' : 'var(--success-dim)',
+    border: producer.isLoading ? '1px solid rgba(59,130,246,0.3)' : producer.isFallback ? '1px solid rgba(245,158,11,0.3)' : '1px solid rgba(16,185,129,0.3)',
     borderRadius: 'var(--radius-full)',
     padding: '2px 8px',
     fontSize: '10px',
-    color: 'var(--success)',
+    color: producer.isLoading ? '#60a5fa' : producer.isFallback ? '#fbbf24' : 'var(--success)',
     fontWeight: 500,
   };
 
@@ -359,7 +359,7 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
             <span style={titleStyle}>AI Producer</span>
             <div style={statusBadgeStyle}>
               <span className="ai-producer-online-dot" />
-              <span>Synced</span>
+              <span>{producer.isLoading ? 'Memproses' : producer.isFallback ? 'Fallback aktif' : 'Siap'}</span>
             </div>
           </div>
           <button
@@ -374,7 +374,7 @@ export const AiProducerDrawer: React.FC<AiProducerDrawerProps> = ({
 
         {/* Context pill */}
         <span style={contextPillStyle}>
-          Step {currentStep} • {aspectRatio} • {templateId.toUpperCase()}
+          {videoTitle ? `${videoTitle.slice(0, 34)}${videoTitle.length > 34 ? '…' : ''} • ` : ''}Step {currentStep} • {aspectRatio} • {templateId.toUpperCase()}
         </span>
       </div>
 
