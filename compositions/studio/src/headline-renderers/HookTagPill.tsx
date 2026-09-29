@@ -234,17 +234,13 @@ export const HookTagPill: React.FC<HookTagPillProps> = ({
   // ─── 2. SOLID IMPACT (Urgency) ────────────────────────────────────────────
   if (activePresetId === 'solid-impact') {
     let bgHex = '#FF1744';
-    let accentYellow = '#FACC15';
     if (activeColor === 'yellow') {
       bgHex = '#B45309';
-      accentYellow = '#FEF08A';
     } else if (activeColor === 'green') {
       bgHex = '#15803D';
-      accentYellow = '#BBF7D0';
     } else if (activeColor === 'auto') {
       const v = resolveTagVisual(tag, fallbackAccent);
       bgHex = v.borderColor;
-      accentYellow = '#FACC15';
     }
 
     const spr = spring({ frame, fps, config: { damping: 9, stiffness: 200 } });

@@ -13,7 +13,6 @@ export const quickEnter = (frame: number, fps: number): number =>
 export const calculateBlur = ({
   localFrame,
   sceneDurationFrames,
-  fps,
   blurIn,
   blurOut,
   maxBlur = 0,
@@ -99,7 +98,7 @@ export const scaleBurstProgress = (frame: number, fps: number): number =>
  * Smooth fade entrance for FadeRenderer / fade animation preset.
  * Eases opacity from 0 to 1 over ~8 frames with clamp.
  */
-export const fadeProgress = (frame: number, fps: number, durationFrames = 8): number =>
+export const fadeProgress = (frame: number, _fps: number, durationFrames = 8): number =>
   interpolate(frame, [0, Math.max(1, durationFrames)], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -189,4 +188,3 @@ export const smoothExitProgress = (
 export const antiFlashOffset = (frame: number, initialOffset = -180): number => {
   return frame === 0 ? initialOffset : 0;
 };
-

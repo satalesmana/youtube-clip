@@ -9,7 +9,12 @@ import type {
   BadgeColorVariant,
   ViralHook,
 } from '../../types';
-import { CLIENT_VISUAL_PRESETS, CLIENT_PRESET_MAP } from '../../lib/visual-presets';
+import {
+  CLIENT_VISUAL_PRESETS,
+  CLIENT_PRESET_MAP,
+  PRESET_FAMILIES,
+  type PresetFamily,
+} from '../../lib/visual-presets';
 import {
   HOOK_TAG_CATEGORIES,
   RESEARCH_HOOK_TAGS,
@@ -19,7 +24,10 @@ import {
   parseHookTag,
 } from '../../lib/hook-tags';
 import { HookIcon, type HookIconName } from './HookIcon';
-import { HookPresetLivePreview } from './HookPresetLivePreview';
+
+const HookPresetLivePreview = React.lazy(() =>
+  import('./HookPresetLivePreview').then((module) => ({ default: module.HookPresetLivePreview })),
+);
 
 export interface HookTextStylePresetsProps {
   value: VisualPresetSelection;
@@ -163,7 +171,14 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
   hooks = [],
 }) => {
   const [tagCategoryFilter, setTagCategoryFilter] = React.useState<string>('all');
+  const [selectedFamily, setSelectedFamily] = React.useState<PresetFamily | 'all'>('all');
   const aiPreset = CLIENT_PRESET_MAP[aiRecommendationId] || CLIENT_PRESET_MAP['kinetic-punch'];
+  const recommendedFamily = aiPreset.family;
+
+  const filteredPresets = React.useMemo(() => {
+    if (selectedFamily === 'all') return CLIENT_VISUAL_PRESETS;
+    return CLIENT_VISUAL_PRESETS.filter((p) => p.family === selectedFamily);
+  }, [selectedFamily]);
 
   const categoryCounts = React.useMemo(() => {
     const counts: Record<string, number> = { all: RESEARCH_HOOK_TAGS.length };
@@ -322,22 +337,65 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
             </div>
           </div>
 
-          {/* Group 1: Visual Style Presets (12 Presets directly, no individual auto bar) */}
+          {/* Group 1: Visual Style Presets (Grouped by 4 Families) */}
           <div className="hts-control-group">
             <div className="hts-group-header">
               <div className="hts-group-title-row">
                 <span className="hts-group-title">1. Gaya Visual Hook (Preset Rekomendasi)</span>
-                <span className="hts-group-badge">12 Presets</span>
+                <span className="hts-group-badge">{CLIENT_VISUAL_PRESETS.length} Presets</span>
               </div>
               <span className="hts-group-hint">
                 {isPresetCustom ? `Kustom: ${effectivePresetParsed.title}` : `Pilihan AI: ${effectivePresetParsed.title}`}
               </span>
             </div>
 
-            {/* Compact 12 Preset Cards Grid (Strict 3 Columns) */}
+            {/* Preset Family Filter Tabs (Energik, Cerita, Pertanyaan, Data) */}
+            <div className="hts-family-filter-bar" role="tablist" aria-label="Filter keluarga preset visual">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selectedFamily === 'all'}
+                className={`hts-family-pill ${selectedFamily === 'all' ? 'active' : ''}`}
+                onClick={() => setSelectedFamily('all')}
+              >
+                Semua ({CLIENT_VISUAL_PRESETS.length})
+              </button>
+              {PRESET_FAMILIES.map((fam) => {
+                const isFamActive = selectedFamily === fam.id;
+                const isRecommendedFam = recommendedFamily === fam.id;
+                const count = CLIENT_VISUAL_PRESETS.filter((p) => p.family === fam.id).length;
+                return (
+                  <button
+                    key={fam.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isFamActive}
+                    className={`hts-family-pill ${isFamActive ? 'active' : ''}`}
+                    onClick={() => setSelectedFamily(fam.id)}
+                    title={fam.bestFitGuidance}
+                  >
+                    <span>{fam.badgeLabel}</span>
+                    <span className="hts-family-pill-count">{count}</span>
+                    {isRecommendedFam && <span className="hts-family-match-dot" title="Cocok dengan hook kamu">★</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Contextual Guidance */}
+            <div className="hts-family-guidance">
+              {selectedFamily !== 'all' ? (
+                <span>💡 {PRESET_FAMILIES.find((f) => f.id === selectedFamily)?.bestFitGuidance}</span>
+              ) : (
+                <span>💡 Pilih gaya visual yang selaras dengan pesan hook: pertanyaan, angka/data, cerita, atau kejutan.</span>
+              )}
+            </div>
+
+            {/* Compact Preset Cards Grid */}
             <div className="hts-compact-grid" role="group" aria-label="Visual style presets">
-              {CLIENT_VISUAL_PRESETS.map((preset) => {
+              {filteredPresets.map((preset) => {
                 const isSelected = effectivePresetId === preset.id;
+                const isAiRecommended = aiRecommendationId === preset.id;
                 const { iconName, title } = parsePresetLabel(preset.label, preset.id);
                 return (
                   <button
@@ -357,7 +415,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                     }}
                     disabled={disabled}
                     aria-pressed={isSelected}
-                    title={preset.description}
+                    title={`${preset.description} — ${preset.bestFor}`}
                   >
                     <div className="hts-compact-top">
                       <HookIcon
@@ -368,8 +426,10 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
                         style={{ marginRight: 6 }}
                       />
                       <span className="hts-compact-label">{title}</span>
+                      {isAiRecommended && <span className="hts-compact-ai-badge" title="Paling cocok dengan isi hook kamu">★ AI</span>}
                       {isSelected && <span className="hts-compact-check">✓</span>}
                     </div>
+                    <div className="hts-compact-best-for">{preset.bestFor}</div>
                     <div className="hts-compact-meta">
                       <span>{preset.metaBadges.slice(0, 2).join(' • ')}</span>
                     </div>
@@ -1181,19 +1241,23 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
 
         {/* Right Column: Sticky Live Phone Preview */}
         <div className="hts-preview-col">
-          <HookPresetLivePreview
-            selectedPreset={value}
-            overrideLayout={selectedLayout}
-            overrideAnimation={selectedAnimation}
-            overrideTypography={selectedTypography}
-            selectedBadgePreset={selectedBadgePreset}
-            selectedBadgeColor={selectedBadgeColor}
-            customText={customHookText}
-            customTag={customHookTag}
-            highlightWords={highlightWords}
-            thumbnailUrl={thumbnailUrl}
-            aiRecommendationId={aiRecommendationId}
-          />
+          <React.Suspense fallback={<div className="hpl-container" aria-label="Memuat preview hook" />}>
+            <HookPresetLivePreview
+              selectedPreset={value}
+              overrideLayout={selectedLayout}
+              overrideAnimation={selectedAnimation}
+              overrideTypography={selectedTypography}
+              selectedBadgePreset={selectedBadgePreset}
+              selectedBadgeColor={selectedBadgeColor}
+              customText={customHookText}
+              customTag={customHookTag}
+              highlightWords={highlightWords}
+              thumbnailUrl={thumbnailUrl}
+              previewVideoUrl={typeof selectedHookIndex === 'number' ? hooks[selectedHookIndex]?.previewUrl : undefined}
+              durationSeconds={typeof selectedHookIndex === 'number' ? hooks[selectedHookIndex]?.finalDurationSeconds : undefined}
+              aiRecommendationId={aiRecommendationId}
+            />
+          </React.Suspense>
         </div>
       </div>
     </div>

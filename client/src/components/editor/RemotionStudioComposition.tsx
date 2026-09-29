@@ -12,10 +12,10 @@ import {
 } from 'remotion';
 import { resolveAudioStreamUrl } from '../../lib/audio-catalog';
 import { Outro } from '../../../../compositions/studio/src/Outro';
+import { HookHeadline } from '../../../../compositions/studio/src/HookHeadline';
+import { selectTheme } from '../../../../compositions/studio/src/design';
 import type { Theme } from '../../../../compositions/studio/src/design';
-import { CLIENT_PRESET_MAP } from '../../lib/visual-presets';
-import { parseHookTag, resolveBadgeStyle } from '../../lib/hook-tags';
-import type { AnimationPreset, CompositionLayout, TypographyVariant } from '../../types';
+import { resolveVisualPreset } from '../../../../compositions/studio/src/visual-preset';
 
 export interface RemotionStudioCompositionProps {
   videoSrc?: string;
@@ -212,21 +212,19 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   dynamicOverlays = [],
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width, durationInFrames: compositionDurationFrames } = useVideoConfig();
+  const { fps, durationInFrames: compositionDurationFrames } = useVideoConfig();
   const currentTimeSec = frame / fps;
   const contentStartFrame = sequenceHookIntro ? Math.round(hookDurationProp * fps) : 0;
   const contentTimeSec = sequenceHookIntro ? Math.max(0, currentTimeSec - hookDurationProp) : currentTimeSec;
 
-  const preset = CLIENT_PRESET_MAP[visualPreset as keyof typeof CLIENT_PRESET_MAP] ?? CLIENT_PRESET_MAP['kinetic-punch'];
-  const effectiveLayout = (hookLayout && hookLayout !== 'auto'
-    ? hookLayout
-    : preset.layout.toLowerCase().replace(/\s+/g, '-')) as CompositionLayout;
-  const effectiveAnimation = (hookAnimation && hookAnimation !== 'auto'
-    ? hookAnimation
-    : preset.animation.toLowerCase().replace(/\s+/g, '-')) as AnimationPreset;
-  const effectiveTypography = (hookTypography && hookTypography !== 'auto'
-    ? hookTypography
-    : preset.typography.toLowerCase().replace(/\s+/g, '-')) as TypographyVariant;
+  const baseHookPreset = resolveVisualPreset({ manualPreset: visualPreset as any });
+  const hookPreset = {
+    ...baseHookPreset,
+    ...(hookLayout && hookLayout !== 'auto' ? { layout: hookLayout as any } : {}),
+    ...(hookAnimation && hookAnimation !== 'auto' ? { animation: hookAnimation as any } : {}),
+    ...(hookTypography && hookTypography !== 'auto' ? { typography: hookTypography as any } : {}),
+  };
+  const hookTheme = selectTheme('editor-hook', visualPreset);
 
   const targetAspect = aspectRatio === '16:9' ? 16 / 9 : aspectRatio === '1:1' ? 1 : 9 / 16;
   let focusX = 0.5;
@@ -248,32 +246,6 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   const hookDurationSec = hookDurationProp;
   const hookEndFrame = Math.round(hookDurationSec * fps);
   const isHookActive = enableHookIntro && !isRenderedVideo && frame < hookEndFrame;
-
-  // Spring entry punch for the hook
-  const hookSpring = spring({
-    frame,
-    fps,
-    config: { damping: 14, stiffness: 120, mass: 0.8 },
-  });
-
-  const hookProgress = interpolate(frame, [0, Math.max(1, Math.round(fps * 0.55))], [0, 1], { extrapolateRight: 'clamp' });
-  const cascadeProgress = Math.max(0, frame / Math.max(1, Math.round(fps * 0.18)));
-  const hookScale = effectiveAnimation === 'scale-burst'
-    ? interpolate(hookSpring, [0, 1], [0.45, 1])
-    : effectiveAnimation === 'spring-punch'
-      ? interpolate(hookSpring, [0, 1], [0.85, 1])
-      : 1;
-  const hookOpacity = effectiveAnimation === 'fade'
-    ? interpolate(frame, [0, Math.round(fps * 0.8)], [0, 1], { extrapolateRight: 'clamp' })
-    : effectiveAnimation === 'slide-up'
-      ? hookProgress
-      :
-    frame < hookEndFrame - 15
-      ? interpolate(frame, [0, 8], [0, 1], { extrapolateRight: 'clamp' })
-      : interpolate(frame, [hookEndFrame - 15, hookEndFrame], [1, 0], {
-          extrapolateLeft: 'clamp',
-          extrapolateRight: 'clamp',
-        });
 
   // ---------------------------------------------------------------------------
   // 2. Outro Card (Last N seconds)
@@ -379,37 +351,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       ? 68
       : 48;
 
-  const badgeStyle = resolveBadgeStyle(badgePreset as any, badgeColor as any, hookTag);
-  const parsedHookTag = parseHookTag(hookTag);
-
-  // Typography font family helper
-  const getFontFamily = () => {
-    switch (effectiveTypography) {
-      case 'montserrat':
-      case 'stacked':
-        return "'Montserrat', 'Inter', sans-serif";
-      case 'anton':
-      case 'bold-caps':
-        return "'Anton', 'Impact', sans-serif";
-      case 'poppins':
-      case 'minimal':
-        return "'Poppins', 'Segoe UI', sans-serif";
-      case 'archivo-black':
-        return "'Archivo Black', 'Impact', sans-serif";
-      case 'oswald':
-        return "'Oswald', 'Impact', sans-serif";
-      case 'barlow-condensed':
-        return "'Barlow Condensed', 'Impact', sans-serif";
-      default:
-        return "'Bebas Neue', 'Anton', sans-serif";
-    }
-  };
-
   return (
     <AbsoluteFill
       style={{
         backgroundColor: '#0A0E14',
-        fontFamily: getFontFamily(),
+        fontFamily: 'sans-serif',
         color: '#FFFFFF',
         overflow: 'hidden',
         ...dynamicStyles.canvas,
@@ -645,110 +591,21 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {isHookActive && (
         <AbsoluteFill
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: effectiveLayout === 'top-heavy' ? 'flex-start' : 'center',
-            padding: `0 ${width * 0.05}px`,
-            paddingTop: effectiveLayout === 'top-heavy' ? '14%' : effectiveLayout === 'data-focus' ? '22%' : '0',
-            transform: `${effectiveAnimation === 'slide-up' ? `translateY(${interpolate(hookProgress, [0, 1], [70, 0])}px) ` : ''}scale(${hookScale})`,
-            opacity: hookOpacity,
             zIndex: 40,
             pointerEvents: 'none',
+            ...dynamicStyles.hook,
           }}
         >
-          {/* Top Badge Tag Pill */}
-          {hookTag && (
-            <div
-              style={{
-                marginBottom: width * 0.016,
-                padding: `${width * 0.006}px ${width * 0.018}px`,
-                borderRadius: badgeStyle.borderRadius > 100 ? '999px' : `${badgeStyle.borderRadius}px`,
-                fontSize: width * 0.034,
-                fontWeight: badgeStyle.fontWeight,
-                letterSpacing: badgeStyle.letterSpacing,
-                textTransform: 'uppercase',
-                background: badgeStyle.bgColor,
-                color: badgeStyle.textColor,
-                border: `${badgeStyle.borderWidth}px solid ${badgeStyle.borderColor}`,
-                boxShadow: badgeStyle.boxShadow,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: `${width * 0.007}px`,
-              }}
-            >
-              <span>{hookTag.match(/^\p{Extended_Pictographic}/u)?.[0] || (parsedHookTag.iconName === 'flame' ? '🔥' : parsedHookTag.iconName === 'zap' ? '⚡' : '✦')}</span>
-              {parsedHookTag.cleanText}
-            </div>
-          )}
-
-          {preset.decoration === 'Burst' && <div style={{ position: 'absolute', inset: '8%', border: '8px dotted rgba(250,204,21,.55)', borderRadius: '50%', transform: `rotate(${frame * 0.25}deg)`, zIndex: -1 }} />}
-          {preset.decoration === 'Corner Frame' && <div style={{ position: 'absolute', inset: '18%', border: '4px solid rgba(255,255,255,.7)', borderRadius: 12, pointerEvents: 'none' }} />}
-          {preset.decoration === 'Question Mark' && <div style={{ fontSize: 112, lineHeight: 0.8, color: '#FACC15', fontWeight: 900, textShadow: '0 8px 28px #000', marginBottom: 12 }}>?</div>}
-          {preset.decoration === 'Arrow' && <div style={{ fontSize: 76, lineHeight: 0.8, color: '#FACC15', marginBottom: 14 }}>➜</div>}
-          {preset.decoration === 'Number Badge' && <div style={{ borderRadius: 999, background: '#F59E0B', color: '#111827', padding: '6px 18px', fontSize: 22, fontWeight: 900, marginBottom: 12 }}>STAT</div>}
-          {preset.decoration === 'Spark' && <div style={{ fontSize: 52, color: '#FDE047', marginBottom: 10 }}>✦ ✧ ✦</div>}
-          {preset.decoration === 'Scribble' && <div style={{ position: 'absolute', width: '76%', height: '54%', border: '4px dashed #FACC15', borderRadius: '48% 52% 45% 55%', transform: 'rotate(-5deg)', pointerEvents: 'none' }} />}
-
-          {/* Kinetic Headline Box */}
-          <div
-            style={{
-              background: preset.highlight === 'Box' ? 'rgba(10,14,20,.35)' : 'transparent',
-              border: preset.highlight === 'Box' ? '2px solid #06B6D4' : 'none',
-              borderRadius: effectiveLayout === 'full-screen-text' ? '8px' : '0',
-              padding: preset.highlight === 'Box' ? `${width * 0.012}px ${width * 0.018}px` : 0,
-              textAlign: 'center',
-              backdropFilter: preset.highlight === 'Box' ? 'blur(8px)' : undefined,
-              boxShadow: preset.highlight === 'Box' ? '0 0 16px rgba(6,182,212,.35)' : 'none',
-              maxWidth: effectiveLayout === 'full-screen-text' ? '100%' : '90%',
-              width: effectiveLayout === 'full-screen-text' ? '100%' : effectiveLayout === 'split-proof' ? '70%' : 'auto',
-              alignSelf: effectiveLayout === 'split-proof' ? 'flex-end' : 'center',
-              ...dynamicStyles.hook,
-            }}
-          >
-            <h1
-              style={{
-                margin: 0,
-                fontSize: width * (effectiveLayout === 'full-screen-text' ? 0.12 : 0.10),
-                lineHeight: 1.05,
-                fontWeight: effectiveTypography === 'montserrat' || effectiveTypography === 'stacked' || effectiveTypography === 'poppins' || effectiveTypography === 'minimal' ? 800 : 900,
-                textTransform: effectiveTypography === 'minimal' || effectiveTypography === 'poppins' ? 'none' : 'uppercase',
-                letterSpacing: width * 0.0015,
-                WebkitTextStroke: `${Math.max(1, width * 0.001)}px rgba(0,0,0,.9)`,
-                textShadow: `0 ${width * 0.002}px ${width * 0.009}px rgba(0,0,0,.95)`,
-                color: '#FFFFFF',
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-                columnGap: width * 0.012,
-                rowGap: width * 0.006,
-                ...dynamicStyles.hookText,
-              }}
-            >
-              {effectiveAnimation === 'word-cascade' ? hookText.split(/\s+/).map((word, wordIndex) => (
-                <React.Fragment key={`${word}-${wordIndex}`}>
-                  <span style={{ display: 'inline-block', opacity: interpolate(cascadeProgress - wordIndex, [0, 1], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }), transform: `translateY(${interpolate(cascadeProgress - wordIndex, [0, 1], [18, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}px)`, color: hookHighlightWords.includes(word.replace(/[.,!?…]/g, '')) ? '#FACC15' : '#FFFFFF' }}>{word}</span>{' '}
-                </React.Fragment>
-              )) : hookText.split(/\s+/).map((word, wordIndex) => {
-                const cleaned = word.replace(/[.,!?…]/g, '');
-                const highlighted = hookHighlightWords.some((highlight) => highlight.toLowerCase() === cleaned.toLowerCase()) || word.toUpperCase().includes((preset.demoKeyword || '').toUpperCase());
-                const highlightStyle: React.CSSProperties = preset.highlight === 'Neon Glow'
-                  ? { color: '#BBE1FA', textShadow: '0 0 16px #38BDF8, 0 0 6px #06B6D4, 0 2px 8px rgba(0,0,0,.9)' }
-                  : preset.highlight === 'Underline'
-                    ? { textDecoration: 'underline', textUnderlineOffset: width * 0.004, textDecorationColor: '#38BDF8', textDecorationThickness: Math.max(2, width * 0.001) }
-                    : preset.highlight === 'Background Chip'
-                      ? { background: '#38BDF8', color: '#000', padding: `0 ${width * 0.006}px`, borderRadius: width * 0.004, WebkitTextStroke: '0 transparent' }
-                      : preset.highlight === 'Brush'
-                        ? { background: 'linear-gradient(transparent 58%, #06B6D4 58%)', padding: `0 ${width * 0.005}px` }
-                        : preset.highlight === 'Stroke'
-                          ? { color: '#fff', WebkitTextStroke: `${width * 0.0014}px #F59E0B`, textShadow: '0 0 12px rgba(245,158,11,.6)' }
-                          : preset.highlight === 'Box'
-                            ? { border: `${width * 0.0016}px solid #06B6D4`, borderRadius: width * 0.004, padding: `0 ${width * 0.006}px` }
-                            : {};
-                return <span key={`${word}-${wordIndex}`} style={highlighted ? highlightStyle : undefined}>{word}</span>;
-              })}
-            </h1>
-          </div>
+          <HookHeadline
+            text={hookText}
+            tag={hookTag}
+            theme={hookTheme}
+            badgePresetId={badgePreset as any}
+            badgeColor={badgeColor as any}
+            highlightWords={hookHighlightWords}
+            visualPreset={hookPreset}
+            durationFrames={hookEndFrame}
+          />
         </AbsoluteFill>
       )}
 

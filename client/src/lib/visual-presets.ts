@@ -6,10 +6,54 @@
  */
 import type { VisualPresetId } from '../types';
 
+export type PresetFamily = 'energik' | 'cerita' | 'pertanyaan' | 'data';
+
+export interface PresetFamilyInfo {
+  id: PresetFamily;
+  label: string;
+  badgeLabel: string;
+  description: string;
+  bestFitGuidance: string;
+}
+
+export const PRESET_FAMILIES: PresetFamilyInfo[] = [
+  {
+    id: 'energik',
+    label: '⚡ Energik & Kejutan',
+    badgeLabel: '⚡ Energik',
+    description: 'Gerak cepat & punch tegas untuk klaim berani atau peringatan mendesak',
+    bestFitGuidance: 'Cocok untuk hook kejutan, kontrarian, atau peringatan keras',
+  },
+  {
+    id: 'cerita',
+    label: '📖 Cerita & Naratif',
+    badgeLabel: '📖 Cerita',
+    description: 'Transisi halus untuk narasi personal dan edukasi berwibawa',
+    bestFitGuidance: 'Cocok untuk hook naratif, pengalaman pribadi, atau otoritas',
+  },
+  {
+    id: 'pertanyaan',
+    label: '❓ Pertanyaan & Rasa Ingin Tahu',
+    badgeLabel: '❓ Pertanyaan',
+    description: 'Membuka knowledge gap yang memancing audiens berhenti scroll',
+    bestFitGuidance: 'Cocok untuk hook pertanyaan atau rasa penasaran mendalam',
+  },
+  {
+    id: 'data',
+    label: '📊 Data, Angka & Fakta',
+    badgeLabel: '📊 Data',
+    description: 'Sorotan angka konkret, statistik, dan bukti hasil nyata',
+    bestFitGuidance: 'Cocok untuk hook dengan statistik, persentase, atau bukti sosial',
+  },
+];
+
 export interface ClientVisualPreset {
   id: VisualPresetId;
   label: string;
   description: string;
+  family: PresetFamily;
+  familyLabel: string;
+  bestFor: string;
   metaBadges: string[];
   previewClass: string;
   typography: 'Kinetic' | 'Stacked' | 'Minimal' | 'Bold Caps';
@@ -29,6 +73,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'kinetic-punch',
     label: '⚡ Kinetic Punch',
     description: 'Hard-hitting spring entrance with bold uppercase text and neon glow',
+    family: 'energik',
+    familyLabel: '⚡ Energik',
+    bestFor: 'Klaim berani, urgensi, atau kejutan keras',
     metaBadges: ['Spring', 'Neon Glow', 'Centered'],
     previewClass: 'vp-preview-kinetic',
     typography: 'Kinetic',
@@ -45,6 +92,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'curiosity-stack',
     label: '🤔 Curiosity Stack',
     description: 'Words cascade in one by one, building anticipation',
+    family: 'pertanyaan',
+    familyLabel: '❓ Pertanyaan',
+    bestFor: 'Pancingan rasa penasaran bertahap kata demi kata',
     metaBadges: ['Cascade', 'Neon Glow', 'Subject-First'],
     previewClass: 'vp-preview-curiosity',
     typography: 'Stacked',
@@ -61,6 +111,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'story-slide',
     label: '📖 Story Slide',
     description: 'Smooth upward reveal with clean typography and underline accents',
+    family: 'cerita',
+    familyLabel: '📖 Cerita',
+    bestFor: 'Kisah personal atau alur narasi ("3 tahun lalu...")',
     metaBadges: ['Slide Up', 'Underline', 'Centered'],
     previewClass: 'vp-preview-story',
     typography: 'Minimal',
@@ -77,6 +130,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'minimal-question',
     label: '❓ Question Focus',
     description: 'Slide-up reveal centered around a prominent question mark',
+    family: 'pertanyaan',
+    familyLabel: '❓ Pertanyaan',
+    bestFor: 'Pertanyaan langsung yang memicu rasa ingin tahu',
     metaBadges: ['Slide Up', 'Question Mark', 'Question-Focus'],
     previewClass: 'vp-preview-question',
     typography: 'Minimal',
@@ -93,6 +149,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'bold-impact',
     label: '🔥 Bold Impact',
     description: 'Full-width scale burst with vivid chip highlights on key words',
+    family: 'energik',
+    familyLabel: '⚡ Energik',
+    bestFor: 'Pernyataan kontrarian atau larangan keras',
     metaBadges: ['Scale Burst', 'Chip', 'Top-Heavy'],
     previewClass: 'vp-preview-bold',
     typography: 'Bold Caps',
@@ -109,6 +168,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'data-punch',
     label: '📊 Data Punch',
     description: 'Scale-burst entrance with a number badge that emphasizes your stat',
+    family: 'data',
+    familyLabel: '📊 Data',
+    bestFor: 'Statistik, angka persen, atau bukti kuantitatif',
     metaBadges: ['Scale Burst', 'Badge', 'Data-Focus'],
     previewClass: 'vp-preview-data',
     typography: 'Bold Caps',
@@ -125,6 +187,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'opportunity-glow',
     label: '💡 Opportunity Glow',
     description: 'Warm cascading words with an inviting glow on the key insight',
+    family: 'data',
+    familyLabel: '📊 Data',
+    bestFor: 'Peluang baru, tips cepat, atau solusi praktis',
     metaBadges: ['Cascade', 'Warm Glow', 'Centered'],
     previewClass: 'vp-preview-opportunity',
     typography: 'Stacked',
@@ -141,6 +206,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'focus-brush',
     label: '🖌️ Focus Brush',
     description: 'Vibrant brush stroke highlight with sparkling attention accents',
+    family: 'energik',
+    familyLabel: '⚡ Energik',
+    bestFor: 'Peringatan keras & sorotan kata kunci artistik',
     metaBadges: ['Spring', 'Brush Stroke', 'Spark'],
     previewClass: 'vp-preview-brush',
     typography: 'Kinetic',
@@ -157,6 +225,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'clean-fade',
     label: '✨ Clean Fade',
     description: 'Smooth elegant fade entrance with framing corner brackets',
+    family: 'cerita',
+    familyLabel: '📖 Cerita',
+    bestFor: 'Pembukaan elegan, edukasi tenang, atau otoritas',
     metaBadges: ['Fade', 'Box Frame', 'Corner Frame'],
     previewClass: 'vp-preview-fade',
     typography: 'Minimal',
@@ -173,6 +244,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'scribble-quote',
     label: '✏️ Scribble Accent',
     description: 'Playful hand-drawn scribble with outlined keyword emphasis',
+    family: 'pertanyaan',
+    familyLabel: '❓ Pertanyaan',
+    bestFor: 'Dilema relatable atau pancingan santai',
     metaBadges: ['Cascade', 'Stroke', 'Scribble'],
     previewClass: 'vp-preview-scribble',
     typography: 'Stacked',
@@ -189,6 +263,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'action-pointer',
     label: '👉 Action Pointer',
     description: 'High-energy scale burst with an action arrow directing focus',
+    family: 'data',
+    familyLabel: '📊 Data',
+    bestFor: 'Pilihan dilema (A vs B) atau ajakan tindakan tegas',
     metaBadges: ['Scale Burst', 'Chip', 'Arrow'],
     previewClass: 'vp-preview-action',
     typography: 'Bold Caps',
@@ -205,6 +282,9 @@ export const CLIENT_VISUAL_PRESETS: ClientVisualPreset[] = [
     id: 'burst-stat',
     label: '💥 Viral Burst',
     description: 'Dynamic burst rays framing full-screen bold claims',
+    family: 'energik',
+    familyLabel: '⚡ Energik',
+    bestFor: 'Pernyataan viral layar penuh dengan ledakan visual',
     metaBadges: ['Scale Burst', 'Neon Glow', 'Burst Rays'],
     previewClass: 'vp-preview-burst',
     typography: 'Bold Caps',
@@ -254,4 +334,9 @@ export function resolvePresetIdFromHook(hookType?: string, angle?: string): Visu
 export function resolvePresetLabelFromHook(hookType?: string, angle?: string): string {
   const id = resolvePresetIdFromHook(hookType, angle);
   return CLIENT_PRESET_MAP[id]?.label ?? '⚡ Kinetic Punch';
+}
+
+export function resolveFamilyFromHook(hookType?: string, angle?: string): PresetFamily {
+  const presetId = resolvePresetIdFromHook(hookType, angle);
+  return CLIENT_PRESET_MAP[presetId]?.family ?? 'energik';
 }

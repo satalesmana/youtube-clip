@@ -8,6 +8,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord, getTextOutlineStyle } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
+import { getHeadlineLayout } from './layoutHelper';
 
 const MAX_WORDS = 10;
 
@@ -118,41 +119,39 @@ export const BoldCapsRenderer: React.FC<BoldCapsRendererProps> = ({
     }
   }
 
+  const layoutStyle = getHeadlineLayout(visualPreset.layout, width, height);
+
   const longestLine = [beforeLine, chipText, afterLine, afterLine2].sort((a, b) => b.length - a.length)[0] || 'A';
   const fitted = fitText({
     text: longestLine,
     fontFamily: font,
-    withinWidth: width * 0.85,
+    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.78 : 0.85),
   });
-  const headlineSize = Math.max(46, Math.min(78, Math.round(fitted.fontSize)));
+  const baseHeadlineSize = Math.max(46, Math.min(78, Math.round(fitted.fontSize)));
+  const headlineSize = Math.round(baseHeadlineSize * layoutStyle.fontSizeFactor);
   const strokeWidth = Math.max(3, Math.round(headlineSize / 9));
   const outlineStyle = getTextOutlineStyle(font, strokeWidth, '#000000', '0 6px 18px rgba(0,0,0,0.95)');
 
   return (
     <AbsoluteFill
       style={{
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        paddingTop: height * 0.10,
-        paddingLeft: 24,
-        paddingRight: 24,
+        ...layoutStyle.containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
+          ...layoutStyle.cardStyle,
           opacity: finalOpacity,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           transformOrigin: 'center center',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          maxWidth: width * 0.94,
+          alignItems: layoutStyle.alignItems,
+          textAlign: layoutStyle.textAlign,
           gap: 12,
-          padding: '24px 36px',
           borderRadius: 24,
-          background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
+          background: layoutStyle.background || 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
         {/* Tag pill */}

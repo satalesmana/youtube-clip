@@ -7,6 +7,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
+import { getHeadlineLayout } from './layoutHelper';
 
 const MAX_WORDS = 12;
 
@@ -102,12 +103,14 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
     }
   }
 
+  const layoutStyle = getHeadlineLayout(visualPreset.layout, width, height);
+
   const renderTokenRow = (rowTokens: string[], offsetIdx: number) => (
     <div
       style={{
         display: 'flex',
         flexWrap: 'wrap',
-        justifyContent: 'center',
+        justifyContent: layoutStyle.alignItems === 'flex-start' ? 'flex-start' : 'center',
         alignItems: 'baseline',
         columnGap: 14,
         rowGap: 8,
@@ -124,7 +127,7 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
             highlightMode={visualPreset.highlight}
             theme={theme}
             font={font}
-            fontSize={54}
+            fontSize={Math.round(54 * layoutStyle.fontSizeFactor)}
             strokeWidth={2}
             underlineProgress={underlineProgress}
           />
@@ -136,27 +139,22 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
   return (
     <AbsoluteFill
       style={{
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        paddingTop: height * 0.11,
-        paddingLeft: 32,
-        paddingRight: 32,
+        ...layoutStyle.containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
+          ...layoutStyle.cardStyle,
           opacity: finalOpacity,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          maxWidth: width * 0.94,
+          alignItems: layoutStyle.alignItems,
+          textAlign: layoutStyle.textAlign,
           gap: 12,
-          padding: '24px 36px',
           borderRadius: 24,
-          background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
+          background: layoutStyle.background || 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
         <HookTagPill
@@ -173,7 +171,7 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
+            alignItems: layoutStyle.alignItems,
             gap: 10,
             filter: 'drop-shadow(0 8px 20px rgba(0,0,0,0.9))',
           }}

@@ -23,7 +23,7 @@ import { WordCascadeRenderer } from './headline-renderers/WordCascadeRenderer';
 import { SlideUpRenderer } from './headline-renderers/SlideUpRenderer';
 import { BoldCapsRenderer } from './headline-renderers/BoldCapsRenderer';
 import { FadeRenderer } from './headline-renderers/FadeRenderer';
-import { HookTagPill, type BadgePresetId } from './headline-renderers/HookTagPill';
+import type { BadgePresetId } from './headline-renderers/HookTagPill';
 import { VISUAL_PRESET_REGISTRY } from './visual-preset/index';
 
 interface HookHeadlineProps {

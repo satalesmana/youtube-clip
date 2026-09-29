@@ -8,6 +8,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
+import { getHeadlineLayout } from './layoutHelper';
 
 const MAX_WORDS = 12;
 
@@ -72,39 +73,38 @@ export const FadeRenderer: React.FC<FadeRendererProps> = ({
     return tokens.length > 2 ? i >= tokens.length - 2 : i === tokens.length - 1;
   };
 
+  const layoutStyle = getHeadlineLayout(visualPreset.layout, width, height);
+
   const fitted = fitText({
     text: tokens.join(' '),
     fontFamily: font,
-    withinWidth: width * 0.86,
+    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.78 : 0.86),
   });
-  const headlineSize = Math.max(44, Math.min(70, Math.round(fitted.fontSize)));
+  const baseHeadlineSize = Math.max(44, Math.min(70, Math.round(fitted.fontSize)));
+  const headlineSize = Math.round(baseHeadlineSize * layoutStyle.fontSizeFactor);
   const strokeWidth = Math.max(3, Math.round(headlineSize / 9));
 
   return (
     <AbsoluteFill
       style={{
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        paddingTop: height * 0.11,
-        paddingLeft: 32,
-        paddingRight: 32,
+        ...layoutStyle.containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
+          ...layoutStyle.cardStyle,
           opacity: finalOpacity,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          maxWidth: width * 0.94,
+          alignItems: layoutStyle.alignItems,
+          textAlign: layoutStyle.textAlign,
           gap: 14,
-          padding: '28px 40px',
           borderRadius: 24,
           background:
+            layoutStyle.background ||
             'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.4) 60%, rgba(0, 0, 0, 0) 90%)',
         }}
       >

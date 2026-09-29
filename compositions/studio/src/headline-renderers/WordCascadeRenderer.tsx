@@ -16,6 +16,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
+import { getHeadlineLayout } from './layoutHelper';
 
 const MAX_WORDS = 10;
 
@@ -71,15 +72,16 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
     return tokens.length >= 3 ? i === 2 : i === 0;
   };
 
+  const layoutStyle = getHeadlineLayout(visualPreset.layout, width, height);
+
   const fitted = fitText({
     text: tokens.join(' '),
     fontFamily: font,
-    withinWidth: width * 0.88,
+    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.80 : 0.88),
   });
-  const headlineSize = Math.max(42, Math.min(70, Math.round(fitted.fontSize)));
+  const baseHeadlineSize = Math.max(42, Math.min(70, Math.round(fitted.fontSize)));
+  const headlineSize = Math.round(baseHeadlineSize * layoutStyle.fontSizeFactor);
   const strokeWidth = isOpportunityGlow ? 2 : Math.max(3, Math.round(headlineSize / 10));
-  const useGlow = visualPreset.highlight === 'neon-glow';
-
   // Phase 2: Micro-Life (Sustained hold with subtle floating bob & scale breathing)
   const microLife = microLifeHold(frame, fps, { amplitudeY: 3, frequency: 1.5 });
 
@@ -94,27 +96,22 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
   return (
     <AbsoluteFill
       style={{
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        paddingTop: height * 0.11,
-        paddingLeft: 32,
-        paddingRight: 32,
+        ...layoutStyle.containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
+          ...layoutStyle.cardStyle,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           opacity: exit.opacity,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          maxWidth: width * 0.94,
+          alignItems: layoutStyle.alignItems,
+          textAlign: layoutStyle.textAlign,
           gap: 12,
-          padding: '24px 36px',
           borderRadius: 24,
-          background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
+          background: layoutStyle.background || 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
         {/* Tag pill */}
@@ -132,7 +129,7 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            justifyContent: 'center',
+            justifyContent: layoutStyle.alignItems === 'flex-start' ? 'flex-start' : 'center',
             alignItems: 'flex-end',
             columnGap: 10,
             rowGap: 6,

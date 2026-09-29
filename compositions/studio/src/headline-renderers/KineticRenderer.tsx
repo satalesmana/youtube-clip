@@ -16,6 +16,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
+import { getHeadlineLayout } from './layoutHelper';
 
 const MAX_WORDS = 10;
 
@@ -96,38 +97,36 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
         : tokens.slice(mid).join(' '))
     : tokens.join(' ');
 
+  const layoutStyle = getHeadlineLayout(visualPreset.layout, width, height);
+
   const fitted = fitText({
     text: longestLine,
     fontFamily: font,
-    withinWidth: width * 0.86,
+    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.80 : 0.86),
   });
-  const headlineSize = Math.max(64, Math.min(84, Math.round(fitted.fontSize)));
+  const baseSize = Math.max(60, Math.min(84, Math.round(fitted.fontSize)));
+  const headlineSize = Math.round(baseSize * layoutStyle.fontSizeFactor);
   const strokeWidth = Math.max(4, Math.round(headlineSize / 9));
 
   return (
     <AbsoluteFill
       style={{
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        paddingTop: height * 0.11,
-        paddingLeft: 32,
-        paddingRight: 32,
+        ...layoutStyle.containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
+          ...layoutStyle.cardStyle,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           opacity: finalOpacity,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          maxWidth: width * 0.94,
+          alignItems: layoutStyle.alignItems,
+          textAlign: layoutStyle.textAlign,
           gap: 14,
-          padding: '24px 36px',
           borderRadius: 24,
-          background: 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
+          background: layoutStyle.background || 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
         {/* Floating Social Pill Tag */}
@@ -145,11 +144,11 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            justifyContent: 'center',
+            justifyContent: layoutStyle.alignItems === 'flex-start' ? 'flex-start' : 'center',
             alignItems: 'center',
             columnGap: 12,
             rowGap: 8,
-            textAlign: 'center',
+            textAlign: layoutStyle.textAlign,
             filter: 'drop-shadow(0 12px 28px rgba(0,0,0,0.95))',
           }}
         >
