@@ -46,6 +46,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
     setAspectRatio,
     enableBroll,
     setEnableBroll,
+    autoReframe,
+    setAutoReframe,
     brollPlacements,
     loadingBroll,
     brollError,
@@ -363,6 +365,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setSubtitleSize={setSubtitleSize}
         enableBroll={enableBroll}
         setEnableBroll={setEnableBroll}
+        autoReframe={autoReframe}
+        setAutoReframe={setAutoReframe}
         brollPlacements={brollPlacements}
         loadingBroll={loadingBroll}
         brollError={brollError}

@@ -333,6 +333,8 @@ export const transformRequestSchema = z.object({
   sourceAudioVolume: z.number().min(0).max(1).optional(),
   /** Whether to insert contextual B-roll footage. */
   enableBroll: z.boolean().optional(),
+  /** Follow detected primary face with a smoothed crop in reel rendering. */
+  autoReframe: z.boolean().optional(),
   /**
    * User-selected B-roll placements to insert during the video.
    */

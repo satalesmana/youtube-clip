@@ -41,6 +41,7 @@ export function useClipTransform() {
   // ClipRefinementService which snaps to the nearest complete sentence/segment.
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [enableBroll, setEnableBroll] = useState(true);
+  const [autoReframe, setAutoReframe] = useState(false);
   const [brollPlacements, setBrollPlacements] = useState<BrollPlacementItem[]>([]);
   const [loadingBroll, setLoadingBroll] = useState(false);
   const [brollError, setBrollError] = useState<string | null>(null);
@@ -758,6 +759,7 @@ export function useClipTransform() {
         audioMode,
         aspectRatio,
         enableBroll,
+        autoReframe,
         brollPlacements: enableBroll && brollPlacements.length > 0 ? brollPlacements : undefined,
         enableIntroOutro,
         outroPreset: enableIntroOutro ? outroPreset : undefined,
@@ -827,6 +829,8 @@ export function useClipTransform() {
     audioMode,
     aspectRatio,
     enableBroll,
+    autoReframe,
+    setAutoReframe,
     brollPlacements,
     enableIntroOutro,
     whisperProvider,
@@ -870,6 +874,8 @@ export function useClipTransform() {
     setAspectRatio,
     enableBroll,
     setEnableBroll,
+    autoReframe,
+    setAutoReframe,
     brollPlacements,
     setBrollPlacements,
     loadingBroll,

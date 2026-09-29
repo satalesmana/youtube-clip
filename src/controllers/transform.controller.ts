@@ -36,6 +36,7 @@ import type { ICaptionService } from '../content/caption.service.js';
 import type { IStyledHookPreview } from '../hook-preview/styled-hook-preview.service.js';
 import type { VideoCaptionResult, SocialPlatform } from '../types/caption.js';
 import type { IBrollService } from '../services/b-roll.service.js';
+import type { IReframeService } from '../services/reframe.service.js';
 import type { BrollPlacement } from '../types/b-roll.js';
 import { planReelSegments } from '../utils/reel-plan.js';
 import { hashSeed } from '../utils/seed.js';
@@ -78,6 +79,8 @@ export interface TransformControllerDeps {
    * Optional Remotion reel composer for rendering reel mode using Remotion.
    */
   reelRemotionService?: ReelRemotionService;
+  /** Optional face trajectory analysis service for video scenes. */
+  reframeService?: IReframeService;
   /**
    * Optional caption service for generating platform-tailored viral social captions.
    */
@@ -985,7 +988,7 @@ export class TransformController {
     const templateOrStyle = request.style ?? request.template ?? autoStyle ?? 'commentary';
     const outputVideo = await this.renderVideo(
       videoPath, videoId, jobId, templateOrStyle, videoPlan, ttsResult, request.channel, request.hookBadge, transcript, hookRange, request.engine, request.blur_watermark,
-      { audioMode, sourceAudioVolume: request.sourceAudioVolume },
+      { audioMode, sourceAudioVolume: request.sourceAudioVolume, autoReframe: request.autoReframe === true },
       request.subtitleStyle,
       request.subtitleSize,
       brolls,
@@ -1201,6 +1204,7 @@ export class TransformController {
         subtitleSize: request.subtitleSize,
         themeSeed: `${videoId}:${request.subtitleStyle || request.style || 'default'}`,
         channelName: request.channel?.name,
+        autoReframe: request.autoReframe === true,
       });
     } else {
       // Fallback: FFmpeg ASS burn-in
@@ -1465,7 +1469,7 @@ export class TransformController {
     engine?: TransformRequestInput['engine'],
     blurWatermark?: TransformRequestInput['blur_watermark'],
     /** Audio output settings derived from the request's audioMode / genre. */
-    audioOptions?: { audioMode: import('../types/audio-mode.js').AudioMode; sourceAudioVolume?: number },
+    audioOptions?: { audioMode: import('../types/audio-mode.js').AudioMode; sourceAudioVolume?: number; autoReframe?: boolean },
     /** User-chosen subtitle caption style preset (beast / hormozi / clean). */
     subtitleStyle?: string,
     /** Subtitle font size preset (sm / md / lg / xl). */
@@ -1563,8 +1567,33 @@ export class TransformController {
       outroDuration: outroOptions?.outroDuration,
       outroChannelName: outroOptions?.outroChannelName?.trim() || channel?.name,
       outroLogoUrl: outroOptions?.outroLogoUrl || channel?.logo,
+      autoReframe: audioOptions?.autoReframe === true,
     };
     videoPlan.brolls = compositionBrolls;
+
+    // Analyze source scenes before Remotion renders; inference never runs in
+    // the frame renderer. Source ranges are absolute seconds in the input clip.
+    if (assets.autoReframe && this.deps.compositionEngine.kind === 'remotion' && this.deps.reframeService?.resolveTrajectory) {
+      for (const scene of videoPlan.scenes) {
+        if (!scene.source || scene.end <= scene.start) continue;
+        try {
+          const trajectory = await this.deps.reframeService.resolveTrajectory(
+            sourceVideoForRender,
+            scene.source.start,
+            scene.source.end,
+            0.75,
+          );
+          const focusPoints = trajectory.points.map((point) => ({
+            time: point.timestampSeconds - scene.source!.start,
+            x: point.focalPoint.x,
+            y: point.focalPoint.y,
+          }));
+          if (focusPoints.length > 0) scene.focusPoints = focusPoints;
+        } catch (error) {
+          this.deps.logger.warn({ error, sourceStart: scene.source.start }, 'Face reframe analysis failed; using default scene framing');
+        }
+      }
+    }
 
     try {
       // Try composition engine (Remotion or FFmpeg template)

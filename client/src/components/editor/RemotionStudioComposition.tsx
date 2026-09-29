@@ -69,6 +69,9 @@ export interface RemotionStudioCompositionProps {
   narrationVolume?: number;   // 0–1 volume narasi, default 1
   outputMode?: 'reel' | 'narration';
   videoStartFromSec?: number; // trim start of video element, default 0
+  /** Precomputed face-focus path for the selected source range, relative seconds. */
+  faceFocusPoints?: Array<{ time: number; x: number; y: number }>;
+  faceSourceAspectRatio?: number;
   // Dynamic CSS Styles & Universal Overlays (Zero-Code Dynamic Extensibility)
   dynamicStyles?: Record<string, React.CSSProperties>;
   dynamicOverlays?: Array<{
@@ -130,9 +133,30 @@ function parseOrRepairHtmlOverlay(content?: string): string | null {
   return null;
 }
 
+function getFocusObjectPosition(
+  focusX: number,
+  focusY: number,
+  scaledSourceAspect: number,
+  targetAspect: number,
+  enabled: boolean,
+): string {
+  if (!enabled) return '50% 50%';
+  if (scaledSourceAspect > targetAspect) {
+    const overflow = scaledSourceAspect / targetAspect - 1;
+    const x = Math.max(0, Math.min(1, (focusX * (overflow + 1) - 0.5) / overflow));
+    return `${x * 100}% 50%`;
+  }
+  const overflow = targetAspect / scaledSourceAspect - 1;
+  const y = overflow > 0.001
+    ? Math.max(0, Math.min(1, (focusY * (overflow + 1) - 0.5) / overflow))
+    : 0.5;
+  return `50% ${y * 100}%`;
+}
+
 export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps> = ({
   videoSrc,
   thumbnailUrl,
+  aspectRatio = '9:16',
   enableHookIntro = true,
   hookText = 'Trik Rahasia Meningkatkan View 10x Lipat!',
   hookTag = '🔥 JANGAN DI-SKIP',
@@ -165,6 +189,8 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   narrationVolume = 1,
   outputMode = 'reel',
   videoStartFromSec = 0,
+  faceFocusPoints = [],
+  faceSourceAspectRatio = 16 / 9,
   // Dynamic CSS & Universal Overlays
   dynamicStyles = {},
   dynamicOverlays = [],
@@ -173,6 +199,17 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   const { fps } = useVideoConfig();
 
   const currentTimeSec = frame / fps;
+  const targetAspect = aspectRatio === '16:9' ? 16 / 9 : aspectRatio === '1:1' ? 1 : 9 / 16;
+  let focusX = 0.5;
+  let focusY = 0.5;
+  if (faceFocusPoints.length > 0) {
+    const nextIndex = faceFocusPoints.findIndex((point) => point.time >= currentTimeSec);
+    const left = nextIndex <= 0 ? faceFocusPoints[0]! : faceFocusPoints[nextIndex - 1]!;
+    const right = nextIndex < 0 ? faceFocusPoints[faceFocusPoints.length - 1]! : faceFocusPoints[nextIndex]!;
+    const progress = Math.max(0, Math.min(1, (currentTimeSec - left.time) / Math.max(0.001, right.time - left.time)));
+    focusX = left.x + (right.x - left.x) * progress;
+    focusY = left.y + (right.y - left.y) * progress;
+  }
   const totalDurationSec = (useVideoConfig().durationInFrames || 900) / fps;
 
   // ---------------------------------------------------------------------------
@@ -407,7 +444,9 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'contain',
+              objectFit: faceFocusPoints.length > 0 ? 'cover' : 'contain',
+              objectPosition: getFocusObjectPosition(focusX, focusY, faceSourceAspectRatio * 1.08, targetAspect, faceFocusPoints.length > 0),
+              scale: faceFocusPoints.length > 0 ? 1.08 : 1,
               ...dynamicStyles.video,
             }}
           />

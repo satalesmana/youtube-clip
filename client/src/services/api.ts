@@ -25,6 +25,19 @@ class ApiError extends Error {
   }
 }
 
+export interface FaceFocusPoint {
+  time: number;
+  x: number;
+  y: number;
+}
+
+export interface FaceFocusAnalysis {
+  points: FaceFocusPoint[];
+  sourceAspectRatio?: number;
+}
+
+const faceFocusCache = new Map<string, FaceFocusAnalysis>();
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let errMsg = `HTTP ${res.status}: ${res.statusText}`;
@@ -58,6 +71,22 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 2000): Pro
 }
 
 export const api = {
+  async analyzeFaceFocus(payload: { videoId: string; start: number; end: number }, signal?: AbortSignal): Promise<FaceFocusAnalysis> {
+    const key = `${payload.videoId}:${payload.start.toFixed(3)}:${payload.end.toFixed(3)}`;
+    const cached = faceFocusCache.get(key);
+    if (cached) return cached;
+    const res = await fetch('/api/reframe/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    const data = await handleResponse<FaceFocusAnalysis>(res);
+    const result = { ...data, points: data.points ?? [] };
+    if (result.points.length > 0) faceFocusCache.set(key, result);
+    return result;
+  },
+
   async checkHealth(): Promise<boolean> {
     try {
       const res = await fetch('/api/health');
@@ -531,6 +560,7 @@ export const api = {
         hookBadgePreset: payload.hookBadgePreset,
         hookBadgeColor: payload.hookBadgeColor,
         enableBroll: payload.enableBroll,
+        autoReframe: payload.autoReframe,
         brollPlacements: payload.brollPlacements,
         enableIntroOutro: payload.enableIntroOutro,
         outroPreset: payload.outroPreset,
@@ -665,6 +695,3 @@ export const api = {
     return await handleResponse<ProducerChatResponse>(res);
   },
 };
-
-
-

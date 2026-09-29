@@ -54,10 +54,29 @@ export const SceneBackground: React.FC<{
   ) => {
     const isSports = theme.id === 'sports';
     const kbScale = kenBurnsScale(localFrame, duration);
+    const timeSeconds = localFrame / fps;
+    const focusPoints = scene.focusPoints ?? [];
+    let focusX = 0.5;
+    let focusY = 0.5;
+    if (focusPoints.length > 0) {
+      const rightIndex = focusPoints.findIndex((point) => point.time >= timeSeconds);
+      const left = rightIndex <= 0 ? focusPoints[0]! : focusPoints[rightIndex - 1]!;
+      const right = rightIndex < 0 ? focusPoints[focusPoints.length - 1]! : focusPoints[rightIndex]!;
+      const span = Math.max(0.001, right.time - left.time);
+      const mix = Math.max(0, Math.min(1, (timeSeconds - left.time) / span));
+      focusX = left.x + (right.x - left.x) * mix;
+      focusY = left.y + (right.y - left.y) * mix;
+    }
     const punchScale = isSports && isFirst && localFrame < 15
       ? interpolate(localFrame, [0, 12], [1.10, 1], { extrapolateRight: 'clamp' })
       : 1;
-    const effectiveScale = kbScale * punchScale;
+    const effectiveScale = kbScale * punchScale * (focusPoints.length > 0 ? 1.08 : 1);
+    // For the standard 16:9 source into 9:16 canvas, map the normalized
+    // subject position to CSS object-position while keeping the image covered.
+    const horizontalOverflow = 16 / 9 / (9 / 16) - 1;
+    const objectPositionX = focusPoints.length > 0
+      ? Math.max(0, Math.min(1, (focusX * (horizontalOverflow + 1) - 0.5) / horizontalOverflow))
+      : 0.5;
     const assetUrl = toAssetUrl(videoSrc);
 
     return (
@@ -94,7 +113,7 @@ export const SceneBackground: React.FC<{
         >
           <Video
             src={assetUrl}
-            objectFit="contain"
+            objectFit={focusPoints.length > 0 ? 'cover' : 'contain'}
             muted={!sourceUnderlay}
             volume={sourceUnderlay ? sourceAudioVolume : 0}
             trimBefore={offset}
@@ -103,6 +122,7 @@ export const SceneBackground: React.FC<{
               width: '100%',
               height: '100%',
               scale: effectiveScale,
+              objectPosition: `${objectPositionX * 100}% ${focusY * 100}%`,
               boxShadow: isSports
                 ? '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 2px rgba(255, 230, 0, 0.25)'
                 : '0 10px 40px rgba(0, 0, 0, 0.6)',

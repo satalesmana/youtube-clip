@@ -59,6 +59,8 @@ export interface CompositionAssets {
   outroChannelName?: string;
   /** Custom logo image URL, data URL, or file path for the outro card. */
   outroLogoUrl?: string;
+  /** Analyze source scenes and follow the dominant detected face. */
+  autoReframe?: boolean;
 }
 
 /** Output from a successful render. */

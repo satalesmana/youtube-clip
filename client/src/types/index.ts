@@ -209,6 +209,7 @@ export interface TransformRequest {
   targetDuration?: number;
   aspectRatio?: '9:16' | '16:9' | '1:1';
   enableBroll?: boolean;
+  autoReframe?: boolean;
   brollPlacements?: BrollPlacementItem[];
   enableIntroOutro?: boolean;
   outroPreset?: OutroPresetId;
@@ -304,4 +305,3 @@ export interface TranscriptResult {
   durationSeconds: number;
   segments: TranscriptSegment[];
 }
-

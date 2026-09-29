@@ -21,6 +21,8 @@ export interface PlanScene {
   narration: string;
   /** For source scenes: the trim range into the source video. */
   source?: { start: number; end: number };
+  /** Normalized face focus samples relative to this scene's source range. */
+  focusPoints?: Array<{ time: number; x: number; y: number }>;
   /** Visual hint for composition engines (e.g. "speaker", "b-roll", "graphic"). */
   visual?: string;
   /** Engagement as short-form content (1-10), carried from the story beat. */

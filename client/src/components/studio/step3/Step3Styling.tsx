@@ -83,6 +83,8 @@ interface Step3StylingProps {
   setSubtitleSize?: (size: SubtitleSize) => void;
   enableBroll: boolean;
   setEnableBroll: (val: boolean) => void;
+  autoReframe: boolean;
+  setAutoReframe: (val: boolean) => void;
   brollPlacements: BrollPlacementItem[];
   loadingBroll: boolean;
   brollError: string | null;
@@ -165,6 +167,8 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   setSubtitleSize,
   enableBroll,
   setEnableBroll,
+  autoReframe,
+  setAutoReframe,
   brollPlacements,
   loadingBroll,
   brollError,
@@ -479,6 +483,24 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
           {/* B-roll & Outro CTA toggles */}
           <div className="form-row" style={{ marginTop: '20px' }}>
             <div className="input-group">
+              <label className="label-main">Kamera Otomatis</label>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <input
+                  type="checkbox"
+                  id="check-auto-reframe"
+                  checked={autoReframe}
+                  onChange={(e) => setAutoReframe(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '1px' }}
+                />
+                <label htmlFor="check-auto-reframe" style={{ fontSize: '13px', color: '#ffffff', cursor: 'pointer' }}>
+                  Ikuti wajah dengan pan dan zoom halus
+                  <span style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)', fontSize: '11px' }}>
+                    Untuk Reel dan Narasi vertikal; memerlukan OpenCV (`opencv-python-headless`). Jika wajah tidak terdeteksi, framing tengah digunakan.
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="input-group">
               <label className="label-main">Sisipan Footage B-Roll Otomatis</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                 <input
@@ -628,4 +650,3 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
     </div>
   );
 };
-

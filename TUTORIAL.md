@@ -26,7 +26,7 @@ Google Trends / X, lalu mencocokkannya dengan video YouTube.
 | Tool                  | Untuk apa                       | Cek                                             | Install                                   |
 | --------------------- | ------------------------------- | ----------------------------------------------- | ----------------------------------------- |
 | Node.js **22+**       | Runtime backend                 | `node -v` ✅ v22.23.2 (sudah ada)               | https://nodejs.org                        |
-| Python **3.10+**      | WhisperX & edge-tts (via venv)  | `python3 -V`                                    | `brew install python`                     |
+| Python **3.10+**      | WhisperX, edge-tts & face tracking (via venv) | `python3 -V`                          | `brew install python`                     |
 | **yt-dlp**            | Download video                  | `yt-dlp --version` ✅ (sudah ada)               | `brew install yt-dlp`                     |
 | **FFmpeg + libass**   | Render klip & burn subtitle     | `ffmpeg -version` ⚠️ default tanpa libass       | `brew install ffmpeg-full` (lihat §3.3)   |
 
@@ -53,7 +53,7 @@ npm install
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install whisperx edge-tts
+pip install whisperx edge-tts 'opencv-python-headless<5'
 deactivate
 
 # 3) Dependency engine render Remotion (dipakai saat COMPOSITION_ENGINE=remotion)

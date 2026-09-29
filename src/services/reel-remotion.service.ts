@@ -8,6 +8,7 @@ import type { Logger } from '../utils/logger.js';
 import type { TranscriptResult } from '../types/transcript.js';
 import type { ISubtitleService } from '../services/subtitle.service.js';
 import type { BrollPlacement } from '../types/b-roll.js';
+import type { IReframeService } from './reframe.service.js';
 
 /** One source range that becomes one segment of the final reel. */
 export interface ReelRemotionSegment {
@@ -33,6 +34,7 @@ export interface ReelRemotionOptions {
   /** Output canvas height in pixels (default 1920). */
   canvasHeight?: number;
   logger: Logger;
+  reframeService?: IReframeService;
 }
 
 export interface ReelRemotionInput {
@@ -62,6 +64,8 @@ export interface ReelRemotionInput {
   themeSeed?: string;
   /** Channel watermark text. */
   channelName?: string;
+  /** Follow the primary detected face when rendering vertical reels. */
+  autoReframe?: boolean;
 }
 
 export interface ReelRemotionOutput {
@@ -220,6 +224,13 @@ export class ReelRemotionService {
                   end: segmentDuration,
                   narration: '',
                   source: { start: segment.start, end: segment.end },
+                  focusPoints: input.autoReframe && this.options.reframeService?.resolveTrajectory
+                    ? (await this.options.reframeService.resolveTrajectory(input.videoPath, segment.start, segment.end, 0.75)).points.filter((point) => point.confidence !== 0).map((point) => ({
+                        time: point.timestampSeconds - segment.start,
+                        x: point.focalPoint.x,
+                        y: point.focalPoint.y,
+                      }))
+                    : undefined,
                 },
               ],
               captions,

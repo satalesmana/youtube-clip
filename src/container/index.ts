@@ -12,7 +12,7 @@ import { HighlightService } from '../services/highlight.service.js';
 import { ClipRefinementService } from '../services/clip-refinement.service.js';
 import { SubtitleService } from '../services/subtitle.service.js';
 import { AssService } from '../services/ass.service.js';
-import { NoOpFaceDetectionService } from '../services/face-detection.service.js';
+import { OpenCvFaceDetectionService } from '../services/face-detection.service.js';
 import { FocalSmoothingService } from '../services/focal-smoothing.service.js';
 import { ReframeService } from '../services/reframe.service.js';
 import { SmartBrollProvider } from '../providers/broll/index.js';
@@ -240,7 +240,12 @@ const assService = new AssService({
   playResY: env.RENDER_OUTPUT_HEIGHT,
 });
 
-const faceDetectionService = new NoOpFaceDetectionService();
+const faceDetectionPython = process.env.PYTHON_BINARY ?? resolve(
+  rootDir,
+  '.venv',
+  process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python',
+);
+const faceDetectionService = new OpenCvFaceDetectionService(faceDetectionPython, createLogger('face-detection'));
 const focalSmoothingService = new FocalSmoothingService();
 
 const reframeService = new ReframeService(
@@ -721,6 +726,7 @@ export const reelRemotionService = new ReelRemotionService({
   canvasWidth: 1080,
   canvasHeight: 1920,
   logger: createLogger('reel-remotion'),
+  reframeService,
 });
 
 // --- Composition Engine (Sprint G) ---

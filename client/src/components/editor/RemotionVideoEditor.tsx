@@ -12,6 +12,7 @@ import type { useClipTransform } from '../../hooks/useClipTransform';
 import type { useAiProducer } from '../../hooks/useAiProducer';
 import { formatTimecode } from '../studio/studioUtils';
 import { resolveBrollMediaAsset, resolveStockBrollUrl } from '../../lib/stock-broll';
+import { api } from '../../services/api';
 
 
 // =============================================================================
@@ -190,6 +191,9 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
   // Canvas Overlay Editor
   const [canvasEditorOpen, setCanvasEditorOpen] = useState(false);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
+  const [faceFocusPoints, setFaceFocusPoints] = useState<Array<{ time: number; x: number; y: number }>>([]);
+  const [faceSourceAspectRatio, setFaceSourceAspectRatio] = useState(16 / 9);
+  const [faceFocusStatus, setFaceFocusStatus] = useState<'idle' | 'analyzing' | 'ready' | 'no-face' | 'error'>('idle');
 
   const fps = 30;
 
@@ -484,6 +488,37 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       ? `/api/media/${downloadedVideo.videoId}/downloads/${downloadedVideo.videoId}.mp4`
       : undefined);
 
+  useEffect(() => {
+    const videoId = downloadedVideo?.videoId;
+    const downloadUrl = `/api/media/${videoId}/downloads/${videoId}.mp4`;
+    const isOriginalSource = Boolean(videoSrc && (videoSrc === rawPreviewUrl || videoSrc.includes(downloadUrl)));
+    if (!transform.autoReframe || !videoId || !isOriginalSource || aspectRatio !== '9:16') {
+      setFaceFocusPoints([]);
+      setFaceFocusStatus('idle');
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    setFaceFocusPoints([]);
+    setFaceFocusStatus('analyzing');
+    api.analyzeFaceFocus({ videoId, start: clipStart, end: clipEnd }, controller.signal)
+      .then((analysis) => {
+        if (!active) return;
+        setFaceFocusPoints(analysis.points);
+        if (analysis.sourceAspectRatio) setFaceSourceAspectRatio(analysis.sourceAspectRatio);
+        setFaceFocusStatus(analysis.points.length > 0 ? 'ready' : 'no-face');
+      })
+      .catch(() => {
+        if (active) setFaceFocusStatus('error');
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [transform.autoReframe, downloadedVideo?.videoId, videoSrc, aspectRatio, clipStart, clipEnd]);
+
   const thumbnailUrl =
     activeClip?.thumbnailUrl ||
     downloadedVideo?.thumbnailUrl ||
@@ -614,12 +649,16 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       narrationVolume: 1,
       outputMode: transform.outputMode,
       videoStartFromSec: (videoSrc && videoSrc.includes('/downloads/')) ? clipStart : 0,
+      faceFocusPoints,
+      faceSourceAspectRatio,
       // Dynamic Styles & Universal Overlays
       dynamicStyles,
       dynamicOverlays,
     }),
     [
       videoSrc,
+      faceFocusPoints,
+      faceSourceAspectRatio,
       thumbnailUrl,
       videoDurationSec,
       aspectRatio,
@@ -1115,6 +1154,27 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               />
             </div>
           </div>
+
+          {transform.autoReframe && aspectRatio === '9:16' && (
+            <div
+              role="status"
+              style={{
+                width: '100%',
+                maxWidth: '340px',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                background: 'rgba(255,255,255,0.035)',
+                color: faceFocusStatus === 'error' ? '#FCA5A5' : 'var(--text-sub)',
+                fontSize: '11px',
+              }}
+            >
+              {faceFocusStatus === 'analyzing' && '⏳ Menganalisis wajah untuk live preview…'}
+              {faceFocusStatus === 'ready' && '✓ Tracking wajah aktif di live preview'}
+              {faceFocusStatus === 'no-face' && 'Tidak ada wajah terdeteksi; memakai framing tengah'}
+              {faceFocusStatus === 'error' && 'Analisis preview gagal; framing tengah digunakan'}
+              {faceFocusStatus === 'idle' && 'Tracking preview tersedia untuk video sumber vertikal'}
+            </div>
+          )}
 
           {/* Timecode & Clip Info under Player */}
           <div

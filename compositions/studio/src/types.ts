@@ -6,6 +6,8 @@ export type PlanScene = {
   end: number;
   narration: string;
   source?: { start: number; end: number };
+  /** Per-time normalized subject focus points used by auto-reframe. */
+  focusPoints?: Array<{ time: number; x: number; y: number }>;
   visual?: string;
   /** Engagement as short-form content (1-10), carried from the story beat. */
   engagementScore?: number;
