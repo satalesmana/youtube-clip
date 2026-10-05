@@ -7,7 +7,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
-import { getHeadlineLayout } from './layoutHelper';
+import { getHeadlineLayout, resolveCardBackdropStyle, type HookCardBackdrop } from './layoutHelper';
 
 const MAX_WORDS = 12;
 
@@ -17,6 +17,7 @@ interface SlideUpRendererProps {
   tag?: string;
   badgePresetId?: BadgePresetId;
   badgeColor?: string;
+  backdrop?: HookCardBackdrop;
   highlightWords?: string[];
   visualPreset: VisualPreset;
   durationFrames?: number;
@@ -28,6 +29,7 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
   tag,
   badgePresetId,
   badgeColor,
+  backdrop,
   highlightWords,
   visualPreset,
   durationFrames,
@@ -127,7 +129,7 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
             highlightMode={visualPreset.highlight}
             theme={theme}
             font={font}
-            fontSize={Math.round(54 * layoutStyle.fontSizeFactor)}
+            fontSize={Math.round(48 * layoutStyle.fontSizeFactor)}
             strokeWidth={2}
             underlineProgress={underlineProgress}
           />
@@ -136,25 +138,32 @@ export const SlideUpRenderer: React.FC<SlideUpRendererProps> = ({
     </div>
   );
 
+  const containerStyle = layoutStyle.containerStyle;
+
+  const cardBackdropStyle = resolveCardBackdropStyle(
+    backdrop ?? 'cinematic-banner',
+    theme,
+    width,
+    layoutStyle.cardStyle,
+  );
+
   return (
     <AbsoluteFill
       style={{
-        ...layoutStyle.containerStyle,
+        ...containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
-          ...layoutStyle.cardStyle,
+          ...cardBackdropStyle,
           opacity: finalOpacity,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: layoutStyle.alignItems,
           textAlign: layoutStyle.textAlign,
-          gap: 12,
-          borderRadius: 24,
-          background: layoutStyle.background || 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
+          gap: 10,
         }}
       >
         <HookTagPill

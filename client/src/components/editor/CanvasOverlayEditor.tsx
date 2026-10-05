@@ -163,8 +163,24 @@ const DraggableOverlayHandle: React.FC<OverlayHandleProps> = ({
 
     const onMouseMove = (ev: MouseEvent) => {
       if (!dragging.current) return;
-      const newX = clamp(dragStart.current.elX + ev.clientX - dragStart.current.mouseX, 0, canvasWidth);
-      const newY = clamp(dragStart.current.elY + ev.clientY - dragStart.current.mouseY, 0, canvasHeight);
+      let newX = clamp(dragStart.current.elX + ev.clientX - dragStart.current.mouseX, 0, canvasWidth);
+      let newY = clamp(dragStart.current.elY + ev.clientY - dragStart.current.mouseY, 0, canvasHeight);
+
+      // Magnetic Snapping (within 12px threshold)
+      const snapThresholdPx = 12;
+      // 1. Snap X to center (50%)
+      if (Math.abs(newX - 0.5 * canvasWidth) < snapThresholdPx) {
+        newX = 0.5 * canvasWidth;
+      }
+      // 2. Snap Y to key anchor levels (14% top safe, 38% optical hero center, 60% lower third)
+      const snapYTargets = [0.14 * canvasHeight, 0.38 * canvasHeight, 0.60 * canvasHeight];
+      for (const targetY of snapYTargets) {
+        if (Math.abs(newY - targetY) < snapThresholdPx) {
+          newY = targetY;
+          break;
+        }
+      }
+
       onPositionChange(newX, newY);
     };
     const onMouseUp = () => {
@@ -265,6 +281,7 @@ export const CanvasOverlayEditor: React.FC<CanvasOverlayEditorProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(true);
+  const [showSafeZone, setShowSafeZone] = useState(true);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const selectedOverlay = selectedId ? overlays.find((o) => o.id === selectedId) ?? null : null;
@@ -371,7 +388,7 @@ export const CanvasOverlayEditor: React.FC<CanvasOverlayEditorProps> = ({
             transition: 'background 0.15s ease',
           }}
         >
-          {/* Rule-of-thirds grid */}
+          {/* Rule-of-thirds grid & Platform Safe-Zone Guides */}
           <svg
             style={{
               position: 'absolute',
@@ -379,14 +396,44 @@ export const CanvasOverlayEditor: React.FC<CanvasOverlayEditorProps> = ({
               width: '100%',
               height: '100%',
               pointerEvents: 'none',
-              opacity: 0.12,
+              opacity: showSafeZone ? 0.38 : 0.12,
+              transition: 'opacity 0.2s ease',
             }}
           >
-            <line x1="33.33%" y1="0" x2="33.33%" y2="100%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" />
-            <line x1="66.66%" y1="0" x2="66.66%" y2="100%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" />
-            <line x1="0" y1="33.33%" x2="100%" y2="33.33%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" />
-            <line x1="0" y1="66.66%" x2="100%" y2="66.66%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" />
-            <circle cx="50%" cy="50%" r="3" stroke="#fff" strokeWidth="1" fill="none" />
+            {/* Rule of thirds */}
+            <line x1="33.33%" y1="0" x2="33.33%" y2="100%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
+            <line x1="66.66%" y1="0" x2="66.66%" y2="100%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
+            <line x1="0" y1="33.33%" x2="100%" y2="33.33%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
+            <line x1="0" y1="66.66%" x2="100%" y2="66.66%" stroke="#fff" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
+            <circle cx="50%" cy="50%" r="3" stroke="#fff" strokeWidth="1" fill="none" opacity="0.5" />
+
+            {/* Platform Safe-Zone Guides (TikTok / Reels / Shorts) */}
+            {showSafeZone && (
+              <>
+                {/* Center magnetic axis */}
+                <line x1="50%" y1="0" x2="50%" y2="100%" stroke="#00F0FF" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.6" />
+                {/* Optical Hero Center */}
+                <line x1="0" y1="38%" x2="100%" y2="38%" stroke="#00F0FF" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.5" />
+
+                {/* Top Safe Area Buffer (12% header) */}
+                <rect x="0" y="0" width="100%" height="12%" fill="rgba(255, 60, 60, 0.08)" stroke="#FF4D4D" strokeWidth="1" strokeDasharray="4 2" />
+                <text x="50%" y="8%" fill="#FF8080" fontSize="9" fontWeight="700" textAnchor="middle" opacity="0.85">
+                  ⚠️ Top Safe-Zone (12%)
+                </text>
+
+                {/* Bottom Safe Area Buffer (28% captions & sound) */}
+                <rect x="0" y="72%" width="100%" height="28%" fill="rgba(255, 60, 60, 0.08)" stroke="#FF4D4D" strokeWidth="1" strokeDasharray="4 2" />
+                <text x="50%" y="78%" fill="#FF8080" fontSize="9" fontWeight="700" textAnchor="middle" opacity="0.85">
+                  ⚠️ Bottom Safe-Zone: Subtitle & UI (28%)
+                </text>
+
+                {/* Right UI Buttons Buffer (18% lower right) */}
+                <rect x="82%" y="45%" width="18%" height="30%" fill="rgba(255, 180, 0, 0.08)" stroke="#FFB400" strokeWidth="1" strokeDasharray="3 3" />
+                <text x="91%" y="60%" fill="#FFD000" fontSize="7.5" fontWeight="700" textAnchor="middle" opacity="0.85">
+                  Buttons
+                </text>
+              </>
+            )}
           </svg>
 
           {/* Drop hint */}
@@ -468,18 +515,38 @@ export const CanvasOverlayEditor: React.FC<CanvasOverlayEditorProps> = ({
             justifyContent: 'space-between',
             pointerEvents: 'none',
           }}>
-            <span style={{
-              background: 'rgba(10,14,20,0.82)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              fontSize: '9.5px',
-              color: 'rgba(255,255,255,0.5)',
-              fontWeight: 600,
-            }}>
-              📐 {overlays.length} overlay · Rule-of-thirds grid
-              {selectedId && ` · ✓ ${selectedOverlay?.type} dipilih`}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                background: 'rgba(10,14,20,0.82)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                fontSize: '9.5px',
+                color: 'rgba(255,255,255,0.5)',
+                fontWeight: 600,
+              }}>
+                📐 {overlays.length} overlay
+                {selectedId && ` · ✓ ${selectedOverlay?.type} dipilih`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowSafeZone((v) => !v)}
+                style={{
+                  pointerEvents: 'auto',
+                  background: showSafeZone ? 'rgba(0,240,255,0.2)' : 'rgba(10,14,20,0.85)',
+                  border: `1px solid ${showSafeZone ? '#00F0FF' : 'rgba(255,255,255,0.2)'}`,
+                  borderRadius: '6px',
+                  padding: '3px 7px',
+                  fontSize: '9px',
+                  color: showSafeZone ? '#00F0FF' : 'rgba(255,255,255,0.6)',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                🛡️ Safe-Zone {showSafeZone ? 'ON' : 'OFF'}
+              </button>
+            </div>
             {selectedId && (
               <span style={{
                 background: 'rgba(239,68,68,0.2)',
@@ -778,6 +845,43 @@ export const CanvasOverlayEditor: React.FC<CanvasOverlayEditorProps> = ({
                   {anim}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Motion Personality */}
+          <div>
+            <label style={{ fontSize: '10px', color: 'var(--text-sub)', fontWeight: 700, display: 'block', marginBottom: '5px' }}>
+              Karakter Motion (Anti-Kaku):
+            </label>
+            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+              {[
+                { id: 'snappy', label: '⚡ Snappy Pop' },
+                { id: 'smooth', label: '🌊 Smooth' },
+                { id: 'editorial', label: '🏛️ Editorial' },
+                { id: 'floating', label: '🎈 Floating' },
+              ].map((p) => {
+                const isSelected = ((selectedOverlay as any).personality || 'snappy') === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleInspectorChange({ personality: p.id } as any)}
+                    style={{
+                      background: isSelected ? 'rgba(0, 240, 255, 0.2)' : 'rgba(255,255,255,0.06)',
+                      border: isSelected ? '1.5px solid #00F0FF' : '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '6px',
+                      padding: '4px 9px',
+                      fontSize: '10px',
+                      color: isSelected ? '#00F0FF' : 'rgba(255,255,255,0.55)',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      transition: 'all 0.12s ease',
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

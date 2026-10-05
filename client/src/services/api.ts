@@ -548,6 +548,7 @@ export const api = {
         ttsRate: payload.ttsRate,
         sourceVolume: payload.sourceVolume,
         selectedClips: payload.selectedClips,
+        timelineOffsetSec: payload.timelineOffsetSec,
         customHook: payload.customHook,
         hookTitle: payload.hookTitle,
         hookTag: payload.hookTag,
@@ -559,22 +560,25 @@ export const api = {
         hookTypography: payload.hookTypography,
         hookBadgePreset: payload.hookBadgePreset,
         hookBadgeColor: payload.hookBadgeColor,
+        hookBackdrop: payload.hookBackdrop,
         enableBroll: payload.enableBroll,
         autoReframe: payload.autoReframe,
         brollPlacements: payload.brollPlacements,
+        enableHookIntro: payload.enableHookIntro,
+        hookDuration: payload.hookDuration,
+        hookStartSec: payload.hookStartSec,
         enableIntroOutro: payload.enableIntroOutro,
         outroPreset: payload.outroPreset,
         outroCtaText: payload.outroCtaText,
         outroButtonText: payload.outroButtonText,
         outroDuration: payload.outroDuration,
+        outroStartSec: payload.outroStartSec,
         outroChannelName: payload.outroChannelName,
         outroLogoUrl: payload.outroLogoUrl,
         channel: payload.channel,
         sourceRange:
-          payload.sourceRange
+          payload.enableHookIntro !== false && payload.sourceRange
             ? payload.sourceRange
-            : payload.start !== undefined && payload.end !== undefined
-            ? { start: payload.start, end: payload.end }
             : undefined,
       }),
     });

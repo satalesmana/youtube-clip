@@ -20,6 +20,7 @@ export interface ReelComposerOptions {
 export interface ReelSegment {
   start: number;
   end: number;
+  kind?: 'intro' | 'clip' | 'gap';
   /**
    * Pre-made segment file (e.g. the styled hook intro `final-hook-NN.mp4` or outro card)
    * used verbatim instead of cutting the source video. When set, `start`/
@@ -132,7 +133,20 @@ export class ReelComposerService {
         const crop = effectiveCrops[index];
         const brollList = effectiveBrolls[index];
 
-        if (segment.filePath) {
+        if (segment.kind === 'gap') {
+          const gapDuration = Math.max(0.05, segment.end - segment.start);
+          await runCommand(ffmpeg, [
+            '-y',
+            '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=30:d=${gapDuration.toFixed(3)}`,
+            '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
+            '-t', gapDuration.toFixed(3),
+            '-map', '0:v:0', '-map', '1:a:0',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+            '-c:a', 'aac', '-b:a', '160k', '-ac', '2',
+            '-video_track_timescale', '90000',
+            partPath,
+          ]);
+        } else if (segment.filePath) {
           // Pre-made segment (styled hook intro or outro card): scale to the canvas,
           // keep its styling, and replace audio with silence so the concat stays uniform.
           const vf = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`;

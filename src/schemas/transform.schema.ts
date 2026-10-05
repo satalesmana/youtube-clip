@@ -93,6 +93,8 @@ export const transformRequestSchema = z.object({
     end: z.number().min(0),
     title: z.string().optional(),
   })).min(1).optional(),
+  /** Additional output-timeline offset for the edited primary video section. */
+  timelineOffsetSec: z.number().min(0).max(3600).optional(),
   /**
    * Optional target narration / video duration in seconds.
    * If omitted, automatically derived from selectedClips, hook sourceRange,
@@ -200,6 +202,26 @@ export const transformRequestSchema = z.object({
     'auto',
   ] as const).optional(),
 
+  /**
+   * Hook card backdrop style:
+   * 'cinematic-banner' | 'frosted-glass' | 'solid-dark' | 'neon-glow' | 'minimal-shadow'
+   */
+  hookBackdrop: z.enum([
+    'cinematic-banner',
+    'frosted-glass',
+    'solid-dark',
+    'neon-glow',
+    'minimal-shadow',
+  ] as const).optional(),
+
+  /** If true, renders the hook intro card / segment. Defaults to true. */
+  enableHookIntro: z.boolean().optional(),
+  /** Duration in seconds for the hook intro segment (0.5 - 15s). Default 3.5s. */
+  hookDuration: z.number().min(0.5).max(15).optional(),
+  /** Timeline position in seconds where the hook intro begins. */
+  hookStartSec: z.number().min(0).max(3600).optional(),
+  /** Output video canvas aspect ratio ('9:16' | '16:9' | '1:1'). Default '9:16'. */
+  aspectRatio: z.enum(['9:16', '16:9', '1:1']).optional(),
   /** If true, the response includes the script and video plan for review. */
   dryRun: z.boolean().default(false),
 
@@ -382,6 +404,8 @@ export const transformRequestSchema = z.object({
   outroButtonText: z.string().max(80).optional(),
   /** Target duration in seconds for the outro card (1–10s, default 3s). */
   outroDuration: z.number().min(1).max(10).optional(),
+  /** Timeline position in seconds where the outro CTA begins. */
+  outroStartSec: z.number().min(0).max(3600).optional(),
   /** Custom channel name / handle for the outro card (e.g. "@kreator" or "Channel Name"). */
   outroChannelName: z.string().max(100).optional(),
   /** Custom channel logo image URL, base64 data URL, or local file path for the outro card. */

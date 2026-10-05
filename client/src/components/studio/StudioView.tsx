@@ -127,6 +127,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
     setSelectedHookBadgePreset,
     selectedHookBadgeColor,
     setSelectedHookBadgeColor,
+    selectedHookBackdrop,
+    setSelectedHookBackdrop,
     startGenerateClips,
     refreshClips,
     rerenderClipPreviews,
@@ -148,6 +150,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const [playingHookIndex, setPlayingHookIndex] = useState<number | null>(null);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [previewModalClip, setPreviewModalClip] = useState<{ clip: ViralClip; idx: number } | null>(null);
+  const [isRenderOutputOpen, setIsRenderOutputOpen] = useState(false);
   const [previewModalHook, setPreviewModalHook] = useState<{ hook: ViralHook; idx: number } | null>(null);
   const [inlineProgress, setInlineProgress] = useState<{ [idx: number]: number }>({});
   const [inlineHookProgress, setInlineHookProgress] = useState<{ [idx: number]: number }>({});
@@ -358,6 +361,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
         setSelectedHookBadgePreset={setSelectedHookBadgePreset}
         selectedHookBadgeColor={selectedHookBadgeColor}
         setSelectedHookBadgeColor={setSelectedHookBadgeColor}
+        selectedHookBackdrop={selectedHookBackdrop}
+        setSelectedHookBackdrop={setSelectedHookBackdrop}
         runningTransform={runningTransform}
         selectedHookIndex={selectedHookIndex}
         hooks={hooks}
@@ -409,14 +414,16 @@ export const StudioView: React.FC<StudioViewProps> = ({
           transform={transform}
           producer={producer}
           onOpenFullProducerDrawer={() => setIsProducerOpen(true)}
+          onOpenRenderedOutput={() => setIsRenderOutputOpen(true)}
         />
         </Suspense>
       )}
 
       {/* STEP 4: Master Output */}
       <Step4Output
-        step={step}
-        setStep={handleStepChange}
+        isOpen={isRenderOutputOpen}
+        onClose={() => setIsRenderOutputOpen(false)}
+        setStep={(nextStep) => { setIsRenderOutputOpen(false); handleStepChange(nextStep); }}
         transformResult={transformResult}
         transformError={transformError}
         runningTransform={runningTransform}

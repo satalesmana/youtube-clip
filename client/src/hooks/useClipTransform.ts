@@ -13,6 +13,7 @@ import type {
   TypographyVariant,
   BadgePresetId,
   BadgeColorVariant,
+  HookCardBackdrop,
   OutroPresetId,
   TranscriptResult,
   SubtitleSize,
@@ -21,6 +22,26 @@ import type { DynamicOverlayItem } from '../types/producer';
 import { resolvePresetIdFromHook } from '../lib/visual-presets';
 import { resolveClientOutroPreset } from '../lib/outro-presets';
 import { AUDIO_CATALOG, type MusicTrack } from '../lib/audio-catalog';
+
+export interface StartTransformOverrides {
+  clips?: ViralClip[];
+  selectedClips?: Array<{ start: number; end: number; title?: string }>;
+  start?: number;
+  end?: number;
+  enableHookIntro?: boolean;
+  hookDuration?: number;
+  hookStartSec?: number;
+  /** Additional output-timeline offset applied when the main video section is moved. */
+  timelineOffsetSec?: number;
+  enableIntroOutro?: boolean;
+  outroDuration?: number;
+  outroStartSec?: number;
+  templateId?: string;
+  subtitleSize?: SubtitleSize;
+  aspectRatio?: '9:16' | '16:9' | '1:1';
+  sourceVolume?: number;
+  brollPlacements?: BrollPlacementItem[];
+}
 
 export function useClipTransform() {
   const [step, setStep] = useState<number>(1);
@@ -244,6 +265,11 @@ export function useClipTransform() {
    * 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto'
    */
   const [selectedHookBadgeColor, setSelectedHookBadgeColor] = useState<BadgeColorVariant>('auto');
+  /**
+   * Hook card backdrop style:
+   * 'cinematic-banner' | 'frosted-glass' | 'solid-dark' | 'neon-glow' | 'minimal-shadow'
+   */
+  const [selectedHookBackdrop, setSelectedHookBackdrop] = useState<HookCardBackdrop>('cinematic-banner');
 
   // Full Transform
   const [runningTransform, setRunningTransform] = useState(false);
@@ -709,7 +735,7 @@ export function useClipTransform() {
     }
   }, [step, enableBroll, brollPlacements.length, url, downloadedVideo?.videoId, fetchBrollSuggestions]);
 
-  const startTransform = useCallback(async () => {
+  const startTransform = useCallback(async (overrides?: StartTransformOverrides) => {
     const targetUrl = url.trim();
     if (!targetUrl) throw new Error('Masukkan URL video');
 
@@ -718,27 +744,64 @@ export function useClipTransform() {
     setProgressPct(10);
     setProgressLabel('Memulai pipeline transformasi…');
 
+    const effectiveClips = overrides?.clips ?? clips;
+    const effectiveIndices = selectedClipIndices.length > 0
+      ? selectedClipIndices
+      : (effectiveClips.length > 0 ? [0] : []);
+
     // Build selectedClips in user-click order.
     // Both reel and narration mode receive the full list; backend resolves
     // multi-clip concatenation for reel, and derives duration/context for narration.
-    const selectedClipsPayload = selectedClipIndices
-      .map((idx) => clips[idx])
-      .filter((c): c is ViralClip => Boolean(c))
-      .map((c) => ({ start: c.start, end: c.end, title: c.title }));
+    const selectedClipsPayload = overrides?.selectedClips ?? (
+      effectiveIndices
+        .map((idx) => effectiveClips[idx])
+        .filter((c): c is ViralClip => Boolean(c))
+        .map((c) => ({ start: c.start, end: c.end, title: c.title }))
+    );
 
-    // For narration mode with multiple clips: send all as selectedClips[] so
-    // the backend can derive the total duration and build a multi-segment script.
-    // For reel mode: backend concatenates them in order.
     const selectedClipsToSend = selectedClipsPayload.length > 0 ? selectedClipsPayload : undefined;
 
     // Use first selected clip for legacy start/end fields (single-clip compat).
-    const primaryClip = selectedClipIndices.length > 0 ? clips[selectedClipIndices[0]!] : undefined;
+    const primaryClip = overrides?.start !== undefined && overrides?.end !== undefined
+      ? { start: overrides.start, end: overrides.end }
+      : (selectedClipsPayload.length > 0
+          ? selectedClipsPayload[0]
+          : (effectiveIndices.length > 0 ? effectiveClips[effectiveIndices[0]!] : undefined));
+
+    const effectiveEnableHookIntro = overrides?.enableHookIntro !== undefined
+      ? overrides.enableHookIntro
+      : enableHookIntro;
+
+    const effectiveEnableIntroOutro = overrides?.enableIntroOutro !== undefined
+      ? overrides.enableIntroOutro
+      : enableIntroOutro;
+
+    const effectiveOutroDuration = overrides?.outroDuration !== undefined
+      ? overrides.outroDuration
+      : outroDuration;
+
+    const effectiveHookDuration = overrides?.hookDuration !== undefined
+      ? overrides.hookDuration
+      : undefined;
+    const effectiveHookStartSec = overrides?.hookStartSec;
+    const effectiveOutroStartSec = overrides?.outroStartSec;
+
+    const effectiveTemplateId = overrides?.templateId ?? templateId;
+    const effectiveSubtitleSize = overrides?.subtitleSize ?? subtitleSize;
+    const effectiveAspectRatio = overrides?.aspectRatio ?? aspectRatio;
+    const effectiveSourceVolume = overrides?.sourceVolume !== undefined
+      ? overrides.sourceVolume
+      : sourceVolume;
+
+    const effectiveBrolls = overrides?.brollPlacements !== undefined
+      ? overrides.brollPlacements
+      : (enableBroll && brollPlacements.length > 0 ? brollPlacements : undefined);
 
     const selectedHook = selectedHookIndex !== null ? hooks[selectedHookIndex] : undefined;
-    const effectiveHookText = enableHookIntro
+    const effectiveHookText = effectiveEnableHookIntro
       ? (customHookText.trim() || selectedHook?.hookText || undefined)
       : undefined;
-    const effectiveHookTag = enableHookIntro
+    const effectiveHookTag = effectiveEnableHookIntro
       ? (customHookTag.trim() || selectedHook?.tag || undefined)
       : undefined;
 
@@ -754,53 +817,59 @@ export function useClipTransform() {
       const res = await api.runTransform({
         url: targetUrl,
         language,
-        templateId,
-        subtitleSize,
+        templateId: effectiveTemplateId,
+        subtitleSize: effectiveSubtitleSize,
         audioMode,
-        aspectRatio,
+        aspectRatio: effectiveAspectRatio,
         enableBroll,
         autoReframe,
-        brollPlacements: enableBroll && brollPlacements.length > 0 ? brollPlacements : undefined,
-        enableIntroOutro,
-        outroPreset: enableIntroOutro ? outroPreset : undefined,
-        outroCtaText: enableIntroOutro ? effectiveCta : undefined,
-        outroButtonText: enableIntroOutro ? effectiveBtn : undefined,
-        outroDuration: enableIntroOutro ? outroDuration : undefined,
-        outroChannelName: enableIntroOutro ? effectiveChannelName : undefined,
-        outroLogoUrl: enableIntroOutro && outroLogoUrl ? outroLogoUrl : undefined,
+        brollPlacements: effectiveBrolls,
+        enableHookIntro: effectiveEnableHookIntro,
+        hookDuration: effectiveEnableHookIntro ? effectiveHookDuration : undefined,
+        hookStartSec: effectiveEnableHookIntro ? effectiveHookStartSec : undefined,
+        timelineOffsetSec: overrides?.timelineOffsetSec,
+        enableIntroOutro: effectiveEnableIntroOutro,
+        outroPreset: effectiveEnableIntroOutro ? outroPreset : undefined,
+        outroCtaText: effectiveEnableIntroOutro ? effectiveCta : undefined,
+        outroButtonText: effectiveEnableIntroOutro ? effectiveBtn : undefined,
+        outroDuration: effectiveEnableIntroOutro ? effectiveOutroDuration : undefined,
+        outroStartSec: effectiveEnableIntroOutro ? effectiveOutroStartSec : undefined,
+        outroChannelName: effectiveEnableIntroOutro ? effectiveChannelName : undefined,
+        outroLogoUrl: effectiveEnableIntroOutro && outroLogoUrl ? outroLogoUrl : undefined,
         channel: effectiveChannelName ? { name: effectiveChannelName } : undefined,
         whisperProvider,
         sttProvider: whisperProvider,
         customPrompt: customPrompt.trim() || undefined,
-        clipIndex: selectedClipIndex ?? undefined,
+        clipIndex: selectedClipIndex ?? (effectiveIndices[0] ?? undefined),
         start: primaryClip?.start,
         end: primaryClip?.end,
         outputMode,
         genre: genre !== 'auto' ? genre : undefined,
         customScript: outputMode === 'narration' && scriptDraft ? scriptDraft : undefined,
         ttsVoice: outputMode === 'narration' ? ttsVoice : undefined,
-        sourceVolume: outputMode === 'narration' ? sourceVolume : undefined,
+        sourceVolume: outputMode === 'narration' ? effectiveSourceVolume : undefined,
         outputLanguage: outputMode === 'narration' ? outputLanguage : undefined,
         customHook: effectiveHookText,
         hookTitle: effectiveHookText,
         hookTag: effectiveHookTag,
         hookHighlightWords: selectedHook?.highlightWords,
         hookPreviewPath: selectedHook?.previewPath,
-        sourceRange: selectedHook?.source ? { start: selectedHook.source.start, end: selectedHook.source.end } : undefined,
+        sourceRange: effectiveEnableHookIntro && selectedHook?.source ? { start: selectedHook.source.start, end: selectedHook.source.end } : undefined,
         selectedClips: selectedClipsToSend,
         // Visual preset: pass selected visual preset, or resolve from hook if 'auto'
-        visualPreset: enableHookIntro
+        visualPreset: effectiveEnableHookIntro
           ? selectedVisualPreset !== 'auto'
             ? selectedVisualPreset
             : selectedHook
             ? resolvePresetIdFromHook(selectedHook.hookType, (selectedHook as any)?.angle ?? (selectedHook as any)?.hookAngle)
             : 'kinetic-punch'
           : undefined,
-        hookLayout: enableHookIntro && selectedHookLayout !== 'auto' ? selectedHookLayout : undefined,
-        hookAnimation: enableHookIntro && selectedHookAnimation !== 'auto' ? selectedHookAnimation : undefined,
-        hookTypography: enableHookIntro && selectedHookTypography !== 'auto' ? selectedHookTypography : undefined,
-        hookBadgePreset: enableHookIntro ? selectedHookBadgePreset : undefined,
-        hookBadgeColor: enableHookIntro && selectedHookBadgeColor !== 'auto' ? selectedHookBadgeColor : undefined,
+        hookLayout: effectiveEnableHookIntro && selectedHookLayout !== 'auto' ? selectedHookLayout : undefined,
+        hookAnimation: effectiveEnableHookIntro && selectedHookAnimation !== 'auto' ? selectedHookAnimation : undefined,
+        hookTypography: effectiveEnableHookIntro && selectedHookTypography !== 'auto' ? selectedHookTypography : undefined,
+        hookBadgePreset: effectiveEnableHookIntro ? selectedHookBadgePreset : undefined,
+        hookBadgeColor: effectiveEnableHookIntro && selectedHookBadgeColor !== 'auto' ? selectedHookBadgeColor : undefined,
+        hookBackdrop: effectiveEnableHookIntro ? selectedHookBackdrop : undefined,
       });
 
       setProgressPct(100);
@@ -847,6 +916,9 @@ export function useClipTransform() {
     selectedHookLayout,
     selectedHookAnimation,
     selectedHookTypography,
+    selectedHookBadgePreset,
+    selectedHookBadgeColor,
+    selectedHookBackdrop,
   ]);
 
   return {
@@ -965,6 +1037,8 @@ export function useClipTransform() {
     setSelectedHookBadgePreset,
     selectedHookBadgeColor,
     setSelectedHookBadgeColor,
+    selectedHookBackdrop,
+    setSelectedHookBackdrop,
     startGenerateClips,
     refreshClips,
     rerenderClipPreviews,

@@ -86,6 +86,16 @@ export type BadgeColorVariant =
   | 'auto';
 
 /**
+ * Hook Card Backdrop style options.
+ */
+export type HookCardBackdrop =
+  | 'cinematic-banner'
+  | 'frosted-glass'
+  | 'solid-dark'
+  | 'neon-glow'
+  | 'minimal-shadow';
+
+/**
  * A user can either pick an explicit preset or let the AI auto-resolve.
  * 'auto' is a UI-only sentinel — it is NOT sent to the server.
  * When 'auto' is selected, `visualPreset` is omitted from the API payload.
@@ -212,11 +222,16 @@ export interface TransformRequest {
   enableBroll?: boolean;
   autoReframe?: boolean;
   brollPlacements?: BrollPlacementItem[];
+  enableHookIntro?: boolean;
+  hookDuration?: number;
+  hookStartSec?: number;
+  timelineOffsetSec?: number;
   enableIntroOutro?: boolean;
   outroPreset?: OutroPresetId;
   outroCtaText?: string;
   outroButtonText?: string;
   outroDuration?: number;
+  outroStartSec?: number;
   outroChannelName?: string;
   outroLogoUrl?: string;
   channel?: { name: string; logo?: string };
@@ -259,6 +274,8 @@ export interface TransformRequest {
   hookBadgePreset?: BadgePresetId;
   /** Optional user override for badge pill color variant. */
   hookBadgeColor?: BadgeColorVariant;
+  /** Optional user override for hook card backdrop style. */
+  hookBackdrop?: HookCardBackdrop;
 }
 
 export interface TransformProgress {

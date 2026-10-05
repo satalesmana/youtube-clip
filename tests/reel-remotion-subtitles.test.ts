@@ -174,4 +174,83 @@ test('Reel Remotion Subtitles Test Suite', async (t) => {
     assert.equal(result.outputMode, 'reel');
     assert.equal((result as any).outputVideo.path, '/dummy/output/reel.mp4');
   });
+
+  await t.test('4. TransformController forwards outro configuration to ReelRemotionService when enableIntroOutro is active', async () => {
+    const { TransformController } = await import('../src/controllers/transform.controller.js');
+
+    let passedInput: any = null;
+    const mockReelRemotionService: any = {
+      compose: async (input: any) => {
+        passedInput = input;
+        return {
+          path: '/dummy/output/reel-with-outro.mp4',
+          durationSeconds: 18,
+          sizeBytes: 1200000,
+        };
+      },
+    };
+
+    const mockTranscriptDoc = {
+      videoId: 'test_vid_outro',
+      language: 'id',
+      durationSeconds: 60,
+      segments: mockTranscript.segments,
+    };
+
+    const deps: any = {
+      youtubeService: {},
+      transcriptService: {
+        loadTranscript: async () => mockTranscriptDoc,
+      },
+      whisperService: {},
+      contentAngleService: {},
+      scriptService: {},
+      ttsService: {},
+      videoPlanService: {},
+      storyService: {},
+      templateService: {},
+      templateRendererService: {},
+      assService: {},
+      subtitleService,
+      outputsDir: '/tmp',
+      logger,
+      assStyle: {},
+      compositionEngine: {},
+      reelRemotionService: mockReelRemotionService,
+    };
+
+    const controller = new TransformController(deps);
+    (controller as any).loadTranscriptForVideoId = async () => mockTranscriptDoc;
+    (controller as any).resolveTranscriptAndVideo = async () => ({
+      videoId: 'test_vid_outro',
+      videoPath: '/tmp/test_vid_outro.mp4',
+      transcript: mockTranscriptDoc,
+    });
+    (controller as any).toMediaUrl = (path: string) => `http://localhost/media/${path}`;
+
+    const result = await controller.transform({
+      videoId: 'test_vid_outro',
+      outputMode: 'reel',
+      selectedClips: [
+        { start: 10, end: 14, title: 'Clip 1' },
+      ],
+      enableIntroOutro: true,
+      outroPreset: 'comment-debate',
+      outroCtaText: 'Tulis tanggapanmu di komentar!',
+      outroButtonText: 'KOMENTAR SEKARANG',
+      outroDuration: 4,
+      outroChannelName: 'Aladin Studio',
+      generateCaptions: false,
+    });
+
+    assert.ok(passedInput, 'Input must be passed to compose');
+    assert.equal(passedInput.enableIntroOutro, true, 'enableIntroOutro must be true');
+    assert.equal(passedInput.outroPreset, 'comment-debate');
+    assert.equal(passedInput.outroCtaText, 'Tulis tanggapanmu di komentar!');
+    assert.equal(passedInput.outroButtonText, 'KOMENTAR SEKARANG');
+    assert.equal(passedInput.outroDuration, 4);
+    assert.equal(passedInput.outroChannelName, 'Aladin Studio');
+    assert.equal((result as any).reel.hasOutro, true, 'result.reel.hasOutro must be true');
+  });
 });
+

@@ -5728,54 +5728,463 @@ textarea:focus {
 }
 
 /* ── Live Remotion editor layout ─────────────────────────────── */
+/* ── Remotion Video Editor Shell ─────────────────────────────── */
 .remotion-editor-shell {
-  padding: clamp(14px, 2vw, 24px) !important;
-  border-color: var(--border) !important;
-  background: linear-gradient(145deg, #121b24 0%, #0d141c 100%) !important;
-  box-shadow: var(--shadow-md) !important;
+  padding: 0 !important;
+  border: 1.5px solid rgba(50, 130, 184, 0.22) !important;
+  border-radius: var(--radius-xl) !important;
+  background: linear-gradient(160deg, #0e1820 0%, #0a1118 60%, #0d131a 100%) !important;
+  box-shadow: 0 2px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+  overflow: hidden;
+  margin-bottom: 28px;
 }
 
-.remotion-editor-workspace {
-  align-items: start !important;
-  gap: clamp(14px, 1.6vw, 20px) !important;
+/* ── Editor Header Bar ──────────────────────────────────────── */
+.remotion-editor-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(50, 130, 184, 0.14);
+  background: linear-gradient(90deg, rgba(15, 76, 117, 0.12) 0%, transparent 60%);
 }
 
+.remotion-editor-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.remotion-editor-header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #0F4C75, #3282B8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 4px 14px rgba(50, 130, 184, 0.45);
+  flex-shrink: 0;
+}
+
+.remotion-editor-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #FFFFFF;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.remotion-editor-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(50, 130, 184, 0.18);
+  border: 1px solid rgba(50, 130, 184, 0.45);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 10px;
+  color: #BBE1FA;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.remotion-editor-status-badge.is-rendered {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6EE7B7;
+}
+
+.remotion-editor-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #3282B8;
+  animation: editor-dot-pulse 2s ease-in-out infinite;
+}
+
+.remotion-editor-status-badge.is-rendered .remotion-editor-status-dot {
+  background: #10B981;
+}
+
+@keyframes editor-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
+
+.remotion-editor-subtitle {
+  font-size: 11.5px;
+  color: var(--text-sub);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* ── Header Right Actions ───────────────────────────────────── */
 .remotion-editor-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
+.remotion-editor-format-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(50, 130, 184, 0.2);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.remotion-editor-format-btn {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-sub);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.remotion-editor-format-btn.is-active {
+  background: var(--accent);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(50, 130, 184, 0.4);
+}
+
+.remotion-editor-format-btn:hover:not(.is-active) {
+  background: rgba(50, 130, 184, 0.12);
+  color: #FFFFFF;
+}
+
+.remotion-editor-preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(50, 130, 184, 0.2);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.remotion-editor-preview-btn {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-sub);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.remotion-editor-preview-btn.is-active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6EE7B7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.remotion-editor-preview-btn:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #FFFFFF;
+}
+
+.remotion-editor-output-btn {
+  border: 1px solid rgba(50, 130, 184, 0.35);
+  border-radius: 9px;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(50, 130, 184, 0.08);
+  color: var(--accent);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.remotion-editor-output-btn:hover:not(:disabled) {
+  background: rgba(50, 130, 184, 0.18);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.remotion-editor-output-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .remotion-editor-render-button {
   border: 0;
-  border-radius: var(--radius-md);
-  padding: 7px 14px;
-  background: var(--accent);
+  border-radius: 9px;
+  padding: 7px 16px;
+  background: linear-gradient(135deg, #1565a8, #3282B8);
   color: #fff;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: all 0.18s ease;
+  box-shadow: 0 4px 14px rgba(50, 130, 184, 0.35);
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.01em;
+}
+
+.remotion-editor-render-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.08), transparent);
+  pointer-events: none;
 }
 
 .remotion-editor-render-button:hover:not(:disabled) {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #1a72bb, #3B95D1);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(50, 130, 184, 0.5);
 }
 
 .remotion-editor-render-button:disabled {
   cursor: wait;
-  opacity: 0.7;
+  opacity: 0.65;
+  transform: none;
 }
 
+/* ── Status Bar ─────────────────────────────────────────────── */
+.remotion-editor-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(50, 130, 184, 0.1);
+  font-size: 12px;
+  position: relative;
+}
+
+.remotion-editor-status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.remotion-editor-preset-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: transparent;
+  color: #b8a4fb;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.remotion-editor-preset-toggle:hover,
+.remotion-editor-preset-toggle.is-open {
+  background: rgba(139, 92, 246, 0.14);
+  border-color: rgba(139, 92, 246, 0.55);
+  color: #c8b7ff;
+}
+
+/* ── Navigation Divider ─────────────────────────────────────── */
+.remotion-editor-nav-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── Header Tabs (Next to Preset Library) ──────────────────── */
+.remotion-editor-header-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.28);
+  padding: 3px 4px;
+  border-radius: 9px;
+  border: 1px solid rgba(50, 130, 184, 0.18);
+}
+
+.remotion-editor-header-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94A3B8;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+
+.remotion-editor-header-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #F1F5F9;
+}
+
+.remotion-editor-header-tab.is-active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(109, 40, 217, 0.18));
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #E9D5FF;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.remotion-editor-tab-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.remotion-editor-tab-label {
+  line-height: 1;
+}
+
+/* ── Preset Library Popover ────────────────────────────────── */
+.remotion-editor-preset-popover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  left: 20px;
+  width: min(400px, calc(100vw - 40px));
+  height: min(560px, 72vh);
+  padding: 8px;
+  border: 1px solid rgba(50, 130, 184, 0.25);
+  border-radius: 14px;
+  background: #0e1820;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ── Workspace Body ─────────────────────────────────────────── */
+.remotion-editor-workspace-body {
+  padding: 16px 20px 20px;
+}
+
+.remotion-editor-workspace {
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 360px) !important;
+  align-items: stretch !important;
+  gap: 16px !important;
+}
+
+.remotion-editor-mobile-switcher { display: none; }
+
+/* ── Stage Column (left: canvas + timeline) ─────────────────── */
 .remotion-editor-stage-column {
   align-items: stretch !important;
+  gap: 14px !important;
 }
 
+/* ── Canvas Stage ───────────────────────────────────────────── */
 .remotion-editor-canvas-stage {
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42) !important;
+  box-shadow: 0 0 0 1px rgba(50, 130, 184, 0.18), 0 20px 56px rgba(0, 0, 0, 0.55) !important;
+  transition: box-shadow 0.25s ease, border-color 0.2s ease !important;
 }
 
+.remotion-editor-canvas-stage:hover {
+  box-shadow: 0 0 0 1px rgba(50, 130, 184, 0.3), 0 24px 64px rgba(0, 0, 0, 0.65) !important;
+}
+
+/* ── Tool Rail (vertical tab sidebar) ──────────────────────── */
+.remotion-editor-tool-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 5px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(50, 130, 184, 0.14);
+  border-radius: 14px;
+  align-self: flex-start;
+  position: sticky;
+  top: 16px;
+}
+
+.remotion-editor-tool-rail button {
+  display: flex;
+  min-height: 54px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #6b7289;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  position: relative;
+  width: 52px;
+}
+
+.remotion-editor-tool-rail button > span {
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.remotion-editor-tool-rail button small {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: color 0.18s ease;
+}
+
+.remotion-editor-tool-rail button:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #b8a4fb;
+}
+
+.remotion-editor-tool-rail button:hover > span {
+  transform: scale(1.1);
+}
+
+.remotion-editor-tool-rail button.is-active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(109, 40, 217, 0.14));
+  border-color: rgba(139, 92, 246, 0.45);
+  color: #c8b7ff;
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.remotion-editor-tool-rail button.is-active::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 25%;
+  height: 50%;
+  width: 3px;
+  background: linear-gradient(180deg, #8B5CF6, #6D28D9);
+  border-radius: 0 3px 3px 0;
+}
+
+.remotion-editor-tool-rail-divider {
+  height: 1px;
+  background: rgba(50, 130, 184, 0.12);
+  margin: 2px 6px;
+}
+
+/* ── Inspector Panel (right column) ────────────────────────── */
 .remotion-editor-inspector {
   position: sticky;
   top: 16px;
@@ -5783,8 +6192,60 @@ textarea:focus {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: var(--border-focus) transparent;
-  box-shadow: var(--shadow-sm) !important;
+  scrollbar-color: rgba(50, 130, 184, 0.3) transparent;
+  box-shadow: none !important;
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(50, 130, 184, 0.14);
+}
+
+.remotion-editor-inspector-header {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(50, 130, 184, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 76, 117, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  backdrop-filter: blur(14px);
+}
+
+.remotion-editor-inspector-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: 0.01em;
+}
+
+.remotion-editor-inspector-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.remotion-editor-section-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.remotion-editor-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(50, 130, 184, 0.12);
 }
 
 .remotion-editor-inspector-tabs {
@@ -5794,27 +6255,116 @@ textarea:focus {
   backdrop-filter: blur(14px);
 }
 
+/* ── Preset Card Enhanced ───────────────────────────────────── */
+.editor-preset-card {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1.5px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-preset-card:hover {
+  border-color: rgba(50, 130, 184, 0.4);
+  background: rgba(50, 130, 184, 0.05);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.editor-preset-card.is-active {
+  background: rgba(50, 130, 184, 0.12);
+  border-color: rgba(50, 130, 184, 0.6);
+  box-shadow: 0 0 16px rgba(50, 130, 184, 0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* ── Canvas Face Focus Status ───────────────────────────────── */
+.remotion-editor-face-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  color: var(--text-sub);
+  width: 100%;
+}
+
+/* ── Error Banner ───────────────────────────────────────────── */
+.remotion-editor-error-banner {
+  margin: 0 20px 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  border-radius: 10px;
+  padding: 12px 16px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 1450px) {
+  .remotion-editor-workspace { grid-template-columns: minmax(0, 1fr) 58px 290px !important; }
+}
+
 @media (max-width: 1200px) {
   .remotion-editor-workspace {
     grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .remotion-editor-mobile-switcher {
+    display: flex;
+    grid-row: 1;
+    gap: 8px;
+  }
+  .remotion-editor-mobile-switcher button {
+    padding: 8px 12px;
+    border: 1px solid #393847;
+    border-radius: 8px;
+    background: #20212b;
+    color: #e8e5f4;
+    font-size: 11px;
+  }
+  .remotion-editor-stage-column { grid-row: 2; }
+  .remotion-editor-inspector { display: none; }
+  .remotion-editor-inspector.is-mobile-open {
+    display: flex;
+    grid-row: 3;
   }
 
   .remotion-editor-inspector {
     position: static;
-    max-height: none;
-    overflow: visible;
+    max-height: min(70vh, 640px);
+    overflow: auto;
   }
 
-  .remotion-editor-inspector-tabs {
-    top: 0;
+  .remotion-editor-workspace-body {
+    padding: 12px 16px 16px;
   }
 }
 
 @media (max-width: 640px) {
   .remotion-editor-shell {
     border-radius: var(--radius-lg) !important;
-    padding: 12px !important;
     margin-inline: -8px;
+  }
+
+  .remotion-editor-header-bar {
+    padding: 12px 14px;
   }
 
   .remotion-editor-header-actions {
@@ -5826,16 +6376,12 @@ textarea:focus {
     gap: 12px !important;
   }
 
-  .remotion-editor-inspector {
-    padding: 12px !important;
+  .remotion-editor-inspector-body {
+    padding: 10px !important;
   }
 
-  .remotion-editor-inspector-tabs {
-    overflow-x: auto;
-  }
-
-  .remotion-editor-inspector-tabs > button {
-    min-width: 104px;
+  .remotion-editor-workspace-body {
+    padding: 10px 12px 14px;
   }
 }
 
@@ -5855,4 +6401,126 @@ body.ai-producer-open .floating-questions-popup {
     pointer-events: none !important;
     transform: translateY(16px) !important;
   }
+}
+
+/* ── Hook Card Backdrop Styles ────────────────────────────────── */
+.hts-backdrop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .hts-backdrop-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hts-backdrop-card {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: left;
+  gap: 8px;
+}
+
+.hts-backdrop-card:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.hts-backdrop-card.active {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: #38BDF8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.18);
+}
+
+.hts-backdrop-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hts-backdrop-icon-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hts-backdrop-card-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.hts-backdrop-card.active .hts-backdrop-card-label {
+  color: #38BDF8;
+}
+
+.hts-backdrop-card-desc {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+/* Miniature Live Previews */
+.hts-backdrop-mini-preview {
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.hts-backdrop-mini-preview .mini-banner-line {
+  padding: 3px 12px;
+  background: rgba(8, 12, 22, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+.hts-backdrop-mini-preview .mini-glass-box {
+  padding: 3px 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.hts-backdrop-mini-preview .mini-solid-box {
+  padding: 3px 12px;
+  background: #060911;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 5px;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+.hts-backdrop-mini-preview .mini-neon-box {
+  padding: 3px 12px;
+  background: rgba(8, 12, 22, 0.85);
+  border: 1px solid #38BDF8;
+  border-radius: 6px;
+  color: #38BDF8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.hts-backdrop-mini-preview .mini-shadow-box {
+  padding: 3px 10px;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
 }

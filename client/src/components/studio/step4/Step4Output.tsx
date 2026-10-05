@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import type { TransformResult } from '../../../types';
 
 interface Step4OutputProps {
-  step: number;
   setStep: (step: number) => void;
+  isOpen: boolean;
+  onClose: () => void;
   transformResult: TransformResult | null;
   transformError: string | null;
   runningTransform?: boolean;
@@ -14,8 +15,9 @@ interface Step4OutputProps {
 }
 
 export const Step4Output: React.FC<Step4OutputProps> = ({
-  step,
   setStep,
+  isOpen,
+  onClose,
   transformResult,
   transformError,
   runningTransform = false,
@@ -34,11 +36,18 @@ export const Step4Output: React.FC<Step4OutputProps> = ({
       );
     }
   }, [transformResult?.outputVideo, transformResult?.videoUrl]);
+  if (!isOpen) return null;
+
   return (
-    <div className={`card ${step !== 4 ? 'hidden' : ''}`}>
+    <div
+      role="presentation"
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: 'rgba(3, 7, 18, 0.78)', backdropFilter: 'blur(8px)' }}
+    >
+    <div className="card" role="dialog" aria-modal="true" aria-labelledby="render-output-title" style={{ width: 'min(900px, 100%)', maxHeight: 'min(92vh, 1000px)', overflowY: 'auto', position: 'relative', boxShadow: '0 24px 80px rgba(0,0,0,.6)' }}>
       <div className="card-head">
         <div className="card-head-title">
-          <h2>4. Video Berhasil Dirender &amp; Siap Pakai</h2>
+          <h2 id="render-output-title">Video Berhasil Dirender &amp; Siap Pakai</h2>
           <span className="head-badge" style={{ background: '#10B981', color: '#ffffff' }}>✓ Selesai Dirender</span>
           {lastRenderedAt && (
             <span
@@ -54,10 +63,11 @@ export const Step4Output: React.FC<Step4OutputProps> = ({
               Update: {lastRenderedAt}
             </span>
           )}
+          <p className="muted">
+            Video siap dipublikasikan ke YouTube Shorts, Instagram Reels, dan TikTok.
+          </p>
         </div>
-        <p className="muted">
-          Video format 1080x1920 60fps telah siap dipublikasikan ke YouTube Shorts, Instagram Reels, dan TikTok.
-        </p>
+        <button type="button" className="btn ghost" onClick={onClose} aria-label="Tutup hasil render">✕</button>
       </div>
 
       {transformError && (
@@ -270,7 +280,7 @@ export const Step4Output: React.FC<Step4OutputProps> = ({
                 type="button"
                 className="btn ghost"
                 disabled={runningTransform}
-                onClick={() => setStep(3)}
+                onClick={() => { onClose(); setStep(3); }}
                 title="Kembali ke Langkah 3 untuk menyesuaikan preset subtitle atau naskah tanpa mengulang dari awal"
               >
                 ✏️ Ubah Gaya di Langkah 3
@@ -280,7 +290,7 @@ export const Step4Output: React.FC<Step4OutputProps> = ({
                 type="button"
                 className="btn ghost"
                 disabled={runningTransform}
-                onClick={() => setStep(1)}
+                onClick={() => { onClose(); setStep(1); }}
               >
                 + Proses Video Baru
               </button>
@@ -319,6 +329,7 @@ export const Step4Output: React.FC<Step4OutputProps> = ({
             )}
           </div>
         )}
+    </div>
     </div>
   );
 };

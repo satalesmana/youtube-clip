@@ -14,6 +14,7 @@ import type {
   TypographyVariant,
   BadgePresetId,
   BadgeColorVariant,
+  HookCardBackdrop,
 } from '../../types';
 
 interface HookPresetLivePreviewProps {
@@ -23,6 +24,7 @@ interface HookPresetLivePreviewProps {
   overrideTypography?: TypographyVariant | 'auto';
   selectedBadgePreset?: BadgePresetId;
   selectedBadgeColor?: BadgeColorVariant;
+  selectedBackdrop?: HookCardBackdrop;
   customText?: string;
   customTag?: string;
   highlightWords?: string[];
@@ -44,6 +46,7 @@ interface HookPreviewCompositionProps {
   previewVideoUrl?: string;
   badgePreset: BadgePresetId;
   badgeColor: BadgeColorVariant;
+  backdrop?: HookCardBackdrop;
   durationInFrames: number;
 }
 
@@ -59,6 +62,7 @@ const HookPreviewComposition: React.FC<HookPreviewCompositionProps> = ({
   previewVideoUrl,
   badgePreset,
   badgeColor,
+  backdrop,
   durationInFrames,
 }) => {
   const frame = useCurrentFrame();
@@ -171,6 +175,7 @@ const HookPreviewComposition: React.FC<HookPreviewCompositionProps> = ({
         visualPreset={visualPreset}
         badgePresetId={badgePreset}
         badgeColor={badgeColor}
+        backdrop={backdrop}
         durationFrames={durationInFrames}
       />
 
@@ -197,6 +202,7 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
   overrideTypography = 'auto',
   selectedBadgePreset = 'neon-outline',
   selectedBadgeColor = 'auto',
+  selectedBackdrop = 'cinematic-banner',
   customText,
   customTag,
   highlightWords = [],
@@ -232,6 +238,7 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
     previewVideoUrl,
     badgePreset: selectedBadgePreset,
     badgeColor: selectedBadgeColor,
+    backdrop: selectedBackdrop,
     durationInFrames,
   }), [
     activePresetId,
@@ -248,6 +255,7 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
     previewVideoUrl,
     selectedBadgePreset,
     selectedBadgeColor,
+    selectedBackdrop,
     durationInFrames,
   ]);
 
@@ -301,6 +309,7 @@ export const HookPresetLivePreview: React.FC<HookPresetLivePreviewProps> = ({
 
       <div className="hpl-compact-specs">
         <div className="hpl-spec-tag"><span className="spec-k">Preset:</span><span className="spec-v">{preset.label}</span></div>
+        <div className="hpl-spec-tag"><span className="spec-k">Backdrop:</span><span className="spec-v">{selectedBackdrop}</span></div>
         <div className="hpl-spec-tag"><span className="spec-k">Tipografi:</span><span className="spec-v">{typography}</span></div>
         <div className="hpl-spec-tag"><span className="spec-k">Layout:</span><span className="spec-v">{layout}</span></div>
         <div className="hpl-spec-tag"><span className="spec-k">Motion:</span><span className="spec-v">{animation}</span></div>

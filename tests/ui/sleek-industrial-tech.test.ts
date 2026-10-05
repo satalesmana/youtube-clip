@@ -62,7 +62,7 @@ test('Modern Creator Suite UI Architecture Verification', async (t) => {
     assert.match(studioView, /Unduh &amp; Siapkan Video/, 'Download button must exist in Step 1');
     assert.match(studioView, /config-locked-container/, 'Locked configuration container must exist');
     assert.match(studioView, /2\. Rekomendasi Klip/i, 'Step 2 friendly title');
-    assert.match(studioView, /3\. Desain Subtitle/i, 'Step 3 friendly title');
+    assert.match(studioView, /3\. (Desain Subtitle|Produksi Video)/i, 'Step 3 friendly title');
     assert.match(studioView, /4\. Video Berhasil Dirender/i, 'Step 4 friendly title');
     assert.doesNotMatch(studioView, /\[01 INGEST\]/, 'Harsh terminal brackets must be removed');
   });

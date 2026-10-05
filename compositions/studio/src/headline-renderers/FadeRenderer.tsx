@@ -8,7 +8,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
-import { getHeadlineLayout } from './layoutHelper';
+import { getHeadlineLayout, resolveCardBackdropStyle, type HookCardBackdrop } from './layoutHelper';
 
 const MAX_WORDS = 12;
 
@@ -18,6 +18,7 @@ interface FadeRendererProps {
   tag?: string;
   badgePresetId?: BadgePresetId;
   badgeColor?: string;
+  backdrop?: HookCardBackdrop;
   highlightWords?: string[];
   visualPreset: VisualPreset;
   durationFrames?: number;
@@ -29,6 +30,7 @@ export const FadeRenderer: React.FC<FadeRendererProps> = ({
   tag,
   badgePresetId,
   badgeColor,
+  backdrop,
   highlightWords,
   visualPreset,
   durationFrames,
@@ -78,22 +80,31 @@ export const FadeRenderer: React.FC<FadeRendererProps> = ({
   const fitted = fitText({
     text: tokens.join(' '),
     fontFamily: font,
-    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.78 : 0.86),
+    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.70 : 0.76),
   });
-  const baseHeadlineSize = Math.max(44, Math.min(70, Math.round(fitted.fontSize)));
+  const baseHeadlineSize = Math.max(40, Math.min(66, Math.round(fitted.fontSize)));
   const headlineSize = Math.round(baseHeadlineSize * layoutStyle.fontSizeFactor);
   const strokeWidth = Math.max(3, Math.round(headlineSize / 9));
+
+  const containerStyle = layoutStyle.containerStyle;
+
+  const cardBackdropStyle = resolveCardBackdropStyle(
+    backdrop ?? 'cinematic-banner',
+    theme,
+    width,
+    layoutStyle.cardStyle,
+  );
 
   return (
     <AbsoluteFill
       style={{
-        ...layoutStyle.containerStyle,
+        ...containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
-          ...layoutStyle.cardStyle,
+          ...cardBackdropStyle,
           opacity: finalOpacity,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           position: 'relative',
@@ -101,11 +112,7 @@ export const FadeRenderer: React.FC<FadeRendererProps> = ({
           flexDirection: 'column',
           alignItems: layoutStyle.alignItems,
           textAlign: layoutStyle.textAlign,
-          gap: 14,
-          borderRadius: 24,
-          background:
-            layoutStyle.background ||
-            'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.4) 60%, rgba(0, 0, 0, 0) 90%)',
+          gap: 10,
         }}
       >
         {/* Optional Corner Frame Decoration enclosing the card */}

@@ -1,8 +1,7 @@
-import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
-import { fitText } from '@remotion/layout-utils';
+import { Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import * as React from 'react';
 import { quickEnter } from './animation';
-import { FONT, SPORTS_FONT, FONT_INTER, FONT_ARCHIVO_BLACK, FONT_MONTSERRAT } from './design';
+import { SPORTS_FONT, FONT_INTER, FONT_ARCHIVO_BLACK } from './design';
 import type { Theme } from './design';
 import type { PlanCaption } from './types';
 
@@ -20,24 +19,6 @@ export const SAFE_AREA = {
   channelBottom: 140,
 };
 
-const fitTextSize = (
-  text: string,
-  fontFamily: string,
-  withinWidth: number,
-  cap: number,
-  min: number,
-): number => {
-  if (!text) {
-    return cap;
-  }
-  const { fontSize } = fitText({
-    text,
-    fontFamily,
-    withinWidth,
-  });
-  return Math.max(min, Math.min(fontSize, cap));
-};
-
 /** TikTok-style stroke caption with word highlight synced to the voice. */
 export const Caption: React.FC<{
   caption: PlanCaption;
@@ -51,7 +32,7 @@ export const Caption: React.FC<{
   subtitleSize?: 'sm' | 'md' | 'lg' | 'xl';
 }> = ({ caption, theme, durationFrames, absoluteStartFrame, subtitleStyle = 'beast', subtitleSize = 'md' }) => {
   const frame = useCurrentFrame();
-  const { width, fps } = useVideoConfig();
+  const { fps } = useVideoConfig();
   // Animate the caption block as one unit while keeping the existing per-word
   // karaoke pop independent. Keep very short captions readable by shortening
   // both transitions, and omit the exit entirely when there is no hold time.
@@ -103,17 +84,14 @@ export const Caption: React.FC<{
       ? (absoluteStartFrame + frame) / fps
       : frame / fps;
 
-  const spokenCount = caption.wordTimings
-    ? Math.min(
-        nWords,
-        caption.wordTimings.filter((w) => currentTime >= w.start).length,
-      )
-    : Math.min(
-        nWords,
-        Math.floor((frame / Math.max(1, durationFrames)) * nWords) + 1,
-      );
-
-  const currentActiveIdx = spokenCount > 0 ? spokenCount - 1 : -1;
+  const realActiveWordIdx = caption.wordTimings
+    ? caption.wordTimings.findIndex((word) => currentTime >= word.start && currentTime <= word.end)
+    : -1;
+  const currentActiveIdx = realActiveWordIdx !== -1
+    ? realActiveWordIdx
+    : caption.wordTimings
+      ? caption.wordTimings.filter((word) => currentTime >= word.start).length - 1
+      : Math.min(nWords - 1, Math.floor((frame / Math.max(1, durationFrames)) * nWords));
 
   // Word relative start/end frames within this caption's local frame timeline.
   // Headless Chromium renders offline frame-by-frame; CSS transitions cannot execute.
@@ -156,20 +134,8 @@ export const Caption: React.FC<{
     return null;
   }
 
-  // Sweet spot font sizing for 1080x1920 short-form video:
-  // - Hormozi: base 72px (tall Anton, boxed)
-  // - Clean: base 64px (clean Inter, sentence case)
-  // - Pop Dinamis (Beast): base 76px (bold Archivo Black)
-  // - Sports: base 80px (italic Anton)
-  const baseMax = isHormozi ? 72 : isClean ? 64 : isSports ? 80 : 76;
-  const sizeMultiplier =
-    subtitleSize === 'sm' ? 0.82 :
-    subtitleSize === 'lg' ? 1.18 :
-    subtitleSize === 'xl' ? 1.36 : 1.0;
-  const scaledMax = Math.round(baseMax * sizeMultiplier);
-  const minFitted = Math.round(44 * sizeMultiplier);
-  const fitted = fitTextSize(caption.text, captionFont, width * 0.86, scaledMax, minFitted);
-  const strokeSize = Math.max(3, Math.round(fitted / 18));
+  // Match the live editor's subtitle scale exactly.
+  const fitted = subtitleSize === 'sm' ? 38 : subtitleSize === 'lg' ? 58 : subtitleSize === 'xl' ? 68 : 48;
 
   const renderWords = () => {
     return words.map((word, k) => {
@@ -191,12 +157,7 @@ export const Caption: React.FC<{
       // Preset 1: Hormozi High Contrast Black Box
       // ─────────────────────────────────────────────────────────────────
       if (isHormozi) {
-        let color = 'rgba(255, 255, 255, 0.45)'; // upcoming
-        if (isCurrent || isHighlight) {
-          color = '#FFE500'; // energetic yellow
-        } else if (isPast) {
-          color = '#FFFFFF'; // solid crisp white
-        }
+        const color = isCurrent ? '#000000' : isPast ? '#FFFFFF' : 'rgba(255, 255, 255, 0.65)';
 
         const scale = isCurrent
           ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.05, 1.03], {
@@ -215,6 +176,15 @@ export const Caption: React.FC<{
           <span
             key={k}
             style={{
+              background: isCurrent ? '#10B981' : isPast ? '#000000' : 'transparent',
+              border: isPast ? '2px solid #334155' : 'none',
+              padding: isCurrent ? '7px 15px' : '6px 14px',
+              borderRadius: '10px',
+              fontSize: `${Math.round(fitted * (isCurrent ? 0.99 : 0.94))}px`,
+              lineHeight: 1.2,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              boxShadow: isCurrent ? '0 8px 24px rgba(16,185,129,0.5)' : 'none',
               color,
               display: 'inline-block',
               transform: `translateY(${translateY}px) scale(${scale})`,
@@ -232,12 +202,7 @@ export const Caption: React.FC<{
       // Preset 2: Clean Modern Minimalist
       // ─────────────────────────────────────────────────────────────────
       if (isClean) {
-        let color = 'rgba(243, 244, 246, 0.45)'; // upcoming
-        if (isCurrent || isHighlight) {
-          color = '#A3E635'; // vibrant lime green
-        } else if (isPast) {
-          color = '#F3F4F6'; // soft white
-        }
+        const color = isCurrent ? '#38BDF8' : isPast ? '#FFFFFF' : 'rgba(255, 255, 255, 0.55)';
 
         const scale = isCurrent
           ? interpolate(wordSpring, [0, 0.7, 1], [1.0, 1.04, 1.02], {
@@ -256,14 +221,17 @@ export const Caption: React.FC<{
           <span
             key={k}
             style={{
+              fontSize: `${Math.round(fitted * (isCurrent ? 0.92 : 0.88))}px`,
+              lineHeight: 1.3,
+              fontWeight: isCurrent ? 800 : 600,
               color,
               display: 'inline-block',
               transform: `translateY(${translateY}px) scale(${scale})`,
               transformOrigin: 'center bottom',
-              margin: '0 4px',
+              margin: '0 3px',
               textShadow: isCurrent
-                ? '0 0 14px rgba(163, 230, 53, 0.6), 0 2px 8px rgba(0, 0, 0, 0.9)'
-                : '0 2px 8px rgba(0, 0, 0, 0.85)',
+                ? '0 0 16px rgba(56,189,248,0.7)'
+                : 'none',
             }}
           >
             {word}
@@ -274,7 +242,7 @@ export const Caption: React.FC<{
       // ─────────────────────────────────────────────────────────────────
       // Preset 3: Pop Dinamis (MrBeast / Viral Style)
       // ─────────────────────────────────────────────────────────────────
-      let color = 'rgba(255, 255, 255, 0.85)'; // upcoming
+      let color = 'rgba(255, 255, 255, 0.65)'; // upcoming
       let shadowGlow = '';
 
       const scale = isCurrent
@@ -295,9 +263,6 @@ export const Caption: React.FC<{
         shadowGlow = isHighlight
           ? '0 0 24px rgba(0, 229, 255, 0.9), '
           : '0 0 24px rgba(255, 229, 0, 0.9), ';
-      } else if (isHighlight) {
-        color = '#00E5FF';
-        shadowGlow = '0 0 14px rgba(0, 229, 255, 0.6), ';
       } else if (isPast) {
         color = '#FFFFFF';
       }
@@ -306,17 +271,21 @@ export const Caption: React.FC<{
         shadowGlow = `0 0 24px ${theme.accent}, 0 0 35px rgba(255, 230, 0, 0.5), `;
       }
 
-      const outline = `-${strokeSize}px -${strokeSize}px 0 #000, ${strokeSize}px -${strokeSize}px 0 #000, -${strokeSize}px ${strokeSize}px 0 #000, ${strokeSize}px ${strokeSize}px 0 #000, 0 ${strokeSize * 1.5}px ${strokeSize * 2.5}px rgba(0,0,0,0.95)`;
+      const outline = '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 6px 16px rgba(0,0,0,0.9)';
 
       return (
         <span
           key={k}
           style={{
+            fontSize: `${Math.round(fitted * (isCurrent ? 1.08 : 1))}px`,
+            lineHeight: 1.2,
+            fontWeight: 900,
+            textTransform: 'uppercase',
             color,
             display: 'inline-block',
             transform: `translateY(${translateY}px) scale(${scale})`,
             transformOrigin: 'center bottom',
-            margin: '0 5px',
+            margin: '0 4px',
             textShadow: `${shadowGlow}${outline}`,
           }}
         >
@@ -327,51 +296,47 @@ export const Caption: React.FC<{
   };
 
   return (
-    <AbsoluteFill
-      style={{
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        paddingBottom: SAFE_AREA.bottom,
-      }}
-    >
+    <div style={{ position: 'absolute', bottom: '240px', left: '40px', right: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', zIndex: 60 }}>
       <div
         style={{
           display: 'inline-flex',
           flexWrap: 'wrap',
           justifyContent: 'center',
-          alignItems: 'baseline',
-          columnGap: isClean ? '16px' : isHormozi ? '18px' : '22px',
-          rowGap: '10px',
+          alignItems: isHormozi ? 'center' : 'flex-end',
+          columnGap: isClean ? '10px' : isHormozi ? '16px' : '12px',
+          rowGap: isClean ? '8px' : '10px',
           fontSize: fitted,
-          lineHeight: isHormozi ? 1.1 : isClean ? 1.25 : 1.16,
+          lineHeight: isHormozi ? 1.2 : isClean ? 1.3 : 1.2,
           textAlign: 'center',
           textTransform: isClean ? 'none' : 'uppercase',
           fontFamily: captionFont,
           fontWeight: isClean ? 600 : 900,
-          fontStyle: isSports ? 'italic' : 'normal',
-          letterSpacing: isSports ? 2 : isHormozi ? 1.5 : isClean ? 0.2 : 0.8,
+          letterSpacing: 0,
           color: '#FFFFFF',
-          maxWidth: width * 0.88,
+          maxWidth: isClean ? '850px' : 'none',
           whiteSpace: 'normal',
           ...(isHormozi
             ? {
-                backgroundColor: '#000000',
-                padding: '14px 28px',
-                borderRadius: '12px',
-                border: '2px solid rgba(255, 255, 255, 0.2)',
-                boxShadow: '0 12px 36px rgba(0, 0, 0, 0.95)',
+                background: 'rgba(0, 0, 0, 0.6)',
+                padding: '12px 24px',
+                borderRadius: '16px',
+                backdropFilter: 'blur(8px)',
               }
             : isClean
             ? {
-                backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                padding: '12px 26px',
-                borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+                background: 'rgba(15, 23, 42, 0.85)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                padding: '16px 32px',
+                borderRadius: '18px',
+                backdropFilter: 'blur(12px)',
               }
-            : {}),
+            : {
+                background: 'rgba(0, 0, 0, 0.55)',
+                padding: '16px 28px',
+                borderRadius: '24px',
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              }),
           opacity: blockOpacity,
           scale: blockScale,
           translate: `0px ${blockTranslateY}px`,
@@ -379,6 +344,6 @@ export const Caption: React.FC<{
       >
         {renderWords()}
       </div>
-    </AbsoluteFill>
+    </div>
   );
 };

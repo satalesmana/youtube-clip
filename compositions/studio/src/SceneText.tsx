@@ -36,6 +36,7 @@ export const SceneText: React.FC<{
         tag={scene.hookTag}
         badgePresetId={scene.hookBadgePresetId}
         badgeColor={scene.hookBadgeColor}
+        backdrop={(scene.hookBackdrop as any) ?? 'cinematic-banner'}
         highlightWords={scene.highlightWords}
         visualPreset={visualPreset}
         theme={theme}

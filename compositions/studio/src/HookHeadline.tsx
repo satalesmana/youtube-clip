@@ -24,7 +24,10 @@ import { SlideUpRenderer } from './headline-renderers/SlideUpRenderer';
 import { BoldCapsRenderer } from './headline-renderers/BoldCapsRenderer';
 import { FadeRenderer } from './headline-renderers/FadeRenderer';
 import type { BadgePresetId } from './headline-renderers/HookTagPill';
+import type { HookCardBackdrop } from './headline-renderers/layoutHelper';
 import { VISUAL_PRESET_REGISTRY } from './visual-preset/index';
+
+export type { HookCardBackdrop };
 
 interface HookHeadlineProps {
   text: string;
@@ -32,6 +35,7 @@ interface HookHeadlineProps {
   tag?: string;
   badgePresetId?: BadgePresetId;
   badgeColor?: string;
+  backdrop?: HookCardBackdrop;
   highlightWords?: string[];
   /** Resolved visual preset. When absent, kinetic-punch is used. */
   visualPreset?: VisualPreset;
@@ -47,6 +51,7 @@ export const HookHeadline: React.FC<HookHeadlineProps> = ({
   tag,
   badgePresetId,
   badgeColor,
+  backdrop,
   highlightWords,
   visualPreset,
   durationFrames,
@@ -60,6 +65,7 @@ export const HookHeadline: React.FC<HookHeadlineProps> = ({
     tag,
     badgePresetId,
     badgeColor,
+    backdrop,
     highlightWords,
     visualPreset: preset,
     durationFrames,

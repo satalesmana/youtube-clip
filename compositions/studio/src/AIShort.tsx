@@ -3,6 +3,7 @@ import { Audio, Video } from '@remotion/media';
 import * as React from 'react';
 import { Badge } from './Badge';
 import { Caption } from './Caption';
+import { HookHeadline } from './HookHeadline';
 import { Outro } from './Outro';
 import { ProgressBar } from './ProgressBar';
 import { SceneBackground } from './SceneBackground';
@@ -93,10 +94,16 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   subtitleStyle,
   subtitleSize,
   enableIntroOutro,
+  enableHookIntro,
+  hookStartSec = 0,
+  hookDurationSec = 3.5,
+  hookTitle,
+  hookTag,
   outroPreset,
   outroCtaText,
   outroButtonText,
   outroDuration,
+  outroStartSec,
   outroChannelName,
   skin,
 }) => {
@@ -109,7 +116,9 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
   const outroSeconds = isOutroActive ? (outroDuration ?? OUTRO_SECONDS) : 0;
   const outroFrames = isOutroActive && outroSeconds > 0 ? Math.max(1, Math.round(outroSeconds * fps)) : 0;
   const badgeFrames = Math.max(1, Math.round(BADGE_SECONDS * fps));
-  const totalDurationFrames = contentFrames + outroFrames;
+  const outroStartFrame = Math.max(0, Math.round((outroStartSec ?? plan.duration) * fps));
+  const hookStartFrame = Math.max(0, Math.round(hookStartSec * fps));
+  const hookFrames = Math.max(1, Math.round(hookDurationSec * fps));
 
   const hasNarration = Boolean(narrationPath);
   const isSourceAudioActive = Boolean(plan.audio?.sourceUnderlay) || !hasNarration;
@@ -151,6 +160,19 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
           </Sequence>
         );
       })}
+
+      {enableHookIntro !== false && hookTitle && (
+        <Sequence from={hookStartFrame} durationInFrames={hookFrames}>
+          <AbsoluteFill style={{ zIndex: 40, pointerEvents: 'none' }}>
+            <HookHeadline
+              text={hookTitle}
+              tag={hookTag}
+              theme={theme}
+              durationFrames={hookFrames}
+            />
+          </AbsoluteFill>
+        </Sequence>
+      )}
 
       {/* Layer 2: Contextual B-Roll Overlay Videos (plays above source scenes, below captions & badges) */}
       {plan.brolls?.map((broll, bIdx) => {
@@ -222,9 +244,9 @@ export const AIShort: React.FC<CompositionProps & { skin?: Skin }> = ({
           );
         })}
 
-      {/* Outro / CTA: Appears strictly AFTER all video scenes and narration voiceover have completed */}
+      {/* Outro / CTA: Timeline placement is configurable; default remains after the scenes. */}
       {outroFrames > 0 && (
-        <Sequence from={contentFrames} durationInFrames={outroFrames}>
+        <Sequence from={outroStartFrame} durationInFrames={outroFrames}>
           {plan.scenes.length > 0 && sourceVideoPath ? (
             <SceneBackground
               scene={plan.scenes[plan.scenes.length - 1]!}

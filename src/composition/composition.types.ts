@@ -47,6 +47,12 @@ export interface CompositionAssets {
   }>;
   /** Whether to append an outro call-to-action (CTA) card to the video. */
   enableIntroOutro?: boolean;
+  /** Whether the editable hook headline is rendered in the final composition. */
+  enableHookIntro?: boolean;
+  hookStartSec?: number;
+  hookDurationSec?: number;
+  hookTitle?: string;
+  hookTag?: string;
   /** Outro CTA style preset: 'creator-glass', 'viral-neon', 'minimal-clean', 'comment-debate', 'subscribe-bell', 'link-in-bio'. */
   outroPreset?: string;
   /** Custom CTA headline text for the outro card. */
@@ -55,6 +61,8 @@ export interface CompositionAssets {
   outroButtonText?: string;
   /** Outro card duration in seconds (default 3s). */
   outroDuration?: number;
+  /** Output timeline position in seconds where the CTA card begins. */
+  outroStartSec?: number;
   /** Custom channel name / handle for the outro card. */
   outroChannelName?: string;
   /** Custom logo image URL, data URL, or file path for the outro card. */

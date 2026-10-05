@@ -3,9 +3,7 @@ import {
   AbsoluteFill,
   Audio,
   Img,
-  interpolate,
   Sequence,
-  spring,
   useCurrentFrame,
   useVideoConfig,
   Video,
@@ -16,6 +14,7 @@ import { HookHeadline } from '../../../../compositions/studio/src/HookHeadline';
 import { selectTheme } from '../../../../compositions/studio/src/design';
 import type { Theme } from '../../../../compositions/studio/src/design';
 import { resolveVisualPreset } from '../../../../compositions/studio/src/visual-preset';
+import { computeOrganicTransform } from '../../lib/canvas-motion';
 
 export interface RemotionStudioCompositionProps {
   videoSrc?: string;
@@ -34,9 +33,11 @@ export interface RemotionStudioCompositionProps {
   hookTypography?: string;
   hookHighlightWords?: string[];
   hookDurationSec?: number;
+  hookStartSec?: number;
   sequenceHookIntro?: boolean;
   badgePreset?: string;
   badgeColor?: string;
+  hookBackdrop?: string;
   // Subtitle props
   templateId?: string;
   subtitleText?: string;
@@ -64,6 +65,7 @@ export interface RemotionStudioCompositionProps {
   outroCtaText?: string;
   outroButtonText?: string;
   outroDuration?: number;
+  outroStartSec?: number;
   outroPreset?: string;
   outroLogoUrl?: string;
   channelName?: string;
@@ -77,9 +79,14 @@ export interface RemotionStudioCompositionProps {
   narrationVolume?: number;   // 0–1 volume narasi, default 1
   outputMode?: 'reel' | 'narration';
   videoStartFromSec?: number; // trim start of video element, default 0
+  videoStartSec?: number;     // timeline start position in seconds
+  videoDurationSec?: number;  // timeline duration in seconds
+  videoTrimFrontSec?: number; // seconds trimmed from front of video
   /** Precomputed face-focus path for the selected source range, relative seconds. */
   faceFocusPoints?: Array<{ time: number; x: number; y: number }>;
   faceSourceAspectRatio?: number;
+  subtitleStartSec?: number;
+  subtitleEndSec?: number;
   // Dynamic CSS Styles & Universal Overlays (Zero-Code Dynamic Extensibility)
   dynamicStyles?: Record<string, React.CSSProperties>;
   dynamicOverlays?: Array<{
@@ -177,9 +184,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   hookTypography = 'kinetic',
   hookHighlightWords = [],
   hookDurationSec: hookDurationProp = 3.5,
+  hookStartSec = 0,
   sequenceHookIntro = false,
   badgePreset = 'neon-outline',
   badgeColor = 'cyan',
+  hookBackdrop = 'cinematic-banner',
   templateId = 'beast',
   subtitleText,
   subtitleSize = 'md',
@@ -192,6 +201,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   outroCtaText = 'Suka video ini? Follow untuk update tips harian!',
   outroButtonText = 'Follow',
   outroDuration = 3,
+  outroStartSec: outroStartProp,
   outroPreset = 'creator-glass',
   outroLogoUrl,
   channelName = '@kreator',
@@ -205,8 +215,13 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   narrationVolume = 1,
   outputMode = 'reel',
   videoStartFromSec = 0,
+  videoStartSec,
+  videoDurationSec,
+  videoTrimFrontSec = 0,
   faceFocusPoints = [],
   faceSourceAspectRatio = 16 / 9,
+  subtitleStartSec,
+  subtitleEndSec,
   // Dynamic CSS & Universal Overlays
   dynamicStyles = {},
   dynamicOverlays = [],
@@ -214,8 +229,70 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   const frame = useCurrentFrame();
   const { fps, durationInFrames: compositionDurationFrames } = useVideoConfig();
   const currentTimeSec = frame / fps;
-  const contentStartFrame = sequenceHookIntro ? Math.round(hookDurationProp * fps) : 0;
-  const contentTimeSec = sequenceHookIntro ? Math.max(0, currentTimeSec - hookDurationProp) : currentTimeSec;
+  const hookStartTimeSec = hookStartSec;
+  const hookEndTimeSec = hookStartTimeSec + hookDurationProp;
+  const contentTimeSec = sequenceHookIntro
+    ? Math.max(0, currentTimeSec - hookDurationProp)
+    : enableHookIntro && !isRenderedVideo
+      ? currentTimeSec >= hookEndTimeSec
+        ? currentTimeSec - hookDurationProp
+        : Math.min(currentTimeSec, hookStartTimeSec)
+      : currentTimeSec;
+
+  const defaultVideoStartSec = sequenceHookIntro ? hookDurationProp : 0;
+  const effectiveVideoStartSec = videoStartSec !== undefined ? videoStartSec : defaultVideoStartSec;
+
+  const totalDurationSec = (compositionDurationFrames || 900) / fps;
+  const hookDurationSec = hookDurationProp;
+  const hookStartFrame = Math.round(hookStartSec * fps);
+  const hookDurationFrames = Math.round(hookDurationSec * fps);
+  const hookEndFrame = hookStartFrame + hookDurationFrames;
+  const isHookActive = enableHookIntro && !isRenderedVideo && frame >= hookStartFrame && frame < hookEndFrame;
+
+  const effectiveTrimFrontSec = videoTrimFrontSec ?? 0;
+  const videoDuration = videoDurationSec !== undefined ? videoDurationSec : Math.max(0.5, totalDurationSec - effectiveVideoStartSec);
+
+  const hookEndSec = hookStartSec + hookDurationSec;
+  const hookSplitsVideo = enableHookIntro && !isRenderedVideo && hookEndSec > effectiveVideoStartSec;
+  const videoBeforeHookDurationSec = hookSplitsVideo
+    ? Math.max(0, Math.min(videoDuration, hookStartSec - effectiveVideoStartSec))
+    : videoDuration;
+  const videoTimelineSegments = [
+    ...(videoBeforeHookDurationSec > 0
+      ? [{ timelineStartSec: effectiveVideoStartSec, sourceOffsetSec: 0, durationSec: videoBeforeHookDurationSec }]
+      : []),
+    ...(videoDuration - videoBeforeHookDurationSec > 0
+      ? [{
+          timelineStartSec: hookSplitsVideo ? hookEndSec : effectiveVideoStartSec,
+          sourceOffsetSec: videoBeforeHookDurationSec,
+          durationSec: videoDuration - videoBeforeHookDurationSec,
+        }]
+      : []),
+  ];
+
+  // Is the main video clip actively visible/playing at currentTimeSec?
+  const activeVideoTimelineSegment = videoTimelineSegments.find((segment) =>
+    currentTimeSec >= segment.timelineStartSec && currentTimeSec <= segment.timelineStartSec + segment.durationSec + 0.05,
+  );
+  const isVideoPlaying = !isHookActive && Boolean(activeVideoTimelineSegment);
+
+  // Speech timing in the video media taking into account front trimming and timeline placement
+  const videoElapsedSec = activeVideoTimelineSegment
+    ? activeVideoTimelineSegment.sourceOffsetSec + Math.max(0, currentTimeSec - activeVideoTimelineSegment.timelineStartSec)
+    : 0;
+  const currentClipSpeechSec = effectiveTrimFrontSec + videoElapsedSec;
+
+  // Subtitle timing bounds check (relative to timeline currentTimeSec)
+  const isWithinSubtitleRange =
+    (subtitleStartSec === undefined || currentTimeSec >= subtitleStartSec - 0.02) &&
+    (subtitleEndSec === undefined || currentTimeSec <= subtitleEndSec + 0.05);
+
+  // Subtitle synchronization:
+  // In reel mode, video audio speech is precisely tracked by currentClipSpeechSec.
+  // In narration mode, TTS audio starts relative to subtitle start position.
+  const activeSubtitleSpeechTimeSec = outputMode === 'narration'
+    ? Math.max(0, currentTimeSec - (subtitleStartSec ?? 0))
+    : currentClipSpeechSec;
 
   const baseHookPreset = resolveVisualPreset({ manualPreset: visualPreset as any });
   const hookPreset = {
@@ -230,7 +307,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   let focusX = 0.5;
   let focusY = 0.5;
   if (faceFocusPoints.length > 0) {
-    const faceTimeSec = contentTimeSec;
+    const faceTimeSec = currentClipSpeechSec;
     const nextIndex = faceFocusPoints.findIndex((point) => point.time >= faceTimeSec);
     const left = nextIndex <= 0 ? faceFocusPoints[0]! : faceFocusPoints[nextIndex - 1]!;
     const right = nextIndex < 0 ? faceFocusPoints[faceFocusPoints.length - 1]! : faceFocusPoints[nextIndex]!;
@@ -238,19 +315,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     focusX = left.x + (right.x - left.x) * progress;
     focusY = left.y + (right.y - left.y) * progress;
   }
-  const totalDurationSec = (compositionDurationFrames || 900) / fps;
-
-  // ---------------------------------------------------------------------------
-  // 1. Hook Intro Animations (0s - 3.5s)
-  // ---------------------------------------------------------------------------
-  const hookDurationSec = hookDurationProp;
-  const hookEndFrame = Math.round(hookDurationSec * fps);
-  const isHookActive = enableHookIntro && !isRenderedVideo && frame < hookEndFrame;
 
   // ---------------------------------------------------------------------------
   // 2. Outro Card (Last N seconds)
   // ---------------------------------------------------------------------------
-  const outroStartSec = Math.max(0, totalDurationSec - outroDuration);
+  const outroStartSec = Math.max(0, outroStartProp ?? (totalDurationSec - outroDuration));
   const outroStartFrame = Math.round(outroStartSec * fps);
   const isOutroActive = enableIntroOutro && frame >= outroStartFrame;
   const outroDurationFrames = Math.max(
@@ -276,10 +345,19 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
   // ---------------------------------------------------------------------------
   // 3. Subtitles (Real Voice-Synced Transcript or Fallback Simulation)
   // ---------------------------------------------------------------------------
+  const isSpeechSourceActive = outputMode === 'narration'
+    ? Boolean(narrationAudioUrl)
+    : isVideoPlaying;
+
   const hasRealCaptions = Boolean(captions && captions.length > 0);
-  const activeCaption = hasRealCaptions
-    ? captions.find((c) => contentTimeSec >= c.start && contentTimeSec <= c.end)
+  const activeCaption = hasRealCaptions && isWithinSubtitleRange && isSpeechSourceActive
+    ? captions.find((c, idx) => {
+        const nextCaption = captions[idx + 1];
+        const maxCaptionEnd = nextCaption ? Math.min(nextCaption.start, c.end + 0.25) : c.end + 0.25;
+        return activeSubtitleSpeechTimeSec >= c.start && activeSubtitleSpeechTimeSec <= maxCaptionEnd;
+      })
     : undefined;
+
 
   // ---------------------------------------------------------------------------
   // Background Music Volume & Auto-Ducking
@@ -290,7 +368,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     ? false
     : outputMode === 'narration'
       ? Boolean(narrationAudioUrl || activeCaption)
-      : (hasRealCaptions ? Boolean(activeCaption) : !isOutroActive);
+      : (hasRealCaptions ? Boolean(activeCaption) : (!isOutroActive && isVideoPlaying && isWithinSubtitleRange));
 
   // When auto-ducking is enabled and someone speaks, duck music to 35% of set volume.
   // During speech pauses or hook/outro, music volume returns to 100%.
@@ -300,11 +378,15 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
 
   const resolvedMusicSrc = resolveAudioStreamUrl(musicSrc);
 
-  // Active when hook has faded or if hook is disabled, and not during outro.
-  // When real captions are used, only display when speech is active for that timestamp.
+  // Active when hook has faded or if hook is disabled.
+  // Dual-presence strategy: Subtitle displays when speech source is actively playing and within user subtitle bounds.
+  // When real captions are present, subtitles remain synchronized with speech even during outro CTA so viewers
+  // (especially silent viewers) never lose concluding remarks or spoken CTAs.
   const showSubtitles =
     !isRenderedVideo &&
     !isHookActive &&
+    isWithinSubtitleRange &&
+    isSpeechSourceActive &&
     (hasRealCaptions ? Boolean(activeCaption) : !isOutroActive);
 
   // Default demo subtitle sentences if no custom text provided
@@ -316,7 +398,7 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     .filter(Boolean);
 
   // Cycling words every 0.35s (fallback only)
-  const wordCycleIndex = Math.floor((contentTimeSec * 2.8) % Math.max(1, sampleWords.length));
+  const wordCycleIndex = Math.floor((activeSubtitleSpeechTimeSec * 2.8) % Math.max(1, sampleWords.length));
   const fallbackActiveWord = sampleWords[wordCycleIndex] || sampleWords[0] || 'Viral!';
 
   // Real word resolution
@@ -325,13 +407,13 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
     : [];
 
   const realActiveWordIdx = activeCaption?.wordTimings
-    ? activeCaption.wordTimings.findIndex((w) => contentTimeSec >= w.start && contentTimeSec <= w.end)
+    ? activeCaption.wordTimings.findIndex((w) => activeSubtitleSpeechTimeSec >= w.start && activeSubtitleSpeechTimeSec <= w.end)
     : -1;
 
   const currentSpokenIdx = realActiveWordIdx !== -1
     ? realActiveWordIdx
     : (activeCaption?.wordTimings
-        ? activeCaption.wordTimings.filter((w) => contentTimeSec >= w.start).length - 1
+        ? activeCaption.wordTimings.filter((w) => activeSubtitleSpeechTimeSec >= w.start).length - 1
         : 0);
 
   // Subtitle styling based on templateId
@@ -383,34 +465,21 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
             transform: 'scale(1.2)',
           }}
         />
+      ) : !sequenceHookIntro && isHookActive && hookThumbnailUrl ? (
+        <AbsoluteFill style={{ backgroundImage: `url(${hookThumbnailUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(48px) brightness(0.65)', transform: 'scale(1.2)' }} />
       ) : videoSrc ? (
-        sequenceHookIntro ? (
-          <Sequence from={contentStartFrame}>
+        videoTimelineSegments.map((segment, index) => (
+          <Sequence key={`ambient-video-${index}`} from={Math.round(segment.timelineStartSec * fps)} durationInFrames={Math.max(1, Math.round(segment.durationSec * fps))}>
             <AbsoluteFill style={{ overflow: 'hidden' }}>
               <Video
                 src={videoSrc}
-                startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
+                startFrom={Math.round(((videoStartFromSec ?? 0) + segment.sourceOffsetSec) * fps)}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(48px) brightness(0.65)', transform: 'scale(1.2)' }}
                 muted
               />
             </AbsoluteFill>
           </Sequence>
-        ) : (
-        <AbsoluteFill style={{ overflow: 'hidden' }}>
-          <Video
-            src={videoSrc}
-            startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              filter: 'blur(48px) brightness(0.65)',
-              transform: 'scale(1.2)',
-            }}
-            muted
-          />
-        </AbsoluteFill>
-        )
+        ))
       ) : thumbnailUrl ? (
         <AbsoluteFill
           style={{
@@ -443,27 +512,18 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
           />
         </AbsoluteFill>
       ) : videoSrc ? (
-        sequenceHookIntro ? (
-          <Sequence from={contentStartFrame}>
+        videoTimelineSegments.map((segment, index) => (
+          <Sequence key={`main-video-${index}`} from={Math.round(segment.timelineStartSec * fps)} durationInFrames={Math.max(1, Math.round(segment.durationSec * fps))}>
             <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Video
                 src={videoSrc}
-                startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
+                startFrom={Math.round(((videoStartFromSec ?? 0) + segment.sourceOffsetSec) * fps)}
                 volume={sourceVolume ?? 1}
                 style={{ width: '100%', height: '100%', objectFit: faceFocusPoints.length > 0 ? 'cover' : 'contain', objectPosition: getFocusObjectPosition(focusX, focusY, faceSourceAspectRatio * 1.08, targetAspect, faceFocusPoints.length > 0), scale: faceFocusPoints.length > 0 ? 1.08 : 1, ...dynamicStyles.video }}
               />
             </AbsoluteFill>
           </Sequence>
-        ) : (
-          <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Video
-              src={videoSrc}
-              startFrom={videoStartFromSec ? Math.round(videoStartFromSec * fps) : undefined}
-              volume={sourceVolume ?? 1}
-              style={{ width: '100%', height: '100%', objectFit: faceFocusPoints.length > 0 ? 'cover' : 'contain', objectPosition: getFocusObjectPosition(focusX, focusY, faceSourceAspectRatio * 1.08, targetAspect, faceFocusPoints.length > 0), scale: faceFocusPoints.length > 0 ? 1.08 : 1, ...dynamicStyles.video }}
-            />
-          </AbsoluteFill>
-        )
+        ))
       ) : thumbnailUrl && !isHookActive ? (
         <AbsoluteFill
           style={{
@@ -491,8 +551,11 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {/* -------------------------------------------------------------------- */}
       {enableBroll &&
         brollPlacements?.map((broll, bIdx) => {
-          const startFrame = Math.round((broll.start + (sequenceHookIntro ? hookDurationSec : 0)) * fps);
-          const endFrame = Math.round((broll.end + (sequenceHookIntro ? hookDurationSec : 0)) * fps);
+          const timelineOffset = enableHookIntro && !isRenderedVideo && broll.start >= hookStartSec
+            ? hookDurationSec
+            : 0;
+          const startFrame = Math.round((broll.start + timelineOffset) * fps);
+          const endFrame = Math.round((broll.end + timelineOffset) * fps);
           const durFrames = Math.max(1, endFrame - startFrame);
 
           return (
@@ -589,24 +652,27 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {/* LAYER 4: Hook Intro Headline & Badge (0s - 3.5s)                     */}
       {/* -------------------------------------------------------------------- */}
       {isHookActive && (
-        <AbsoluteFill
-          style={{
-            zIndex: 40,
-            pointerEvents: 'none',
-            ...dynamicStyles.hook,
-          }}
-        >
-          <HookHeadline
-            text={hookText}
-            tag={hookTag}
-            theme={hookTheme}
-            badgePresetId={badgePreset as any}
-            badgeColor={badgeColor as any}
-            highlightWords={hookHighlightWords}
-            visualPreset={hookPreset}
-            durationFrames={hookEndFrame}
-          />
-        </AbsoluteFill>
+        <Sequence from={hookStartFrame} durationInFrames={hookDurationFrames}>
+          <AbsoluteFill
+            style={{
+              zIndex: 40,
+              pointerEvents: 'none',
+              ...dynamicStyles.hook,
+            }}
+          >
+            <HookHeadline
+              text={hookText}
+              tag={hookTag}
+              theme={hookTheme}
+              badgePresetId={badgePreset as any}
+              badgeColor={badgeColor as any}
+              backdrop={(hookBackdrop as any) ?? 'cinematic-banner'}
+              highlightWords={hookHighlightWords}
+              visualPreset={hookPreset}
+              durationFrames={hookDurationFrames}
+            />
+          </AbsoluteFill>
+        </Sequence>
       )}
 
       {/* -------------------------------------------------------------------- */}
@@ -619,7 +685,6 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
             bottom: '240px',
             left: '40px',
             right: '40px',
-            display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             pointerEvents: 'none',
@@ -949,24 +1014,19 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
       {dynamicOverlays && dynamicOverlays.length > 0 && (
         <AbsoluteFill style={{ pointerEvents: 'none', zIndex: 45 }}>
           {dynamicOverlays.map((ov) => {
-            if (sequenceHookIntro && isHookActive) return null;
+            if (isHookActive) return null;
             if (contentTimeSec < ov.start || contentTimeSec > ov.end) return null;
             const posX = ov.position?.x ?? '50%';
             const posY = ov.position?.y ?? (ov.componentId === 'lower-third' ? '74%' : ov.componentId === 'cta-banner' ? '68%' : '42%');
-            const localFrame = Math.max(0, Math.round(contentTimeSec * fps) - Math.round(ov.start * fps));
-            const entrance = spring({ frame: localFrame, fps, config: { damping: 16, stiffness: 180, mass: 0.7 } });
-
-            let animTransform = `translate(-50%, -50%) translateY(${interpolate(entrance, [0, 1], [24, 0])}px) scale(${interpolate(entrance, [0, 1], [0.92, 1])})`;
-            if (ov.animation === 'pulse') {
-              const pulse = 1 + 0.08 * Math.sin(frame * 0.2);
-              animTransform += ` scale(${pulse})`;
-            } else if (ov.animation === 'bounce') {
-              const bounceY = 8 * Math.sin(frame * 0.25);
-              animTransform += ` translateY(${bounceY}px)`;
-            } else if (ov.animation === 'spin') {
-              const spinDeg = (frame * 3) % 360;
-              animTransform += ` rotate(${spinDeg}deg)`;
-            }
+            const organicMotion = computeOrganicTransform({
+              frame,
+              fps,
+              startSec: ov.start,
+              endSec: ov.end,
+              currentTimeSec: contentTimeSec,
+              animation: ov.animation,
+              personality: (ov as any).personality || 'snappy',
+            });
 
             // Detect and repair HTML or truncated CSS snippets into valid broadcast cards
             const htmlContent = parseOrRepairHtmlOverlay(ov.content);
@@ -979,7 +1039,9 @@ export const RemotionStudioComposition: React.FC<RemotionStudioCompositionProps>
                   position: 'absolute',
                   left: typeof posX === 'number' ? `${posX}px` : posX,
                   top: typeof posY === 'number' ? `${posY}px` : posY,
-                  transform: animTransform,
+                  transform: organicMotion.transform,
+                  opacity: organicMotion.opacity,
+                  filter: organicMotion.filter,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

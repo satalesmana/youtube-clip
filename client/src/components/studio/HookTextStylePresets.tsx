@@ -7,6 +7,7 @@ import type {
   TypographyVariant,
   BadgePresetId,
   BadgeColorVariant,
+  HookCardBackdrop,
   ViralHook,
 } from '../../types';
 import {
@@ -42,6 +43,8 @@ export interface HookTextStylePresetsProps {
   onBadgePresetChange?: (p: BadgePresetId) => void;
   selectedBadgeColor?: BadgeColorVariant;
   onBadgeColorChange?: (c: BadgeColorVariant) => void;
+  selectedBackdrop?: HookCardBackdrop;
+  onBackdropChange?: (b: HookCardBackdrop) => void;
   disabled?: boolean;
   aiRecommendationLabel?: string;
   aiRecommendationId?: VisualPresetId;
@@ -118,6 +121,44 @@ const ANIMATION_OPTIONS: Array<{ id: AnimationPreset; label: string; iconName: H
   { id: 'fade', label: 'Clean Fade', iconName: 'star', desc: 'Transisi halus' },
 ];
 
+export const BACKDROP_OPTIONS: Array<{
+  id: HookCardBackdrop;
+  label: string;
+  iconName: HookIconName;
+  desc: string;
+}> = [
+  {
+    id: 'cinematic-banner',
+    label: 'Floating Card Kompak',
+    iconName: 'flag',
+    desc: 'Kartu mengambang kompak bergradien gelap, sudut rounded halus & tidak menutupi penuh layar',
+  },
+  {
+    id: 'frosted-glass',
+    label: 'Frosted Glass',
+    iconName: 'sparkles',
+    desc: 'Kaca blur transparan modern dengan border tipis elegan & sudut melengkung',
+  },
+  {
+    id: 'solid-dark',
+    label: 'Solid Dark',
+    iconName: 'target',
+    desc: 'Kotak gelap pekat dengan kontras & ketajaman maksimal',
+  },
+  {
+    id: 'neon-glow',
+    label: 'Neon Glow',
+    iconName: 'zap',
+    desc: 'Aksen ambient glow dan border menyala senada warna tema badge',
+  },
+  {
+    id: 'minimal-shadow',
+    label: 'Minimalist',
+    iconName: 'eye',
+    desc: 'Teks melayang bersih tanpa kotak (hanya drop-shadow tegas)',
+  },
+];
+
 const PRESET_ICON_MAP: Record<string, HookIconName> = {
   'kinetic-punch': 'zap',
   'curiosity-stack': 'help-circle',
@@ -159,6 +200,8 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
   onBadgePresetChange,
   selectedBadgeColor = 'auto',
   onBadgeColorChange,
+  selectedBackdrop = 'cinematic-banner',
+  onBackdropChange,
   disabled = false,
   aiRecommendationId = 'kinetic-punch',
   customHookText,
@@ -1237,6 +1280,79 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
               })}
             </div>
           </div>
+
+          {/* Group 7: Style Background Teks Hook (Hook Card Backdrop) */}
+          <div className="hts-control-group">
+            <div className="hts-group-header">
+              <div className="hts-group-title-row">
+                <span className="hts-group-title">7. Style Background Teks Hook</span>
+                <span className="hts-group-badge">5 Pilihan Gaya</span>
+              </div>
+              <span className="hts-group-hint">
+                Pilih tampilan latar belakang teks hook agar kontras dan tidak bentrok dengan video
+              </span>
+            </div>
+
+            <div className="hts-backdrop-grid" role="radiogroup" aria-label="Hook Card Backdrop Options">
+              {BACKDROP_OPTIONS.map((opt) => {
+                const isSelected = (selectedBackdrop ?? 'cinematic-banner') === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`hts-backdrop-card ${isSelected ? 'active' : ''}`}
+                    onClick={() => {
+                      if (!disabled && onBackdropChange) {
+                        onBackdropChange(opt.id);
+                      }
+                    }}
+                    disabled={disabled}
+                    role="radio"
+                    aria-checked={isSelected}
+                  >
+                    <div className="hts-backdrop-card-top">
+                      <div className="hts-backdrop-icon-wrap">
+                        <HookIcon name={opt.iconName} size={15} color={isSelected ? '#00F0FF' : '#94A3B8'} />
+                        <span className="hts-backdrop-card-label">{opt.label}</span>
+                      </div>
+                      {isSelected && <span className="hts-badge-check">✓ Aktif</span>}
+                    </div>
+
+                    {/* Miniature live preview */}
+                    <div className={`hts-backdrop-mini-preview preview-${opt.id}`}>
+                      {opt.id === 'cinematic-banner' && (
+                        <div className="mini-banner-line">
+                          <span>CONTOH TEKS HOOK</span>
+                        </div>
+                      )}
+                      {opt.id === 'frosted-glass' && (
+                        <div className="mini-glass-box">
+                          <span>CONTOH TEKS HOOK</span>
+                        </div>
+                      )}
+                      {opt.id === 'solid-dark' && (
+                        <div className="mini-solid-box">
+                          <span>CONTOH TEKS HOOK</span>
+                        </div>
+                      )}
+                      {opt.id === 'neon-glow' && (
+                        <div className="mini-neon-box">
+                          <span>CONTOH TEKS HOOK</span>
+                        </div>
+                      )}
+                      {opt.id === 'minimal-shadow' && (
+                        <div className="mini-shadow-box">
+                          <span>CONTOH TEKS HOOK</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="hts-backdrop-card-desc">{opt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Right Column: Sticky Live Phone Preview */}
@@ -1249,6 +1365,7 @@ export const HookTextStylePresets: React.FC<HookTextStylePresetsProps> = ({
               overrideTypography={selectedTypography}
               selectedBadgePreset={selectedBadgePreset}
               selectedBadgeColor={selectedBadgeColor}
+              selectedBackdrop={selectedBackdrop}
               customText={customHookText}
               customTag={customHookTag}
               highlightWords={highlightWords}

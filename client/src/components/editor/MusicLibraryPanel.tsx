@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import {
   AUDIO_CATALOG,
   MUSIC_GENRES,
@@ -49,7 +49,6 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
   // Live scraping states
   const [liveScrapedTracks, setLiveScrapedTracks] = useState<MusicTrack[]>([]);
   const [isScrapingLive, setIsScrapingLive] = useState(false);
-  const [autoDirectScrape, setAutoDirectScrape] = useState(true);
   const [cookieModalOpen, setCookieModalOpen] = useState(false);
   const [pixabayCookieInput, setPixabayCookieInput] = useState(() => {
     try {
@@ -62,9 +61,6 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
     type: 'success' | 'warn' | 'error';
     message: string;
   } | null>(null);
-
-  // Track the last scraped query to avoid duplicate scraping
-  const lastScrapedQueryRef = useRef<string>('');
 
   // -------------------------------------------------------------------------
   // Combined list: Live scraped tracks + Base Catalog
@@ -162,23 +158,6 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
       setIsScrapingLive(false);
     }
   };
-
-  // -------------------------------------------------------------------------
-  // Automatic Direct Scraping Debounce (750ms after typing)
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    if (!autoDirectScrape) return;
-    const q = searchQuery.trim();
-    if (q.length < 3 || q.toLowerCase() === 'pixabay') return;
-    if (q === lastScrapedQueryRef.current) return;
-
-    const timer = setTimeout(() => {
-      lastScrapedQueryRef.current = q;
-      handlePixabayLiveSearch(undefined, q);
-    }, 750);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, autoDirectScrape]);
 
   // -------------------------------------------------------------------------
   // Preview playback
@@ -530,7 +509,7 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
           <div style={{ position: 'relative', flex: 1 }}>
             <input
               type="text"
-              placeholder="🔍 Cari atau ketik kata kunci Pixabay (otomatis scrape)..."
+              placeholder="🔍 Cari musik atau kata kunci Pixabay..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -539,7 +518,6 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  lastScrapedQueryRef.current = searchQuery.trim();
                   handlePixabayLiveSearch();
                 }
               }}
@@ -574,7 +552,6 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
 
           <button
             onClick={() => {
-              lastScrapedQueryRef.current = searchQuery.trim();
               handlePixabayLiveSearch();
             }}
             disabled={isScrapingLive || !searchQuery.trim()}
@@ -603,7 +580,7 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
           </button>
         </div>
 
-        {/* Auto-scrape option & hotkey info */}
+        {/* Manual search hint */}
         <div
           style={{
             display: 'flex',
@@ -614,23 +591,7 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
             padding: '0 2px',
           }}
         >
-          <label
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={autoDirectScrape}
-              onChange={(e) => setAutoDirectScrape(e.target.checked)}
-              style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
-            />
-            <span>Auto-scrape Pixabay saat mengetik</span>
-          </label>
+          <span>Hasil katalog lokal difilter saat mengetik.</span>
           <span style={{ opacity: 0.75 }}>
             Tekan <kbd style={{ padding: '1px 4px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: '3px', fontSize: '10px' }}>Enter</kbd> untuk cari langsung
           </span>
@@ -742,7 +703,6 @@ export const MusicLibraryPanel: React.FC<MusicLibraryPanelProps> = ({
             {searchQuery.trim().length > 0 && (
               <button
                 onClick={() => {
-                  lastScrapedQueryRef.current = searchQuery.trim();
                   handlePixabayLiveSearch(undefined, searchQuery.trim());
                 }}
                 disabled={isScrapingLive}

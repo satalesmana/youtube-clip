@@ -16,7 +16,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
-import { getHeadlineLayout } from './layoutHelper';
+import { getHeadlineLayout, resolveCardBackdropStyle, type HookCardBackdrop } from './layoutHelper';
 
 const MAX_WORDS = 10;
 
@@ -26,6 +26,7 @@ interface KineticRendererProps {
   tag?: string;
   badgePresetId?: BadgePresetId;
   badgeColor?: string;
+  backdrop?: HookCardBackdrop;
   highlightWords?: string[];
   visualPreset: VisualPreset;
   durationFrames?: number;
@@ -37,6 +38,7 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
   tag,
   badgePresetId,
   badgeColor,
+  backdrop,
   highlightWords,
   visualPreset,
   durationFrames,
@@ -102,31 +104,38 @@ export const KineticRenderer: React.FC<KineticRendererProps> = ({
   const fitted = fitText({
     text: longestLine,
     fontFamily: font,
-    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.80 : 0.86),
+    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.70 : 0.76),
   });
-  const baseSize = Math.max(60, Math.min(84, Math.round(fitted.fontSize)));
+  const baseSize = Math.max(52, Math.min(76, Math.round(fitted.fontSize)));
   const headlineSize = Math.round(baseSize * layoutStyle.fontSizeFactor);
   const strokeWidth = Math.max(4, Math.round(headlineSize / 9));
+
+  const containerStyle = layoutStyle.containerStyle;
+
+  const cardBackdropStyle = resolveCardBackdropStyle(
+    backdrop ?? 'cinematic-banner',
+    theme,
+    width,
+    layoutStyle.cardStyle,
+  );
 
   return (
     <AbsoluteFill
       style={{
-        ...layoutStyle.containerStyle,
+        ...containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
-          ...layoutStyle.cardStyle,
+          ...cardBackdropStyle,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           opacity: finalOpacity,
           display: 'flex',
           flexDirection: 'column',
           alignItems: layoutStyle.alignItems,
           textAlign: layoutStyle.textAlign,
-          gap: 14,
-          borderRadius: 24,
-          background: layoutStyle.background || 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
+          gap: 10,
         }}
       >
         {/* Floating Social Pill Tag */}

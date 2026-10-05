@@ -43,6 +43,13 @@ export type PlanScene = {
   hookAnimation?: string;
   /** Typography variant override from Hook Klip design system */
   hookTypography?: string;
+  /** Hook card backdrop style */
+  hookBackdrop?:
+    | 'cinematic-banner'
+    | 'frosted-glass'
+    | 'solid-dark'
+    | 'neon-glow'
+    | 'minimal-shadow';
 };
 
 export type PlanCaption = {
@@ -90,6 +97,12 @@ export type CompositionProps = {
   subtitleSize?: 'sm' | 'md' | 'lg' | 'xl';
   /** Whether outro CTA is enabled (defaults to true). */
   enableIntroOutro?: boolean;
+  /** Whether the editable hook headline is enabled. */
+  enableHookIntro?: boolean;
+  hookStartSec?: number;
+  hookDurationSec?: number;
+  hookTitle?: string;
+  hookTag?: string;
   /** Outro style preset id (e.g. 'creator-glass', 'viral-neon', etc.). */
   outroPreset?: string;
   /** Custom call-to-action headline text for the outro card. */
@@ -98,6 +111,8 @@ export type CompositionProps = {
   outroButtonText?: string;
   /** Duration in seconds for the outro card (default 3s). */
   outroDuration?: number;
+  /** Output timeline position in seconds where the CTA card begins. */
+  outroStartSec?: number;
   /** Custom channel name / handle for the outro card. */
   outroChannelName?: string;
   /** Custom logo image URL, data URL, or file path for the outro card. */
@@ -145,6 +160,19 @@ export type HookIntroProps = {
       | 'diagonal-slash';
     /** Badge pill color variant: 'cyan' | 'magenta' | 'red' | 'yellow' | 'green' | 'purple' | 'gold' | 'auto' */
     badgeColor?: string;
+    /** Hook card backdrop style */
+    hookBackdrop?:
+      | 'cinematic-banner'
+      | 'frosted-glass'
+      | 'solid-dark'
+      | 'neon-glow'
+      | 'minimal-shadow';
+    backdrop?:
+      | 'cinematic-banner'
+      | 'frosted-glass'
+      | 'solid-dark'
+      | 'neon-glow'
+      | 'minimal-shadow';
   };
   /** Staged source video (public-relative path, absolute for Studio testing). */
   sourceVideoPath: string;
@@ -164,4 +192,7 @@ export type OutroCardShortProps = {
   themeSeed?: string;
   outroPreset?: string;
   buttonText?: string;
+  sourceVideoPath?: string;
+  sourceStart?: number;
+  sourceEnd?: number;
 };

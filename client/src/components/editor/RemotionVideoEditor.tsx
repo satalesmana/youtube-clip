@@ -4,9 +4,12 @@ import type { RemotionStudioCompositionProps } from './RemotionStudioComposition
 import { InteractiveTimeline, type BrollBlock } from './InteractiveTimeline';
 import { MusicLibraryPanel } from './MusicLibraryPanel';
 import { CanvasOverlayEditor } from './CanvasOverlayEditor';
+import { PresetLibraryPanel } from './PresetLibraryPanel';
+import { findMasterCanvasPreset, type MasterCanvasPreset } from '../../lib/master-canvas-presets';
 import { resolveAudioStreamUrl } from '../../lib/audio-catalog';
 import type { useClipTransform } from '../../hooks/useClipTransform';
 import type { useAiProducer } from '../../hooks/useAiProducer';
+import type { ViralClip } from '../../types';
 import { resolveBrollMediaAsset, resolveStockBrollUrl } from '../../lib/stock-broll';
 import { resolveClientOutroPreset } from '../../lib/outro-presets';
 import { resolvePresetIdFromHook } from '../../lib/visual-presets';
@@ -122,12 +125,14 @@ interface RemotionVideoEditorProps {
   transform: ReturnType<typeof useClipTransform>;
   producer: ReturnType<typeof useAiProducer>;
   onOpenFullProducerDrawer: () => void;
+  onOpenRenderedOutput: () => void;
 }
 
 export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
   transform,
   producer,
   onOpenFullProducerDrawer,
+  onOpenRenderedOutput,
 }) => {
   const {
     aspectRatio,
@@ -168,6 +173,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     downloadedVideo,
     transcript,
     dynamicStyles,
+    setDynamicStyles,
     dynamicOverlays,
     setDynamicOverlays,
     addDynamicOverlay,
@@ -183,8 +189,10 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
   } = transform;
 
   const [promptInput, setPromptInput] = useState('');
-  const [activeTab, setActiveTab] = useState<'editor' | 'hook' | 'subtitle' | 'music'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'hook' | 'subtitle' | 'music'>('hook');
+  const [isPresetLibraryOpen, setIsPresetLibraryOpen] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState(1);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState<'tools' | null>(null);
 
   // playerRef for timeline sync
   const playerRef = useRef<PlayerRef | null>(null);
@@ -195,6 +203,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
   // Canvas Overlay Editor
   const [canvasEditorOpen, setCanvasEditorOpen] = useState(false);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
+  const [previewMode, setPreviewMode] = useState<'editor' | 'rendered'>('editor');
+  const renderedPreviewSignatureRef = useRef('');
   const [faceFocusPoints, setFaceFocusPoints] = useState<Array<{ time: number; x: number; y: number }>>([]);
   const [faceSourceAspectRatio, setFaceSourceAspectRatio] = useState(16 / 9);
   const [faceFocusStatus, setFaceFocusStatus] = useState<'idle' | 'analyzing' | 'ready' | 'no-face' | 'error'>('idle');
@@ -225,13 +235,20 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
   const hookSourceEnd = hookSourceStart !== undefined && selectedHook?.source?.end !== undefined
     ? Math.min(selectedHook.source.end, hookSourceStart + 3.5)
     : undefined;
-  const hookDurationSec = hookSourceStart !== undefined && hookSourceEnd !== undefined && hookSourceEnd > hookSourceStart
+  const defaultHookDurationSec = hookSourceStart !== undefined && hookSourceEnd !== undefined && hookSourceEnd > hookSourceStart
     ? hookSourceEnd - hookSourceStart
     : Math.min(3.5, Math.max(0.5, selectedHook?.finalDurationSeconds ?? 3.5));
+  const [customHookDuration, setCustomHookDuration] = useState<number | null>(null);
+  const [customOutroDuration, setCustomOutroDuration] = useState<number | null>(null);
+  const [customHookStartSec, setCustomHookStartSec] = useState<number | null>(null);
+  const [customOutroStartSec, setCustomOutroStartSec] = useState<number | null>(null);
+  const hookStartSec = customHookStartSec ?? 0;
+  const hookDurationSec = customHookDuration !== null ? customHookDuration : defaultHookDurationSec;
   const clipStart = activeClip?.start ?? 0;
   const clipEnd = activeClip?.end ?? (clipStart + clipBaseDuration);
-  const isRenderedOutput = Boolean(transform.transformResult?.videoUrl);
-  const sequenceHookIntro = enableHookIntro && transform.outputMode === 'reel' && !isRenderedOutput;
+  const renderedVideoUrl = transform.transformResult?.videoUrl;
+  const isRenderedOutput = previewMode === 'rendered' && Boolean(renderedVideoUrl);
+  const sequenceHookIntro = enableHookIntro && transform.outputMode === 'reel' && !isRenderedOutput && hookStartSec === 0;
   // Hook and selected clip are independent timeline segments. The clip always
   // begins at its selected source range, even when it overlaps the hook range.
   const sourceContentStartSec = clipStart;
@@ -248,33 +265,136 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     ? Math.max(0.5, clipEnd - sourceContentStartSec)
     : baseVideoDurationSec;
   const videoDurationSec = contentDurationSec;
-  const durationInFrames = Math.max(90, Math.round((contentDurationSec + (sequenceHookIntro ? hookDurationSec : 0)) * fps));
-  const effectiveDurationSec = durationInFrames / fps;
   const timelineContentOffsetSec = sequenceHookIntro ? hookDurationSec : 0;
-  const effectiveOutroDurationSec = Math.min(
-    Math.max(0, outroDuration || 3),
-    effectiveDurationSec,
-  );
 
-  // Derive real voice-synced transcript captions for the active clip
+  // Immutable baseline clip range when clip is loaded/selected
+  const originalClipRangeRef = useRef<{ start: number; end: number; duration: number } | null>(null);
+
+  useEffect(() => {
+    if (activeClip) {
+      originalClipRangeRef.current = {
+        start: activeClip.start,
+        end: activeClip.end,
+        duration: activeClip.duration,
+      };
+    }
+    setCustomVideoRange(null);
+    setCustomSubtitleRange(null);
+    setCustomHookDuration(null);
+    setCustomOutroDuration(null);
+    setCustomHookStartSec(null);
+    setCustomOutroStartSec(null);
+  }, [selectedClipIndex, selectedHookIndex, downloadedVideo?.videoId]);
+
+  const baseClipStart = originalClipRangeRef.current?.start ?? (activeClip?.start ?? 0);
+  const baseClipEnd = originalClipRangeRef.current?.end ?? (activeClip?.end ?? (baseClipStart + clipBaseDuration));
+
+  // User-defined video trim & display range on the timeline (null = default full content range)
+  const [customVideoRange, setCustomVideoRange] = useState<{
+    start: number;       // Position on timeline in seconds
+    duration: number;    // Visible duration on timeline in seconds
+    trimFrontSec: number;// Seconds trimmed from the beginning of this clip
+  } | null>(null);
+
+  // User-defined subtitle display range on the timeline (null = default full content range)
+  const [customSubtitleRange, setCustomSubtitleRange] = useState<{ start: number; end: number } | null>(null);
+
+  // Lock synchronization between Subtitle and Video Utama (true by default)
+  const [lockSubtitleVideo, setLockSubtitleVideo] = useState(true);
+
+  const defaultVideoStart = timelineContentOffsetSec;
+  const defaultVideoDuration = contentDurationSec;
+
+  const activeVideoStart = customVideoRange !== null ? customVideoRange.start : defaultVideoStart;
+  const activeVideoDuration = customVideoRange !== null ? customVideoRange.duration : defaultVideoDuration;
+  const activeVideoTrimFront = customVideoRange !== null ? customVideoRange.trimFrontSec : 0;
+  const activeVideoEnd = activeVideoStart + activeVideoDuration;
+  const hookVideoShiftSec = enableHookIntro && !sequenceHookIntro && hookStartSec < activeVideoEnd ? hookDurationSec : 0;
+  const contentToTimelineTime = useCallback((sec: number) => {
+    if (!enableHookIntro) return sec;
+    if (sequenceHookIntro) return sec + hookDurationSec;
+    return sec >= hookStartSec ? sec + hookDurationSec : sec;
+  }, [enableHookIntro, sequenceHookIntro, hookDurationSec, hookStartSec]);
+  const timelineToContentTime = useCallback((sec: number) => {
+    if (!enableHookIntro) return sec;
+    if (sequenceHookIntro) return Math.max(0, sec - hookDurationSec);
+    return sec >= hookStartSec + hookDurationSec ? sec - hookDurationSec : sec;
+  }, [enableHookIntro, sequenceHookIntro, hookDurationSec, hookStartSec]);
+
+  const activeSubtitleStart = customSubtitleRange !== null
+    ? customSubtitleRange.start
+    : (lockSubtitleVideo ? activeVideoStart : defaultVideoStart);
+  const activeSubtitleEnd = customSubtitleRange !== null
+    ? customSubtitleRange.end
+    : (lockSubtitleVideo ? activeVideoEnd : (defaultVideoStart + defaultVideoDuration));
+  const activeSubtitleDuration = Math.max(0.5, activeSubtitleEnd - activeSubtitleStart);
+
+  const baseTimelineEndSec = Math.max(
+    contentDurationSec + (enableHookIntro ? hookDurationSec : 0),
+    hookStartSec + (enableHookIntro ? hookDurationSec : 0),
+    activeVideoEnd + hookVideoShiftSec,
+    activeSubtitleEnd + hookVideoShiftSec,
+  );
+  const requestedOutroDurationSec = Math.max(1, customOutroDuration ?? outroDuration ?? 3);
+  const outroStartSec = customOutroStartSec ?? baseTimelineEndSec;
+
+  // Handle lock/unlock synchronization between Subtitle and Video tracks
+  const handleLockSubtitleVideoChange = useCallback((locked: boolean) => {
+    setLockSubtitleVideo(locked);
+    if (!locked) {
+      // When unlocking, snapshot both tracks into independent custom ranges
+      setCustomSubtitleRange((prev) => prev !== null ? prev : {
+        start: activeSubtitleStart,
+        end: activeSubtitleEnd,
+      });
+      setCustomVideoRange((prev) => prev !== null ? prev : {
+        start: activeVideoStart,
+        duration: activeVideoDuration,
+        trimFrontSec: activeVideoTrimFront,
+      });
+    } else {
+      // When locking back, re-align subtitle to video track
+      setCustomSubtitleRange({
+        start: activeVideoStart,
+        end: activeVideoEnd,
+      });
+    }
+  }, [
+    activeSubtitleStart,
+    activeSubtitleEnd,
+    activeVideoStart,
+    activeVideoDuration,
+    activeVideoTrimFront,
+    activeVideoEnd,
+  ]);
+
+  const maxContentEndSec = Math.max(
+    baseTimelineEndSec,
+    enableIntroOutro ? outroStartSec + requestedOutroDurationSec : 0,
+  );
+  const durationInFrames = Math.max(90, Math.round(maxContentEndSec * fps));
+  const effectiveDurationSec = durationInFrames / fps;
+  const effectiveOutroDurationSec = requestedOutroDurationSec;
+
+  // Derive real voice-synced transcript captions for the active clip (stable relative to baseClipStart)
   const clipCaptions = useMemo(() => {
     if (!transcript?.segments?.length || !activeClip) return [];
 
-    // Filter segments overlapping this clip range
+    // Filter segments overlapping this original clip range
     const segmentsInRange = transcript.segments.filter(
-      (s) => s.end > sourceContentStartSec && s.start < clipEnd,
+      (s) => s.end > baseClipStart && s.start < baseClipEnd,
     );
 
-    // Flatten words in range with timestamps rebased to the first visible clip frame.
+    // Flatten words in range with timestamps rebased to baseClipStart (stable 0-indexed).
     const flatWords: Array<{ word: string; start: number; end: number }> = [];
     for (const seg of segmentsInRange) {
       if (seg.words && seg.words.length > 0) {
         for (const w of seg.words) {
-          if (w.end > sourceContentStartSec && w.start < clipEnd) {
+          if (w.end > baseClipStart && w.start < baseClipEnd) {
             flatWords.push({
               word: w.word,
-              start: Math.max(0, Number((w.start - sourceContentStartSec).toFixed(2))),
-              end: Math.max(0.05, Number((w.end - sourceContentStartSec).toFixed(2))),
+              start: Math.max(0, Number((w.start - baseClipStart).toFixed(2))),
+              end: Math.max(0.05, Number((w.end - baseClipStart).toFixed(2))),
             });
           }
         }
@@ -285,11 +405,11 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         words.forEach((w, i) => {
           const wStart = seg.start + i * wDur;
           const wEnd = seg.start + (i + 1) * wDur;
-          if (wEnd > sourceContentStartSec && wStart < clipEnd) {
+          if (wEnd > baseClipStart && wStart < baseClipEnd) {
             flatWords.push({
               word: w,
-              start: Math.max(0, Number((wStart - sourceContentStartSec).toFixed(2))),
-              end: Math.max(0.05, Number((wEnd - sourceContentStartSec).toFixed(2))),
+              start: Math.max(0, Number((wStart - baseClipStart).toFixed(2))),
+              end: Math.max(0.05, Number((wEnd - baseClipStart).toFixed(2))),
             });
           }
         });
@@ -327,7 +447,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     }
 
     return captions;
-  }, [transcript, activeClip, sourceContentStartSec, clipEnd]);
+  }, [transcript, activeClip, baseClipStart, baseClipEnd]);
 
   // Derive real voice-synced captions for narration mode (AI script sections)
   const narrationCaptions = useMemo(() => {
@@ -503,13 +623,9 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     }
   }, [aspectRatio]);
 
-  // Video source — urutan prioritas:
-  // 1. Video sudah dirender (hasil transform)
-  // 2. previewUrl klip dari server (ada jika clip sudah di-preview)
-  // 3. Source video yang didownload via /api/media/{videoId}/downloads/{videoId}.mp4
+  // Editor mode always uses source footage so timeline edits remain interactive.
   const rawPreviewUrl = activeClip?.previewUrl || '';
   const videoSrc =
-    transform.transformResult?.videoUrl ||
     (rawPreviewUrl || undefined) ||
     (downloadedVideo?.videoId
       ? `/api/media/${downloadedVideo.videoId}/downloads/${downloadedVideo.videoId}.mp4`
@@ -610,11 +726,11 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     () =>
       normalizedBrollList.map((b) => ({
         id: b.id,
-        startSec: b.start + timelineContentOffsetSec,
+        startSec: contentToTimelineTime(b.start),
         durationSec: b.durationSec,
         query: b.query,
       })),
-    [normalizedBrollList, timelineContentOffsetSec],
+    [normalizedBrollList, contentToTimelineTime],
   );
 
   // AI Overlay blocks derived from dynamicOverlays for InteractiveTimeline
@@ -622,12 +738,12 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     () =>
       dynamicOverlays.map((o) => ({
         id: o.id,
-        startSec: o.start + timelineContentOffsetSec,
+        startSec: contentToTimelineTime(o.start),
         durationSec: Math.max(0.5, o.end - o.start),
         label: o.content ? (o.content.length > 24 ? o.content.slice(0, 24) + '…' : o.content) : o.type,
         overlayType: o.type,
       })),
-    [dynamicOverlays, timelineContentOffsetSec],
+    [dynamicOverlays, contentToTimelineTime],
   );
 
   // Broll Placements memoized prop
@@ -663,6 +779,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       hookTypography: selectedHookTypography,
       hookHighlightWords: selectedHook?.highlightWords,
       hookDurationSec,
+      hookStartSec,
       sequenceHookIntro,
       badgePreset: selectedHookBadgePreset || 'neon-outline',
       badgeColor: selectedHookBadgeColor || 'cyan',
@@ -685,6 +802,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       hooks,
       selectedHook,
       hookDurationSec,
+      hookStartSec,
       sequenceHookIntro,
     ],
   );
@@ -697,6 +815,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       outroCtaText: outroCtaText.trim() || selectedOutroPreset.defaultCtaText,
       outroButtonText: outroButtonText.trim() || selectedOutroPreset.defaultButtonText,
       outroDuration: effectiveOutroDurationSec,
+      outroStartSec,
       channelName: outroChannelName || downloadedVideo?.channelTitle || '@kreator',
       outroLogoUrl: outroLogoUrl || undefined,
     }),
@@ -707,6 +826,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       outroButtonText,
       outroDuration,
       effectiveOutroDurationSec,
+      outroStartSec,
       selectedOutroPreset,
       outroChannelName,
       downloadedVideo?.channelTitle,
@@ -747,12 +867,25 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       subtitleSize,
       subtitleText: activeClip?.title,
       captions: transform.outputMode === 'narration' && narrationCaptions.length > 0 ? narrationCaptions : clipCaptions,
+      subtitleStartSec: activeSubtitleStart,
+      subtitleEndSec: activeSubtitleEnd + hookVideoShiftSec,
       isRenderedVideo: isRenderedOutput,
       enableBroll,
       brollPlacements: brollPlacementsProp,
       ...outroProps,
       ...audioProps,
-      videoStartFromSec: videoSrc?.includes('/downloads/') ? clipStart : sourceRelativeContentStartSec,
+      videoStartFromSec: Math.max(
+        0,
+        Number(
+          (
+            (videoSrc?.includes('/downloads/') ? baseClipStart : 0) +
+            activeVideoTrimFront
+          ).toFixed(2),
+        ),
+      ),
+      videoStartSec: activeVideoStart,
+      videoDurationSec: activeVideoDuration,
+      videoTrimFrontSec: activeVideoTrimFront,
       faceFocusPoints,
       faceSourceAspectRatio,
       dynamicStyles,
@@ -771,17 +904,73 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       transform.outputMode,
       narrationCaptions,
       clipCaptions,
+      activeSubtitleStart,
+      activeSubtitleEnd,
+      hookVideoShiftSec,
+      activeVideoStart,
+      activeVideoDuration,
+      activeVideoTrimFront,
       transform.transformResult?.videoUrl,
       enableBroll,
       brollPlacementsProp,
       outroProps,
       audioProps,
-      clipStart,
+      baseClipStart,
       faceFocusPoints,
       faceSourceAspectRatio,
       dynamicStyles,
       dynamicOverlays,
     ],
+  );
+
+  const editorPreviewSignature = JSON.stringify({
+    videoId: downloadedVideo?.videoId,
+    selectedClipIndex,
+    videoRange: customVideoRange,
+    subtitleRange: customSubtitleRange,
+    hook: [enableHookIntro, customHookText, customHookTag, selectedVisualPreset, hookStartSec, hookDurationSec],
+    outro: [enableIntroOutro, customOutroStartSec, effectiveOutroDurationSec, outroCtaText, outroButtonText, selectedOutroPreset.id],
+    format: [aspectRatio, templateId, subtitleSize],
+    styles: dynamicStyles,
+    overlays: dynamicOverlays,
+    broll: brollPlacementsProp,
+    audio: [selectedMusicTrack?.id, musicVolume, autoDucking, transform.sourceVolume],
+  });
+
+  useEffect(() => {
+    if (previewMode === 'rendered' && !renderedVideoUrl) {
+      setPreviewMode('editor');
+      return;
+    }
+    if (
+      previewMode === 'rendered' &&
+      renderedVideoUrl &&
+      renderedPreviewSignatureRef.current &&
+      renderedPreviewSignatureRef.current !== editorPreviewSignature
+    ) {
+      setPreviewMode('editor');
+    }
+  }, [previewMode, renderedVideoUrl, editorPreviewSignature]);
+
+  // Apply holistic master canvas preset
+  const applyMasterPreset = useCallback(
+    (preset: MasterCanvasPreset) => {
+      setTemplateId(preset.subtitleTemplateId);
+      setSubtitleSize(preset.subtitleSize);
+      setSelectedVisualPreset(preset.hookVisualPresetId as any);
+      setDynamicStyles((prev) => ({
+        ...prev,
+        canvas: {
+          ...prev.canvas,
+          ...preset.canvasStyles,
+        },
+        video: {
+          ...prev.video,
+          ...preset.videoStyles,
+        },
+      }));
+    },
+    [setTemplateId, setSubtitleSize, setSelectedVisualPreset, setDynamicStyles],
   );
 
   // Canvas drop handler
@@ -791,7 +980,10 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       setIsDragOverCanvas(false);
       try {
         const data = JSON.parse(e.dataTransfer.getData('application/json'));
-        if (data.type === 'subtitle-preset') {
+        if (data.type === 'master-canvas-preset') {
+          const p = findMasterCanvasPreset(data.id);
+          if (p) applyMasterPreset(p);
+        } else if (data.type === 'subtitle-preset') {
           setTemplateId(data.id);
         } else if (data.type === 'hook-preset') {
           setSelectedVisualPreset(data.id as any);
@@ -802,7 +994,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         // ignore malformed drag data
       }
     },
-    [setTemplateId, setSelectedVisualPreset],
+    [applyMasterPreset, setTemplateId, setSelectedVisualPreset],
   );
 
   const handleSendPrompt = (textToSend?: string) => {
@@ -812,141 +1004,230 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
     if (!textToSend) setPromptInput('');
   };
 
+  const handleRender = async () => {
+    const clipIdx = selectedClipIndex !== null ? selectedClipIndex : 0;
+    let targetStart = baseClipStart;
+    let targetEnd = baseClipEnd;
+
+    if (customVideoRange) {
+      targetStart = Math.max(0, Number((baseClipStart + customVideoRange.trimFrontSec).toFixed(2)));
+      targetEnd = Math.max(targetStart + 0.5, Number((targetStart + customVideoRange.duration).toFixed(2)));
+    } else if (activeClip) {
+      targetStart = activeClip.start;
+      targetEnd = activeClip.end;
+    }
+
+    const finalDuration = Math.max(0.5, Number((targetEnd - targetStart).toFixed(2)));
+
+    const updatedClip: ViralClip = activeClip
+      ? {
+          ...activeClip,
+          start: targetStart,
+          end: targetEnd,
+          duration: finalDuration,
+        }
+        : {
+          id: 'clip-0',
+          start: targetStart,
+          end: targetEnd,
+          duration: finalDuration,
+          score: 100,
+          title: 'Klip Pilihan',
+          reason: '',
+        };
+
+    const updatedClips = clips.length > 0 ? [...clips] : [updatedClip];
+    updatedClips[clipIdx] = updatedClip;
+    transform.setClips(updatedClips);
+
+    const selectedClipsPayload = [
+      {
+        start: targetStart,
+        end: targetEnd,
+        title: updatedClip.title,
+      },
+    ];
+
+    // Map B-roll placements to absolute timestamps matching targetStart for backend processing
+    const mappedBrolls =
+      enableBroll && brollPlacements.length > 0
+        ? brollPlacements.map((b) => {
+            const rawStart = Number((b as any).start ?? (b as any).startSec ?? (b as any).cue?.start ?? 0);
+            const rawEnd = Number((b as any).end ?? (b as any).endSec ?? (b as any).cue?.end ?? (rawStart + 3));
+            const relStart = rawStart >= baseClipStart ? Math.max(0, rawStart - baseClipStart) : rawStart;
+            const relEnd = rawEnd >= baseClipStart ? Math.max(relStart + 0.5, rawEnd - baseClipStart) : rawEnd;
+            const absStart = Number((targetStart + relStart).toFixed(2));
+            const absEnd = Number((targetStart + relEnd).toFixed(2));
+            return {
+              ...b,
+              start: absStart,
+              end: absEnd,
+              cue: b.cue
+                ? { ...b.cue, start: absStart, end: absEnd }
+                : { start: absStart, end: absEnd, query: (b as any).query || 'B-Roll' },
+            };
+          })
+        : undefined;
+
+    try {
+      await startTransform({
+        clips: updatedClips,
+        selectedClips: selectedClipsPayload,
+        start: targetStart,
+        end: targetEnd,
+        enableHookIntro,
+        hookDuration: hookDurationSec,
+        hookStartSec,
+        timelineOffsetSec: Math.max(0, Number((activeVideoStart - defaultVideoStart).toFixed(2))),
+        enableIntroOutro,
+        outroDuration: effectiveOutroDurationSec,
+        outroStartSec,
+        templateId,
+        subtitleSize,
+        aspectRatio,
+        sourceVolume: transform.sourceVolume,
+        brollPlacements: mappedBrolls,
+      });
+      renderedPreviewSignatureRef.current = editorPreviewSignature;
+      setPreviewMode('rendered');
+    } catch {
+      setPreviewMode('editor');
+    }
+  };
+
   return (
-    <div
-      className="remotion-editor-shell"
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-focus)',
-        borderRadius: 'var(--radius-xl)',
-        padding: '24px',
-        marginBottom: '28px',
-        boxShadow: 'var(--shadow-glow)',
-      }}
-    >
+    <div className="remotion-editor-shell">
       {/* -------------------------------------------------------------------- */}
-      {/* HEADER                                                                */}
+      {/* HEADER BAR                                                            */}
       {/* -------------------------------------------------------------------- */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '12px',
-          marginBottom: '20px',
-          borderBottom: '1px solid var(--border)',
-          paddingBottom: '16px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #0F4C75, #3282B8)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '18px',
-              boxShadow: '0 4px 12px rgba(50, 130, 184, 0.4)',
-              flexShrink: 0,
-            }}
-          >
-            🎬
-          </div>
+      <div className="remotion-editor-header-bar">
+        <div className="remotion-editor-header-left">
+          <div className="remotion-editor-header-icon">🎬</div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ margin: 0, fontSize: '17px', color: '#FFFFFF', fontWeight: 800 }}>
-                Editor Video
-              </h3>
-              <span
-                style={{
-                  background: 'rgba(50, 130, 184, 0.2)',
-                  border: '1px solid #3282B8',
-                  borderRadius: '999px',
-                  padding: '2px 8px',
-                  fontSize: '10px',
-                  color: '#BBE1FA',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Live Preview
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span className="remotion-editor-title">Editor Video</span>
+              <span className={`remotion-editor-status-badge ${previewMode === 'rendered' ? 'is-rendered' : ''}`}>
+                <span className="remotion-editor-status-dot" />
+                {previewMode === 'rendered' ? 'Hasil Render' : 'Live Preview'}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-sub)' }}>
-              Perubahan hook, subtitle, dan B-roll langsung terlihat di pratinjau.
-            </p>
+            <div className="remotion-editor-subtitle">
+              {previewMode === 'rendered'
+                ? 'Menampilkan video final hasil render Remotion.'
+                : 'Perubahan hook, subtitle, dan B-roll langsung terlihat di pratinjau.'}
+            </div>
           </div>
         </div>
 
-        {/* Aspect Ratio Switcher */}
-        <div className="remotion-editor-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-sub)', marginRight: '4px' }}>Format:</span>
-          {(['9:16', '1:1', '16:9'] as const).map((ratio) => (
-            <button
-              key={ratio}
-              type="button"
-              onClick={() => setAspectRatio(ratio)}
-              style={{
-                background: aspectRatio === ratio ? 'var(--accent)' : 'var(--bg-panel)',
-                color: aspectRatio === ratio ? '#FFFFFF' : 'var(--text-muted)',
-                border: `1px solid ${aspectRatio === ratio ? 'var(--border-focus)' : 'var(--border)'}`,
-                borderRadius: '8px',
-                padding: '4px 10px',
-                fontSize: '11.5px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {ratio === '9:16' ? '📱 9:16' : ratio === '1:1' ? '⏹️ 1:1' : '🖥️ 16:9'}
-            </button>
-          ))}
+        {/* Right: Format + Preview + Actions */}
+        <div className="remotion-editor-header-actions">
+          {/* Preview Mode Toggle */}
+          {renderedVideoUrl && (
+            <div role="group" aria-label="Mode preview" className="remotion-editor-preview-toggle">
+              {([
+                { id: 'editor', label: '◈ Editor' },
+                { id: 'rendered', label: '✓ Hasil Render' },
+              ] as const).map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  className={`remotion-editor-preview-btn ${previewMode === mode.id ? 'is-active' : ''}`}
+                  title={mode.id === 'rendered' && renderedPreviewSignatureRef.current !== editorPreviewSignature ? 'Menampilkan hasil render sebelumnya; ada editan timeline yang belum dirender.' : mode.label}
+                  onClick={() => {
+                    if (mode.id === 'editor') {
+                      setPreviewMode('editor');
+                      playerRef.current?.seekTo(0);
+                    } else {
+                      renderedPreviewSignatureRef.current = editorPreviewSignature;
+                      setPreviewMode('rendered');
+                    }
+                  }}
+                >
+                  {mode.id === 'editor' ? '◈ Editor' : `✓ Render${renderedPreviewSignatureRef.current && renderedPreviewSignatureRef.current !== editorPreviewSignature ? ' ·lama' : ''}`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Aspect Ratio Group */}
+          <div role="group" aria-label="Format video" className="remotion-editor-format-group">
+            {(['9:16', '1:1', '16:9'] as const).map((ratio) => (
+              <button
+                key={ratio}
+                type="button"
+                className={`remotion-editor-format-btn ${aspectRatio === ratio ? 'is-active' : ''}`}
+                onClick={() => setAspectRatio(ratio)}
+                title={ratio === '9:16' ? 'Reels/TikTok (Vertikal)' : ratio === '1:1' ? 'Square (Instagram)' : 'YouTube (Horizontal)'}
+              >
+                {ratio === '9:16' ? '📱 9:16' : ratio === '1:1' ? '⏹️ 1:1' : '🖥️ 16:9'}
+              </button>
+            ))}
+          </div>
+
+          {/* Output & Render */}
+          <button
+            type="button"
+            className="remotion-editor-output-btn"
+            onClick={onOpenRenderedOutput}
+            disabled={!renderedVideoUrl}
+            title={renderedVideoUrl ? 'Buka hasil render, unduh video, atau buat caption' : 'Render video terlebih dahulu'}
+          >
+            ↓ Output
+          </button>
           <button
             type="button"
             className="remotion-editor-render-button"
             disabled={runningTransform}
-            onClick={() => startTransform()}
+            onClick={() => handleRender()}
           >
-            {runningTransform ? 'Merender…' : 'Render video'}
+            {runningTransform ? '⏳ Merender…' : '▶ Render Video'}
           </button>
         </div>
       </div>
 
       {/* -------------------------------------------------------------------- */}
-      {/* MODE & AUDIO STATUS BAR                                              */}
+      {/* STATUS BAR                                                           */}
       {/* -------------------------------------------------------------------- */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-md)',
-          padding: '10px 16px',
-          marginBottom: '16px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '12px' }}>
-          <span
-            style={{
-              padding: '3px 10px',
-              borderRadius: '999px',
-              fontSize: '11px',
-              fontWeight: 800,
-              background: transform.outputMode === 'narration' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-              border: `1px solid ${transform.outputMode === 'narration' ? '#06B6D4' : '#10B981'}`,
-              color: transform.outputMode === 'narration' ? '#67E8F9' : '#6EE7B7',
-            }}
+      <div className="remotion-editor-status-bar">
+        <div className="remotion-editor-status-left">
+          <button
+            type="button"
+            aria-expanded={isPresetLibraryOpen}
+            className={`remotion-editor-preset-toggle ${isPresetLibraryOpen ? 'is-open' : ''}`}
+            onClick={() => setIsPresetLibraryOpen((open) => !open)}
           >
-            {transform.outputMode === 'narration' ? '🎙️ Narasi AI' : '🎞️ Klip Sorotan'}
-          </span>
+            ◈ Preset Library {isPresetLibraryOpen ? '▴' : '▾'}
+          </button>
+
+          <div className="remotion-editor-nav-divider" />
+
+          {/* Quick Tab Switcher: AI, Hook, Subtitle, Audio (moved next to Preset Library) */}
+          <nav className="remotion-editor-header-tabs" aria-label="Kategori pengaturan editor">
+            {[
+              { id: 'editor' as const, icon: '✦', label: 'AI' },
+              { id: 'hook' as const, icon: '⚡', label: 'Hook' },
+              { id: 'subtitle' as const, icon: 'T', label: 'Subtitle' },
+              { id: 'music' as const, icon: '♫', label: 'Audio' },
+            ].map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                className={`remotion-editor-header-tab ${activeTab === tool.id ? 'is-active' : ''}`}
+                onClick={() => { setActiveTab(tool.id); setMobilePanelOpen('tools'); }}
+                aria-pressed={activeTab === tool.id}
+                title={tool.id === 'editor' ? 'AI Co-Pilot' : tool.id === 'hook' ? 'Hook Intro' : tool.id === 'subtitle' ? 'Subtitle & B-Roll' : 'Musik & Audio'}
+              >
+                <span className="remotion-editor-tab-icon">{tool.icon}</span>
+                <span className="remotion-editor-tab-label">{tool.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          {transform.outputMode === 'narration' && (
+            <span style={{ padding: '3px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 800, background: 'rgba(6, 182, 212, 0.2)', border: '1px solid #06B6D4', color: '#67E8F9' }}>
+              🎙️ Narasi AI
+            </span>
+          )}
 
           {transform.outputMode === 'narration' && (
             <>
@@ -1001,6 +1282,20 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             </button>
           </div>
         )}
+
+        {isPresetLibraryOpen && (
+          <div role="region" aria-label="Preset klip" className="remotion-editor-preset-popover">
+            <PresetLibraryPanel
+              onClose={() => setIsPresetLibraryOpen(false)}
+              onDropSubtitlePreset={(id) => { setTemplateId(id); setIsPresetLibraryOpen(false); }}
+              onDropHookPreset={(id) => { setSelectedVisualPreset(id as any); setIsPresetLibraryOpen(false); }}
+              onDropMusicTrack={(id, streamUrl, title) => { setSelectedMusicTrack({ id, streamUrl, title } as any); setIsPresetLibraryOpen(false); }}
+              activeSubtitleId={templateId}
+              activeHookPresetId={selectedVisualPreset}
+              activeMusicTrackId={selectedMusicTrack?.id ?? null}
+            />
+          </div>
+        )}
       </div>
 
 
@@ -1008,19 +1303,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       {/* ERROR BANNER — tampil langsung jika render gagal                     */}
       {/* -------------------------------------------------------------------- */}
       {transform.transformError && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: '12px',
-            background: 'rgba(239, 68, 68, 0.10)',
-            border: '1.5px solid rgba(239, 68, 68, 0.55)',
-            borderRadius: 'var(--radius-md)',
-            padding: '14px 18px',
-            marginBottom: '8px',
-          }}
-        >
+        <div className="remotion-editor-error-banner">
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: '13px', color: '#EF4444', marginBottom: '4px' }}>
               ⚠️ Render Gagal
@@ -1054,19 +1337,21 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
       {/* -------------------------------------------------------------------- */}
       {/* UNIFIED 2-COLUMN LAYOUT: Left: Canvas & Timeline | Right: Inspector   */}
       {/* -------------------------------------------------------------------- */}
+      <div className="remotion-editor-workspace-body">
       <div
         className="remotion-editor-workspace"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 360px)',
-          gap: '20px',
           alignItems: 'start',
         }}
       >
+        <div className="remotion-editor-mobile-switcher">
+          <button type="button" onClick={() => setMobilePanelOpen((open) => open === 'tools' ? null : 'tools')}>☷ Tools</button>
+        </div>
         {/* ================================================================== */}
         {/* LEFT / CENTER COLUMN: Player Canvas + Interactive Timeline         */}
         {/* ================================================================== */}
-        <div className="remotion-editor-stage-column" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', minWidth: 0, width: '100%' }}>
+        <div className="remotion-editor-stage-column" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0, width: '100%' }}>
           {/* Player wrapper — position:relative so canvas overlay is absolute inside */}
           {/* Extra right padding reserved for library panel when canvas editor open */}
           <div
@@ -1082,13 +1367,13 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               className="remotion-editor-canvas-stage"
               onDragOver={(e) => {
                 e.preventDefault();
-                if (!canvasEditorOpen) setIsDragOverCanvas(true);
+                if (previewMode === 'editor' && !canvasEditorOpen) setIsDragOverCanvas(true);
               }}
               onDragLeave={() => setIsDragOverCanvas(false)}
               onDrop={handleCanvasDrop}
               style={{
                 width: '100%',
-                maxWidth: aspectRatio === '9:16' ? '340px' : aspectRatio === '1:1' ? '420px' : '100%',
+                maxWidth: aspectRatio === '9:16' ? '380px' : aspectRatio === '1:1' ? '440px' : '100%',
                 aspectRatio: playerAspectRatio,
                 borderRadius: 'var(--radius-lg)',
                 overflow: 'visible', // allow library panel to extend outside
@@ -1109,6 +1394,15 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             >
               {/* Inner clip for the player itself */}
               <div style={{ position: 'absolute', inset: 0, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+                {previewMode === 'rendered' && renderedVideoUrl ? (
+                  <video
+                    key={renderedVideoUrl}
+                    src={renderedVideoUrl}
+                    controls
+                    playsInline
+                    style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain', background: '#0A0E14' }}
+                  />
+                ) : (
                 <Suspense fallback={<div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: '#94A3B8' }}>Memuat pratinjau…</div>}>
                 <RemotionPlayer
                   ref={playerRef}
@@ -1124,10 +1418,11 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   autoPlay={false}
                 />
                 </Suspense>
+                )}
               </div>
 
               {/* Preset drag-over overlay (only when canvas editor is closed) */}
-              {isDragOverCanvas && !canvasEditorOpen && (
+              {previewMode === 'editor' && isDragOverCanvas && !canvasEditorOpen && (
                 <div
                   style={{
                     position: 'absolute',
@@ -1159,7 +1454,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               )}
 
               {/* CanvasOverlayEditor — renders toggle button + overlay canvas + inspector + library */}
-              <CanvasOverlayEditor
+              {previewMode === 'editor' && <CanvasOverlayEditor
                 open={canvasEditorOpen}
                 onToggle={() => setCanvasEditorOpen((v) => !v)}
                 overlays={dynamicOverlays}
@@ -1178,7 +1473,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   })
                 }
                 onRemoveOverlay={removeDynamicOverlay}
-              />
+              />}
             </div>
           </div>
 
@@ -1214,6 +1509,10 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               enableHookIntro={enableHookIntro}
               onEnableHookIntroChange={setEnableHookIntro}
               hookDurationSec={hookDurationSec}
+              onHookDurationChange={(dur) => setCustomHookDuration(dur)}
+              hookStartSec={hookStartSec}
+              maxHookStartSec={activeVideoDuration}
+              onHookMove={(start) => setCustomHookStartSec(start)}
               enableBroll={enableBroll}
               onEnableBrollChange={setEnableBroll}
               brollBlocks={brollBlocks}
@@ -1227,6 +1526,12 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               musicVolume={musicVolume}
               enableOutro={enableIntroOutro}
               outroDurationSec={effectiveOutroDurationSec}
+              outroStartSec={outroStartSec}
+              onOutroMove={(start) => setCustomOutroStartSec(start)}
+              onOutroDurationChange={(dur) => {
+                setCustomOutroDuration(dur);
+                transform.setOutroDuration(dur);
+              }}
               outputMode={transform.outputMode}
               narrationAudioUrl={transform.outputMode === 'narration' ? (transform.ttsAudioUrl || undefined) : undefined}
               synthesizingTts={transform.synthesizingTts}
@@ -1234,6 +1539,169 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
               onSourceVolumeChange={(vol) => transform.setSourceVolume(vol)}
               onSeek={(sec) => playerRef.current?.seekTo(Math.round(sec * fps))}
               onMusicVolumeChange={(vol) => setMusicVolume(vol)}
+              // Video & Subtitle Sync Lock
+              lockSubtitleVideo={lockSubtitleVideo}
+              onLockSubtitleVideoChange={handleLockSubtitleVideoChange}
+              // Video trimming & movement
+      videoStartSec={activeVideoStart}
+              videoDurationSec={activeVideoDuration}
+              videoTrimFrontSec={activeVideoTrimFront}
+              onVideoTrim={(newStart, newDur, newTrimFront) => {
+                const finalStart = Math.max(0, Number(newStart.toFixed(2)));
+                const finalDur = Math.max(0.5, Number(newDur.toFixed(2)));
+                const finalTrim = newTrimFront !== undefined
+                  ? Math.max(0, Number(newTrimFront.toFixed(2)))
+                  : activeVideoTrimFront;
+                setCustomVideoRange({
+                  start: finalStart,
+                  duration: finalDur,
+                  trimFrontSec: finalTrim,
+                });
+                if (lockSubtitleVideo) {
+                  setCustomSubtitleRange({
+                    start: finalStart,
+                    end: Math.max(0.5, Number((finalStart + finalDur).toFixed(2))),
+                  });
+                } else {
+                  setCustomSubtitleRange((prev) => prev !== null ? prev : {
+                    start: activeSubtitleStart,
+                    end: activeSubtitleEnd,
+                  });
+                }
+              }}
+              onVideoResize={(newDur, startSec) => {
+                const finalDur = Math.max(0.5, Number(newDur.toFixed(2)));
+                setCustomVideoRange((prev) => {
+                  const start = startSec !== undefined ? startSec : (prev !== null ? prev.start : activeVideoStart);
+                  const trimFront = prev !== null ? prev.trimFrontSec : activeVideoTrimFront;
+                  return {
+                    start,
+                    duration: finalDur,
+                    trimFrontSec: trimFront,
+                  };
+                });
+                if (lockSubtitleVideo) {
+                  setCustomSubtitleRange((prev) => {
+                    const start = startSec !== undefined ? startSec : (prev !== null ? prev.start : activeVideoStart);
+                    return {
+                      start,
+                      end: Math.max(0.5, Number((start + finalDur).toFixed(2))),
+                    };
+                  });
+                } else {
+                  setCustomSubtitleRange((prev) => prev !== null ? prev : {
+                    start: activeSubtitleStart,
+                    end: activeSubtitleEnd,
+                  });
+                }
+              }}
+              onVideoMove={(newStart) => {
+                const finalStart = Math.max(0, Number(newStart.toFixed(2)));
+                setCustomVideoRange((prev) => {
+                  const dur = prev !== null ? prev.duration : activeVideoDuration;
+                  const trimFront = prev !== null ? prev.trimFrontSec : activeVideoTrimFront;
+                  return {
+                    start: finalStart,
+                    duration: dur,
+                    trimFrontSec: trimFront,
+                  };
+                });
+                if (lockSubtitleVideo) {
+                  setCustomSubtitleRange((prev) => {
+                    const dur = prev !== null ? Math.max(0.5, prev.end - prev.start) : activeSubtitleDuration;
+                    return {
+                      start: finalStart,
+                      end: Math.max(0.5, Number((finalStart + dur).toFixed(2))),
+                    };
+                  });
+                } else {
+                  setCustomSubtitleRange((prev) => prev !== null ? prev : {
+                    start: activeSubtitleStart,
+                    end: activeSubtitleEnd,
+                  });
+                }
+              }}
+              // Subtitle trimming & movement
+              subtitleStartSec={activeSubtitleStart}
+              subtitleDurationSec={activeSubtitleDuration}
+              onSubtitleTrim={(newStart, newDur, newTrimFront) => {
+                const finalStart = Math.max(0, Number(newStart.toFixed(2)));
+                const finalDur = Math.max(0.5, Number(newDur.toFixed(2)));
+                setCustomSubtitleRange({
+                  start: finalStart,
+                  end: Math.max(0.5, Number((finalStart + finalDur).toFixed(2))),
+                });
+                if (lockSubtitleVideo) {
+                  const finalTrim = newTrimFront !== undefined
+                    ? Math.max(0, Number(newTrimFront.toFixed(2)))
+                    : activeVideoTrimFront;
+                  setCustomVideoRange({
+                    start: finalStart,
+                    duration: finalDur,
+                    trimFrontSec: finalTrim,
+                  });
+                } else {
+                  setCustomVideoRange((prev) => prev !== null ? prev : {
+                    start: activeVideoStart,
+                    duration: activeVideoDuration,
+                    trimFrontSec: activeVideoTrimFront,
+                  });
+                }
+              }}
+              onSubtitleResize={(newDur, startSec) => {
+                const finalDur = Math.max(0.5, Number(newDur.toFixed(2)));
+                setCustomSubtitleRange((prev) => {
+                  const start = startSec !== undefined ? startSec : (prev !== null ? prev.start : activeSubtitleStart);
+                  return {
+                    start,
+                    end: Math.max(0.5, Number((start + finalDur).toFixed(2))),
+                  };
+                });
+                if (lockSubtitleVideo) {
+                  setCustomVideoRange((prev) => {
+                    const start = startSec !== undefined ? startSec : (prev !== null ? prev.start : activeVideoStart);
+                    const trimFront = prev !== null ? prev.trimFrontSec : activeVideoTrimFront;
+                    return {
+                      start,
+                      duration: finalDur,
+                      trimFrontSec: trimFront,
+                    };
+                  });
+                } else {
+                  setCustomVideoRange((prev) => prev !== null ? prev : {
+                    start: activeVideoStart,
+                    duration: activeVideoDuration,
+                    trimFrontSec: activeVideoTrimFront,
+                  });
+                }
+              }}
+              onSubtitleMove={(newStart) => {
+                const finalStart = Math.max(0, Number(newStart.toFixed(2)));
+                setCustomSubtitleRange((prev) => {
+                  const dur = prev !== null ? Math.max(0.5, prev.end - prev.start) : activeSubtitleDuration;
+                  return {
+                    start: finalStart,
+                    end: Math.max(0.5, Number((finalStart + dur).toFixed(2))),
+                  };
+                });
+                if (lockSubtitleVideo) {
+                  setCustomVideoRange((prev) => {
+                    const dur = prev !== null ? prev.duration : activeVideoDuration;
+                    const trimFront = prev !== null ? prev.trimFrontSec : activeVideoTrimFront;
+                    return {
+                      start: finalStart,
+                      duration: dur,
+                      trimFrontSec: trimFront,
+                    };
+                  });
+                } else {
+                  setCustomVideoRange((prev) => prev !== null ? prev : {
+                    start: activeVideoStart,
+                    duration: activeVideoDuration,
+                    trimFrontSec: activeVideoTrimFront,
+                  });
+                }
+              }}
               onBrollBlockDelete={(id) => {
                 const idx = brollPlacements.findIndex(
                   (b, i) => (b as any).id === id || `broll-${i}` === id,
@@ -1248,7 +1716,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   prev.map((o) => {
                     if (o.id !== id) return o;
                     const dur = Math.max(0.5, o.end - o.start);
-                    const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
+                    const contentStart = Math.max(0, timelineToContentTime(newStart));
                     return { ...o, start: contentStart, end: contentStart + dur };
                   }),
                 );
@@ -1265,8 +1733,9 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                 setDynamicOverlays((prev) =>
                   prev.map((o) => {
                     if (o.id !== id) return o;
-                    const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
-                    return { ...o, start: contentStart, end: contentStart + newDur };
+                    const contentStart = Math.max(0, timelineToContentTime(newStart));
+                    const contentEnd = Math.max(contentStart + 0.5, timelineToContentTime(newStart + newDur));
+                    return { ...o, start: contentStart, end: contentEnd };
                   }),
                 );
               }}
@@ -1282,7 +1751,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                   const currentEnd =
                     (b as any).end ?? (b as any).endSec ?? (b as any).cue?.end ?? (currentStart + 3);
                   const dur = Math.max(1, currentEnd - currentStart);
-                  const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
+                  const contentStart = Math.max(0, timelineToContentTime(newStart));
                   const newEnd = contentStart + dur;
                   updateBrollPlacement(idx, {
                     ...b,
@@ -1322,8 +1791,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
                 );
                 if (idx !== -1) {
                   const b = brollPlacements[idx];
-                  const contentStart = Math.max(0, newStart - timelineContentOffsetSec);
-                  const newEnd = contentStart + newDur;
+                  const contentStart = Math.max(0, timelineToContentTime(newStart));
+                  const newEnd = Math.max(contentStart + 0.5, timelineToContentTime(newStart + newDur));
                   updateBrollPlacement(idx, {
                     ...b,
                     start: contentStart,
@@ -1344,68 +1813,21 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
         {/* RIGHT COLUMN: Unified Studio Inspector Panel                       */}
         {/* ================================================================== */}
         <div
-          className="remotion-editor-inspector"
-          style={{
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.25)',
-          }}
+          className={`remotion-editor-inspector ${mobilePanelOpen === 'tools' ? 'is-mobile-open' : ''}`}
         >
-          {/* Panel Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Inspector Header (sticky) */}
+          <div className="remotion-editor-inspector-header">
+            <div className="remotion-editor-inspector-title">
               <span style={{ fontSize: '15px' }}>🎛️</span>
-              <span style={{ fontSize: '13px', fontWeight: 800, color: '#FFFFFF', letterSpacing: '0.02em' }}>
-                Pengaturan
-              </span>
+              Pengaturan Studio
             </div>
+            <span style={{ fontSize: '10px', color: 'var(--text-sub)', background: 'rgba(50,130,184,0.1)', border: '1px solid rgba(50,130,184,0.2)', borderRadius: '6px', padding: '2px 7px' }}>
+              {activeTab === 'editor' ? 'AI' : activeTab === 'hook' ? 'Hook' : activeTab === 'subtitle' ? 'Subtitle' : 'Audio'}
+            </span>
           </div>
 
-          {/* Sub-Tab Navigation */}
-          <div
-            className="remotion-editor-inspector-tabs"
-            style={{
-              display: 'flex',
-              gap: '4px',
-              background: 'var(--bg-card)',
-              padding: '4px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            {[
-              { id: 'editor' as const, label: '🤖 AI Co-Pilot' },
-              { id: 'hook' as const, label: '⚡ Hook' },
-              { id: 'subtitle' as const, label: '🎨 Subtitle' },
-              { id: 'music' as const, label: selectedMusicTrack ? '🔊 Audio & Musik (Aktif)' : '🔊 Audio & Musik' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  flex: 1,
-                  padding: '7px 4px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: activeTab === tab.id ? (tab.id === 'music' ? '#A855F7' : 'var(--accent)') : 'transparent',
-                  color: activeTab === tab.id ? '#FFFFFF' : 'var(--text-muted)',
-                  transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {/* Inspector Body */}
+          <div className="remotion-editor-inspector-body">
 
           {/* TAB 1: AI Co-Pilot */}
           {activeTab === 'editor' && (
@@ -1418,7 +1840,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#FFFFFF' }}>
-                  💬 Perintahkan AI Producer di Sini
+                  💬 Perintahkan AI Producer
                 </span>
                 <button
                   type="button"
@@ -1530,13 +1952,8 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
           {/* TAB 2: Hook Controls */}
           {activeTab === 'hook' && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
-              }}
-            >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="remotion-editor-section-label">⚡ Hook Intro</div>
               {/* Toggle Hook Intro Banner */}
               <div
                 onClick={() => setEnableHookIntro(!enableHookIntro)}
@@ -1571,9 +1988,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
               {/* Visual Preset Cards Grid */}
               <div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '8px' }}>
-                  Pilihan Animasi Visual Hook:
-                </div>
+                <div className="remotion-editor-section-label">Animasi Visual</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {HOOK_PRESETS.map((p) => (
                     <PresetCard
@@ -1646,18 +2061,10 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
           {/* TAB 3: Subtitle & B-Roll Controls */}
           {activeTab === 'subtitle' && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
-              }}
-            >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {/* Subtitle Presets Grid */}
               <div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '8px' }}>
-                  Gaya Animasi Subtitle (Karaoke Pop):
-                </div>
+                <div className="remotion-editor-section-label">Gaya Subtitle</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                   {SUBTITLE_PRESETS.map((tpl) => (
                     <PresetCard
@@ -1679,9 +2086,7 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
 
               {/* Subtitle Font Size Controls */}
               <div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '8px' }}>
-                  Ukuran Font Subtitle:
-                </div>
+                <div className="remotion-editor-section-label">Ukuran Font</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                   {[
                     { id: 'sm', label: 'Kecil', px: '38px', desc: 'Subtil' },
@@ -1794,13 +2199,14 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
           {/* TAB 4: Audio & Musik */}
           {activeTab === 'music' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="remotion-editor-section-label">🎚️ Mixer Audio</div>
               {/* Audio Mixer Card */}
               <div
                 style={{
-                  background: 'var(--bg-panel)',
-                  border: '1px solid var(--border-focus)',
+                  background: 'rgba(15, 76, 117, 0.08)',
+                  border: '1px solid rgba(50, 130, 184, 0.2)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '16px',
+                  padding: '14px',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
@@ -1900,7 +2306,9 @@ export const RemotionVideoEditor: React.FC<RemotionVideoEditorProps> = ({
             </div>
           )}
 
+          </div>
         </div>
+      </div>
       </div>
     </div>
   );

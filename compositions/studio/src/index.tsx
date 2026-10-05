@@ -86,11 +86,16 @@ registerRoot(() => (
         calculateMetadata={({ props }) => {
           const contentDuration = props.plan?.duration ?? 60;
           const contentFrames = Math.max(1, Math.round(contentDuration * FPS));
+          const hookFrames = props.enableHookIntro !== false && props.hookTitle
+            ? Math.max(1, Math.round((props.hookDurationSec ?? 3.5) * FPS))
+            : 0;
+          const hookEndFrame = Math.max(0, Math.round((props.hookStartSec ?? 0) * FPS)) + hookFrames;
           const isOutroActive = props.enableIntroOutro !== false;
           const outroSeconds = isOutroActive ? (props.outroDuration ?? OUTRO_SECONDS) : 0;
           const outroFrames = isOutroActive && outroSeconds > 0 ? Math.max(1, Math.round(outroSeconds * FPS)) : 0;
+          const outroStartFrame = Math.max(0, Math.round((props.outroStartSec ?? contentDuration) * FPS));
           return {
-            durationInFrames: contentFrames + outroFrames,
+            durationInFrames: Math.max(contentFrames, hookEndFrame, outroStartFrame + outroFrames),
           };
         }}
         defaultProps={defaultProps}

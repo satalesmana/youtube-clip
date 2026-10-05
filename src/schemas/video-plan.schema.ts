@@ -60,6 +60,10 @@ export const planSceneSchema = z.object({
   hookAnimation: z.string().optional(),
   /** Typography variant override */
   hookTypography: z.string().optional(),
+  /** Hook card backdrop style */
+  hookBackdrop: z
+    .enum(['cinematic-banner', 'frosted-glass', 'solid-dark', 'neon-glow', 'minimal-shadow'])
+    .optional(),
 });
 
 /** A caption event with word-level timing. */

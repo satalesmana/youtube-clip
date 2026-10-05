@@ -2,11 +2,13 @@ import {
   AbsoluteFill,
   useVideoConfig,
 } from 'remotion';
+import { Video } from '@remotion/media';
 import * as React from 'react';
 import { selectTheme } from './design';
 import type { Theme } from './design';
 import type { OutroCardShortProps } from './types';
 import { Outro } from './Outro';
+import { toAssetUrl } from './assetUrl';
 
 /**
  * Animated High-Converting Creator Outro Card Short (9:16).
@@ -21,6 +23,8 @@ export const OutroCardShort: React.FC<OutroCardShortProps> = ({
   themeSeed = 'default:outro',
   outroPreset = 'creator-glass',
   buttonText,
+  sourceVideoPath,
+  sourceStart = 0,
 }) => {
   const { fps } = useVideoConfig();
   const durationFrames = Math.max(1, Math.round(durationSeconds * fps));
@@ -29,6 +33,22 @@ export const OutroCardShort: React.FC<OutroCardShortProps> = ({
 
   return (
     <AbsoluteFill style={{ overflow: 'hidden', backgroundColor: '#07090e' }}>
+      {sourceVideoPath ? (
+        <AbsoluteFill style={{ overflow: 'hidden' }}>
+          <Video
+            src={toAssetUrl(sourceVideoPath)}
+            trimBefore={Math.max(0, Math.round(sourceStart * fps))}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'blur(12px) brightness(0.35)',
+              transform: 'scale(1.1)',
+            }}
+            muted
+          />
+        </AbsoluteFill>
+      ) : null}
       <Outro
         theme={theme}
         channelName={displayHandle}

@@ -13,6 +13,7 @@ import type {
   TypographyVariant,
   BadgePresetId,
   BadgeColorVariant,
+  HookCardBackdrop,
   OutroPresetId,
   SubtitleSize,
 } from '../../../types';
@@ -66,6 +67,8 @@ interface Step3StylingProps {
   setSelectedHookBadgePreset: (preset: BadgePresetId) => void;
   selectedHookBadgeColor: BadgeColorVariant;
   setSelectedHookBadgeColor: (color: BadgeColorVariant) => void;
+  selectedHookBackdrop: HookCardBackdrop;
+  setSelectedHookBackdrop: (backdrop: HookCardBackdrop) => void;
   runningTransform: boolean;
   selectedHookIndex: number | null;
   hooks: ViralHook[];
@@ -151,6 +154,8 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
   setSelectedHookBadgePreset,
   selectedHookBadgeColor,
   setSelectedHookBadgeColor,
+  selectedHookBackdrop,
+  setSelectedHookBackdrop,
   runningTransform,
   selectedHookIndex,
   hooks,
@@ -424,6 +429,8 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
                   onBadgePresetChange={setSelectedHookBadgePreset}
                   selectedBadgeColor={selectedHookBadgeColor}
                   onBadgeColorChange={setSelectedHookBadgeColor}
+                  selectedBackdrop={selectedHookBackdrop}
+                  onBackdropChange={setSelectedHookBackdrop}
                   disabled={runningTransform}
                   aiRecommendationLabel={aiLabel}
                   aiRecommendationId={aiRecId}
@@ -608,7 +615,7 @@ export const Step3Styling: React.FC<Step3StylingProps> = ({
               </div>
 
               <div className="step3-summary-item">
-                <span className="step3-summary-item-label">Penutup</span>
+                <span className="step3-summary-item-label">Kartu Outro CTA</span>
                 <span className="step3-summary-item-value">{enableIntroOutro ? `🎯 ${resolveClientOutroPreset(outroPreset).name} · ${outroDuration} dtk` : 'Tanpa kartu penutup'}</span>
               </div>
             </div>

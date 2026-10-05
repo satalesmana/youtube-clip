@@ -59,6 +59,13 @@ export interface PlanScene {
   hookAnimation?: string;
   /** Typography variant override */
   hookTypography?: string;
+  /** Hook card backdrop style */
+  hookBackdrop?:
+    | 'cinematic-banner'
+    | 'frosted-glass'
+    | 'solid-dark'
+    | 'neon-glow'
+    | 'minimal-shadow';
 }
 
 /** A caption event with word-level timing for the composition engines. */

@@ -74,6 +74,13 @@ export interface VideoPlanBuildInput {
   hookAnimation?: string;
   /** Typography variant override */
   hookTypography?: string;
+  /** Hook card backdrop style */
+  hookBackdrop?:
+    | 'cinematic-banner'
+    | 'frosted-glass'
+    | 'solid-dark'
+    | 'neon-glow'
+    | 'minimal-shadow';
 }
 
 const SECTION_WEIGHTS: Record<string, number> = {
@@ -131,6 +138,7 @@ export class VideoPlanService implements IVideoPlanService {
       hookLayout,
       hookAnimation,
       hookTypography,
+      hookBackdrop,
     } = input;
     const configuredTarget = this.options.targetDuration ?? 60;
     // Never make a video longer than its narration: that produces a frozen
@@ -307,6 +315,9 @@ export class VideoPlanService implements IVideoPlanService {
         }
         if (hookTypography) {
           firstScene.hookTypography = hookTypography;
+        }
+        if (hookBackdrop) {
+          firstScene.hookBackdrop = hookBackdrop;
         }
         if (!firstScene.source && clipEnd > clipStart) {
           firstScene.source = {

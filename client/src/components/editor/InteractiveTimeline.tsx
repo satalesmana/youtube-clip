@@ -30,6 +30,10 @@ export interface InteractiveTimelineProps {
   enableHookIntro: boolean;
   onEnableHookIntroChange?: (enabled: boolean) => void;
   hookDurationSec: number; // default 3.5
+  onHookDurationChange?: (durationSec: number) => void;
+  hookStartSec?: number;
+  maxHookStartSec?: number;
+  onHookMove?: (startSec: number) => void;
   enableBroll: boolean;
   onEnableBrollChange?: (enabled: boolean) => void;
   brollBlocks: BrollBlock[];
@@ -39,6 +43,9 @@ export interface InteractiveTimelineProps {
   musicVolume?: number; // 0–100
   enableOutro: boolean;
   outroDurationSec: number;
+  onOutroDurationChange?: (durationSec: number) => void;
+  outroStartSec?: number;
+  onOutroMove?: (startSec: number) => void;
   // AI Overlay track
   aiOverlayBlocks?: AiOverlayBlock[];
   onAiOverlayMove?: (id: string, newStartSec: number) => void;
@@ -62,6 +69,22 @@ export interface InteractiveTimelineProps {
   // New optional callbacks
   onMusicVolumeChange?: (volume: number) => void;
   onBrollBlockDelete?: (id: string) => void;
+  // Video trimming & movement
+  videoStartSec?: number;
+  videoDurationSec?: number;
+  videoTrimFrontSec?: number;
+  onVideoTrim?: (newStartSec: number, newDurationSec: number, newTrimFrontSec?: number) => void;
+  onVideoResize?: (newDurationSec: number, startSec?: number) => void;
+  onVideoMove?: (newStartSec: number) => void;
+  // Subtitle trimming & movement
+  subtitleStartSec?: number;
+  subtitleDurationSec?: number;
+  onSubtitleTrim?: (newStartSec: number, newDurationSec: number, newTrimFrontSec?: number) => void;
+  onSubtitleResize?: (newDurationSec: number, startSec?: number) => void;
+  onSubtitleMove?: (newStartSec: number) => void;
+  // Lock sync between Video and Subtitle
+  lockSubtitleVideo?: boolean;
+  onLockSubtitleVideoChange?: (locked: boolean) => void;
 }
 
 // ─── Tooltip State ───────────────────────────────────────────────────────────
@@ -78,10 +101,12 @@ interface TooltipState {
 
 interface BrollDragState {
   id: string;
-  type: 'move' | 'resize' | 'resize-left';
+  type: 'move' | 'resize' | 'resize-left' | 'resize-right';
   startMouseX: number;
   startSec: number;       // original startSec (for move / resize-left)
   startDuration: number;  // original durationSec (for resize / resize-left)
+  startTrimFrontSec?: number; // original trimFrontSec (for resize-left)
+  timelineDurationSec?: number;
 }
 
 // ─── Volume Drag State ───────────────────────────────────────────────────────
@@ -114,6 +139,10 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   fps,
   enableHookIntro,
   hookDurationSec,
+  onHookDurationChange,
+  hookStartSec = 0,
+  maxHookStartSec,
+  onHookMove,
   enableBroll,
   brollBlocks,
   enableMusic,
@@ -121,6 +150,9 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   musicVolume = 25,
   enableOutro,
   outroDurationSec,
+  onOutroDurationChange,
+  outroStartSec: propOutroStartSec,
+  onOutroMove,
   aiOverlayBlocks = [],
   onAiOverlayMove,
   onAiOverlayResize,
@@ -140,6 +172,19 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   onBrollBlockDelete,
   onBrollBlockTrim,
   onAiOverlayTrim,
+  videoStartSec,
+  videoDurationSec,
+  videoTrimFrontSec,
+  onVideoTrim,
+  onVideoResize,
+  onVideoMove,
+  subtitleStartSec,
+  subtitleDurationSec,
+  onSubtitleTrim,
+  onSubtitleResize,
+  onSubtitleMove,
+  lockSubtitleVideo: propLockSubtitleVideo,
+  onLockSubtitleVideoChange,
   zoomLevel: propZoomLevel,
   onZoomLevelChange,
 }) => {
@@ -149,6 +194,20 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   const [brollDrag, setBrollDrag] = useState<BrollDragState | null>(null);
   const [aiOverlayDrag, setAiOverlayDrag] = useState<BrollDragState | null>(null);
   const [volumeDrag, setVolumeDrag] = useState<VolumeDragState | null>(null);
+  const [videoDrag, setVideoDrag] = useState<BrollDragState | null>(null);
+  const [subtitleDrag, setSubtitleDrag] = useState<BrollDragState | null>(null);
+  const [hookDrag, setHookDrag] = useState<BrollDragState | null>(null);
+  const [outroDrag, setOutroDrag] = useState<BrollDragState | null>(null);
+  const [internalLockSubtitleVideo, setInternalLockSubtitleVideo] = useState(true);
+  const lockSubtitleVideo = propLockSubtitleVideo !== undefined ? propLockSubtitleVideo : internalLockSubtitleVideo;
+  const setLockSubtitleVideo = useCallback(
+    (action: boolean | ((prev: boolean) => boolean)) => {
+      const nextVal = typeof action === 'function' ? action(lockSubtitleVideo) : action;
+      setInternalLockSubtitleVideo(nextVal);
+      onLockSubtitleVideoChange?.(nextVal);
+    },
+    [lockSubtitleVideo, onLockSubtitleVideoChange],
+  );
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
     x: 0,
@@ -181,6 +240,11 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   const brollDragRef = useRef<BrollDragState | null>(null);
   const aiOverlayDragRef = useRef<BrollDragState | null>(null);
   const volumeDragRef = useRef<VolumeDragState | null>(null);
+  const videoDragRef = useRef<BrollDragState | null>(null);
+  const subtitleDragRef = useRef<BrollDragState | null>(null);
+  const hookDragRef = useRef<BrollDragState | null>(null);
+  const outroDragRef = useRef<BrollDragState | null>(null);
+  const lockSubtitleVideoRef = useRef(true);
   const currentSecRef = useRef(0);
   const zoomLevelRef = useRef(1);
   const zoomAnchorRef = useRef<{ zoom: number; sec: number; viewportX: number } | null>(null);
@@ -191,16 +255,21 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   brollDragRef.current = brollDrag;
   aiOverlayDragRef.current = aiOverlayDrag;
   volumeDragRef.current = volumeDrag;
+  videoDragRef.current = videoDrag;
+  subtitleDragRef.current = subtitleDrag;
+  hookDragRef.current = hookDrag;
+  outroDragRef.current = outroDrag;
+  lockSubtitleVideoRef.current = lockSubtitleVideo;
   currentSecRef.current = currentSec;
   zoomLevelRef.current = zoomLevel;
 
   // Global drag cursor and selection guard
   useEffect(() => {
-    if (brollDrag || aiOverlayDrag || isDraggingPlayhead || volumeDrag) {
+    if (brollDrag || aiOverlayDrag || isDraggingPlayhead || volumeDrag || videoDrag || subtitleDrag || hookDrag || outroDrag) {
       document.body.style.userSelect = 'none';
       if (isDraggingPlayhead) document.body.style.cursor = 'ew-resize';
-      else if (brollDrag?.type === 'move' || aiOverlayDrag?.type === 'move') document.body.style.cursor = 'grabbing';
-      else if (brollDrag?.type?.startsWith('resize') || aiOverlayDrag?.type?.startsWith('resize')) document.body.style.cursor = 'col-resize';
+      else if (hookDrag?.type === 'move' || outroDrag?.type === 'move' || brollDrag?.type === 'move' || aiOverlayDrag?.type === 'move' || videoDrag?.type === 'move' || subtitleDrag?.type === 'move') document.body.style.cursor = 'grabbing';
+      else if (brollDrag?.type?.startsWith('resize') || aiOverlayDrag?.type?.startsWith('resize') || videoDrag?.type?.startsWith('resize') || subtitleDrag?.type?.startsWith('resize') || hookDrag || outroDrag) document.body.style.cursor = 'col-resize';
     } else {
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
@@ -209,21 +278,27 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
     };
-  }, [brollDrag, aiOverlayDrag, isDraggingPlayhead, volumeDrag]);
+  }, [brollDrag, aiOverlayDrag, isDraggingPlayhead, volumeDrag, videoDrag, subtitleDrag, hookDrag, outroDrag]);
 
   // ── Computed track metrics ───────────────────────────────────────────────────
-  const hookEnd = enableHookIntro ? hookDurationSec : 0;
-  const outroStart = durationSec - (enableOutro ? outroDurationSec : 0);
+  const hookEnd = enableHookIntro ? hookStartSec + hookDurationSec : 0;
+  const outroStart = propOutroStartSec ?? durationSec - (enableOutro ? outroDurationSec : 0);
 
   // ── QW-3: Memoized snap points — only recompute when blocks actually change ──
   const snapPoints = useMemo(
-    () => [0, hookEnd, outroStart, durationSec],
-    [hookEnd, outroStart, durationSec],
+    () => [
+      { sec: 0 },
+      { sec: hookStartSec, id: '__hook__' },
+      { sec: hookEnd, id: '__hook__' },
+      { sec: outroStart, id: '__outro__' },
+      { sec: durationSec },
+    ],
+    [hookStartSec, hookEnd, outroStart, durationSec],
   );
 
   const clipSnapPoints = useMemo(
     (): Array<{ sec: number; id?: string }> => [
-      ...snapPoints.map((sec) => ({ sec })),
+      ...snapPoints,
       // Playhead position included via currentSecRef at snap-time (not here)
       ...brollBlocks.flatMap((block) => [
         { sec: block.startSec, id: block.id },
@@ -495,12 +570,12 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       // Volume drag
-      const vDrag = volumeDragRef.current;
-      if (vDrag && onMusicVolumeChange) {
+      const volDrag = volumeDragRef.current;
+      if (volDrag && onMusicVolumeChange) {
         const rect = getContentRect();
         const totalWidth = rect?.width ?? 600;
-        const deltaPct = ((e.clientX - vDrag.startMouseX) / totalWidth) * 100;
-        const newVol = Math.max(0, Math.min(100, vDrag.startVolume + deltaPct));
+        const deltaPct = ((e.clientX - volDrag.startMouseX) / totalWidth) * 100;
+        const newVol = Math.max(0, Math.min(100, volDrag.startVolume + deltaPct));
         onMusicVolumeChange(Math.round(newVol));
         return;
       }
@@ -564,41 +639,268 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
 
       // B-roll drag
       const drag = brollDragRef.current;
-      if (!drag) return;
+      if (drag) {
+        const rect = getContentRect();
+        if (!rect) return;
+        const totalWidth = rect.width;
+        const pxPerSec = totalWidth / durationSec;
+        const deltaSec = (e.clientX - drag.startMouseX) / pxPerSec;
+        const bypass = e.altKey;
 
-      const rect = getContentRect();
-      if (!rect) return;
-      const totalWidth = rect.width;
-      const pxPerSec = totalWidth / durationSec;
-      const deltaSec = (e.clientX - drag.startMouseX) / pxPerSec;
-      const bypass = e.altKey;
-
-      if (drag.type === 'move') {
-        const maxStart = Math.max(0, durationSec - drag.startDuration);
-        const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
-        const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
-        const snappedEnd = snapSec(rawStart + drag.startDuration, pxPerSec, bypass, drag.id) - drag.startDuration;
-        const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
-        onBrollBlockMove(drag.id, Math.max(0, Math.min(maxStart, candidate)));
-      } else if (drag.type === 'resize-left') {
-        const originalEnd = drag.startSec + drag.startDuration;
-        const maxStart = originalEnd - MIN_CLIP_DURATION;
-        const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
-        const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
-        const newStart = Math.max(0, Math.min(maxStart, snappedStart));
-        const newDuration = Math.max(MIN_CLIP_DURATION, originalEnd - newStart);
-        if (onBrollBlockTrim) {
-          onBrollBlockTrim(drag.id, newStart, newDuration);
+        if (drag.type === 'move') {
+          const maxStart = Math.max(0, durationSec - drag.startDuration);
+          const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
+          const snappedEnd = snapSec(rawStart + drag.startDuration, pxPerSec, bypass, drag.id) - drag.startDuration;
+          const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
+          onBrollBlockMove(drag.id, Math.max(0, Math.min(maxStart, candidate)));
+        } else if (drag.type === 'resize-left') {
+          const originalEnd = drag.startSec + drag.startDuration;
+          const maxStart = originalEnd - MIN_CLIP_DURATION;
+          const rawStart = Math.max(0, Math.min(maxStart, drag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, drag.id);
+          const newStart = Math.max(0, Math.min(maxStart, snappedStart));
+          const newDuration = Math.max(MIN_CLIP_DURATION, originalEnd - newStart);
+          if (onBrollBlockTrim) {
+            onBrollBlockTrim(drag.id, newStart, newDuration);
+          } else {
+            onBrollBlockMove(drag.id, newStart);
+            onBrollBlockResize(drag.id, newDuration);
+          }
         } else {
-          onBrollBlockMove(drag.id, newStart);
+          const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - drag.startSec);
+          const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, drag.startDuration + deltaSec));
+          const snappedEnd = snapSec(drag.startSec + rawDuration, pxPerSec, bypass, drag.id);
+          const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - drag.startSec));
           onBrollBlockResize(drag.id, newDuration);
         }
-      } else {
-        const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - drag.startSec);
-        const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, drag.startDuration + deltaSec));
-        const snappedEnd = snapSec(drag.startSec + rawDuration, pxPerSec, bypass, drag.id);
-        const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - drag.startSec));
-        onBrollBlockResize(drag.id, newDuration);
+        return;
+      }
+      // Subtitle drag
+      const sDrag = subtitleDragRef.current;
+      if (sDrag) {
+        const rect = getContentRect();
+        if (!rect) return;
+        const totalWidth = rect.width;
+        const pxPerSec = totalWidth / durationSec;
+        const deltaSec = (e.clientX - sDrag.startMouseX) / pxPerSec;
+        const bypass = e.altKey;
+        const isLocked = lockSubtitleVideoRef.current;
+        if (sDrag.type === 'move') {
+          const maxStart = Math.max(0, durationSec - sDrag.startDuration);
+          const rawStart = Math.max(0, Math.min(maxStart, sDrag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, '__subtitle__');
+          const snappedEnd = snapSec(rawStart + sDrag.startDuration, pxPerSec, bypass, '__subtitle__') - sDrag.startDuration;
+          const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
+          const finalStart = Math.max(0, Math.min(maxStart, candidate));
+          if (onSubtitleMove) {
+            onSubtitleMove(finalStart);
+          } else if (onSubtitleTrim) {
+            onSubtitleTrim(finalStart, sDrag.startDuration);
+          }
+          if (isLocked) {
+            if (onVideoMove) {
+              onVideoMove(finalStart);
+            } else if (onVideoTrim) {
+              onVideoTrim(finalStart, sDrag.startDuration);
+            }
+          }
+        } else if (sDrag.type === 'resize-left') {
+          const originalEnd = sDrag.startSec + sDrag.startDuration;
+          const maxStart = originalEnd - MIN_CLIP_DURATION;
+          const rawStart = Math.max(0, Math.min(maxStart, sDrag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, '__subtitle__');
+          const newStart = Math.max(0, Math.min(maxStart, snappedStart));
+          const newDuration = Math.max(MIN_CLIP_DURATION, originalEnd - newStart);
+          const trimFrontDelta = newStart - sDrag.startSec;
+          const newTrimFront = Math.max(0, (sDrag.startTrimFrontSec ?? 0) + trimFrontDelta);
+          if (onSubtitleTrim) {
+            onSubtitleTrim(newStart, newDuration, newTrimFront);
+          } else {
+            onSubtitleMove?.(newStart);
+            onSubtitleResize?.(newDuration, newStart);
+          }
+          if (isLocked) {
+            if (onVideoTrim) {
+              onVideoTrim(newStart, newDuration, newTrimFront);
+            } else {
+              onVideoMove?.(newStart);
+              onVideoResize?.(newDuration, newStart);
+            }
+          }
+        } else {
+          const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - sDrag.startSec);
+          const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, sDrag.startDuration + deltaSec));
+          const snappedEnd = snapSec(sDrag.startSec + rawDuration, pxPerSec, bypass, '__subtitle__');
+          const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - sDrag.startSec));
+          if (onSubtitleResize) {
+            onSubtitleResize(newDuration, sDrag.startSec);
+          } else if (onSubtitleTrim) {
+            onSubtitleTrim(sDrag.startSec, newDuration);
+          }
+          if (isLocked) {
+            if (onVideoResize) {
+              onVideoResize(newDuration, sDrag.startSec);
+            } else if (onVideoTrim) {
+              onVideoTrim(sDrag.startSec, newDuration);
+            }
+          }
+        }
+        return;
+      }
+
+      // Video drag
+      const vidDrag = videoDragRef.current;
+      if (vidDrag) {
+        const rect = getContentRect();
+        if (!rect) return;
+        const totalWidth = rect.width;
+        const pxPerSec = totalWidth / durationSec;
+        const deltaSec = (e.clientX - vidDrag.startMouseX) / pxPerSec;
+        const bypass = e.altKey;
+        const isLocked = lockSubtitleVideoRef.current;
+
+        if (vidDrag.type === 'move') {
+          const maxStart = Math.max(0, durationSec - vidDrag.startDuration);
+          const rawStart = Math.max(0, Math.min(maxStart, vidDrag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, '__video__');
+          const snappedEnd = snapSec(rawStart + vidDrag.startDuration, pxPerSec, bypass, '__video__') - vidDrag.startDuration;
+          const candidate = Math.abs(snappedStart - rawStart) <= Math.abs(snappedEnd - rawStart) ? snappedStart : snappedEnd;
+          const finalStart = Math.max(0, Math.min(maxStart, candidate));
+          if (onVideoMove) {
+            onVideoMove(finalStart);
+          } else if (onVideoTrim) {
+            onVideoTrim(finalStart, vidDrag.startDuration);
+          }
+          if (isLocked) {
+            if (onSubtitleMove) {
+              onSubtitleMove(finalStart);
+            } else if (onSubtitleTrim) {
+              onSubtitleTrim(finalStart, vidDrag.startDuration);
+            }
+          }
+        } else if (vidDrag.type === 'resize-left') {
+          const originalEnd = vidDrag.startSec + vidDrag.startDuration;
+          const maxStart = originalEnd - MIN_CLIP_DURATION;
+          const rawStart = Math.max(0, Math.min(maxStart, vidDrag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, '__video__');
+          const newStart = Math.max(0, Math.min(maxStart, snappedStart));
+          const newDuration = Math.max(MIN_CLIP_DURATION, originalEnd - newStart);
+          const trimFrontDelta = newStart - vidDrag.startSec;
+          const newTrimFront = Math.max(0, (vidDrag.startTrimFrontSec ?? 0) + trimFrontDelta);
+          if (onVideoTrim) {
+            onVideoTrim(newStart, newDuration, newTrimFront);
+          } else {
+            onVideoMove?.(newStart);
+            onVideoResize?.(newDuration, newStart);
+          }
+          if (isLocked) {
+            if (onSubtitleTrim) {
+              onSubtitleTrim(newStart, newDuration, newTrimFront);
+            } else {
+              onSubtitleMove?.(newStart);
+              onSubtitleResize?.(newDuration, newStart);
+            }
+          }
+        } else {
+          const maxDuration = Math.max(MIN_CLIP_DURATION, durationSec - vidDrag.startSec);
+          const rawDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, vidDrag.startDuration + deltaSec));
+          const snappedEnd = snapSec(vidDrag.startSec + rawDuration, pxPerSec, bypass, '__video__');
+          const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, snappedEnd - vidDrag.startSec));
+          if (onVideoResize) {
+            onVideoResize(newDuration, vidDrag.startSec);
+          } else if (onVideoTrim) {
+            onVideoTrim(vidDrag.startSec, newDuration);
+          }
+          if (isLocked) {
+            if (onSubtitleResize) {
+              onSubtitleResize(newDuration, vidDrag.startSec);
+            } else if (onSubtitleTrim) {
+              onSubtitleTrim(vidDrag.startSec, newDuration);
+            }
+          }
+        }
+        return;
+      }
+
+      // Hook drag (resize)
+      const hDrag = hookDragRef.current;
+      if (hDrag) {
+        const rect = getContentRect();
+        if (!rect) return;
+        const totalWidth = rect.width;
+        const pxPerSec = totalWidth / (hDrag.timelineDurationSec ?? durationSec);
+        const deltaSec = (e.clientX - hDrag.startMouseX) / pxPerSec;
+        const bypass = e.altKey;
+
+        if (hDrag.type === 'move') {
+          const trackDuration = hDrag.timelineDurationSec ?? durationSec;
+          const maxStart = Math.min(trackDuration - hDrag.startDuration, maxHookStartSec ?? trackDuration - hDrag.startDuration);
+          const newStart = snapSec(Math.max(0, Math.min(maxStart, hDrag.startSec + deltaSec)), pxPerSec, bypass, '__hook__');
+          onHookMove?.(Math.max(0, Math.min(maxStart, Number(newStart.toFixed(2)))));
+          setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: '⚡ Hook Intro', duration: `${formatTimecode(newStart)} → ${formatTimecode(newStart + hDrag.startDuration)}` });
+        } else if (hDrag.type === 'resize-left') {
+          const originalEnd = hDrag.startSec + hDrag.startDuration;
+          const newStart = Math.max(0, Math.min(originalEnd - 0.5, maxHookStartSec ?? durationSec, hDrag.startSec + deltaSec));
+          const newDur = Math.max(0.5, Math.min(15, originalEnd - newStart));
+          onHookMove?.(Number(newStart.toFixed(2)));
+          onHookDurationChange?.(Number(newDur.toFixed(2)));
+          setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: '⚡ Hook Intro', duration: `${newDur.toFixed(1)}s` });
+        } else {
+          // resize-right
+          const rawEnd = hDrag.startSec + hDrag.startDuration + deltaSec;
+          const snappedEnd = snapSec(rawEnd, pxPerSec, bypass, '__hook__');
+          const newDur = Math.max(0.5, Math.min(15, snappedEnd - hDrag.startSec));
+          onHookDurationChange?.(Number(newDur.toFixed(2)));
+          setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: '⚡ Hook Intro', duration: `${newDur.toFixed(1)}s` });
+        }
+        return;
+      }
+
+      // Outro drag (resize)
+      const oDrag = outroDragRef.current;
+      if (oDrag) {
+        const rect = getContentRect();
+        if (!rect) return;
+        const totalWidth = rect.width;
+        const pxPerSec = totalWidth / (oDrag.timelineDurationSec ?? durationSec);
+        const deltaSec = (e.clientX - oDrag.startMouseX) / pxPerSec;
+        const bypass = e.altKey;
+
+        if (oDrag.type === 'move') {
+          const trackDuration = oDrag.timelineDurationSec ?? durationSec;
+          const newStart = snapSec(Math.max(0, Math.min(trackDuration - oDrag.startDuration, oDrag.startSec + deltaSec)), pxPerSec, bypass, '__outro__');
+          onOutroMove?.(Math.max(0, Math.min(trackDuration - oDrag.startDuration, Number(newStart.toFixed(2)))));
+          setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: '🏁 Outro CTA', duration: `${formatTimecode(newStart)} → ${formatTimecode(newStart + oDrag.startDuration)}` });
+        } else if (oDrag.type === 'resize-left') {
+          const originalEnd = oDrag.startSec + oDrag.startDuration;
+          const rawStart = Math.max(0, Math.min(originalEnd - 1, oDrag.startSec + deltaSec));
+          const snappedStart = snapSec(rawStart, pxPerSec, bypass, '__outro__');
+          const finalDur = Math.max(1, Math.min(10, originalEnd - snappedStart));
+          onOutroMove?.(Number(snappedStart.toFixed(2)));
+          onOutroDurationChange?.(Number(finalDur.toFixed(2)));
+          setTooltip({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            label: '🏁 Outro CTA',
+            duration: `${formatTimecode(snappedStart)} → ${formatTimecode(snappedStart + finalDur)} (${finalDur.toFixed(1)}s)`,
+          });
+        } else {
+          // resize-right
+          const rawEnd = oDrag.startSec + oDrag.startDuration + deltaSec;
+          const snappedEnd = snapSec(rawEnd, pxPerSec, bypass, '__outro__');
+          const finalDur = Math.max(1, Math.min(10, snappedEnd - oDrag.startSec));
+          onOutroDurationChange?.(Number(finalDur.toFixed(2)));
+          setTooltip({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            label: '🏁 Outro CTA',
+            duration: `${formatTimecode(outroStart)} → ${formatTimecode(outroStart + finalDur)} (${finalDur.toFixed(1)}s)`,
+          });
+        }
+        return;
       }
     };
 
@@ -607,6 +909,10 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
       setBrollDrag(null);
       setAiOverlayDrag(null);
       setVolumeDrag(null);
+      setVideoDrag(null);
+      setSubtitleDrag(null);
+      setHookDrag(null);
+      setOutroDrag(null);
 
       setActiveSnapSec(null);
     };
@@ -630,6 +936,19 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     onAiOverlayMove,
     onAiOverlayResize,
     onAiOverlayTrim,
+    onVideoTrim,
+    onVideoResize,
+    onVideoMove,
+    onSubtitleTrim,
+    onSubtitleResize,
+    onSubtitleMove,
+    onHookDurationChange,
+    hookStartSec,
+    maxHookStartSec,
+    onHookMove,
+    onOutroDurationChange,
+    propOutroStartSec,
+    onOutroMove,
     snapSec,
     getContentRect,
     aiOverlayBlocks,
@@ -744,13 +1063,18 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
   );
 
   // Subtitle track covers the content section in both reel and narration modes.
-  const subtitleStart = outputMode === 'reel' && enableHookIntro ? hookEnd : 0;
-  const subtitleEnd = durationSec;
+  const defaultSubtitleStart = outputMode === 'reel' && enableHookIntro ? hookEnd : 0;
+  const subtitleStart = subtitleStartSec !== undefined ? subtitleStartSec : defaultSubtitleStart;
+  const subtitleDur = subtitleDurationSec !== undefined ? subtitleDurationSec : Math.max(0.5, durationSec - subtitleStart);
+  const subtitleEnd = subtitleStart + subtitleDur;
   const subtitleLeft = secToPercent(subtitleStart);
-  const subtitleWidth = secToPercent(subtitleEnd - subtitleStart);
-  const videoStart = outputMode === 'reel' && enableHookIntro ? hookEnd : 0;
+  const subtitleWidth = secToPercent(subtitleDur);
+
+  const defaultVideoStart = outputMode === 'reel' && enableHookIntro ? hookEnd : 0;
+  const videoStart = videoStartSec !== undefined ? videoStartSec : defaultVideoStart;
+  const videoDur = videoDurationSec !== undefined ? videoDurationSec : Math.max(0.5, durationSec - videoStart);
   const videoLeft = secToPercent(videoStart);
-  const videoWidth = secToPercent(Math.max(0, durationSec - videoStart));
+  const videoWidth = secToPercent(videoDur);
 
   // ─── JSX ────────────────────────────────────────────────────────────────────
   return (
@@ -882,6 +1206,18 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
           ⧲ Snap
         </button>
         <span className="timeline-a11y-hint" aria-live="polite">{snappingEnabled ? 'Snapping aktif' : 'Snapping nonaktif'}</span>
+        <button
+          className={`timeline-zoom-btn timeline-tool-btn${lockSubtitleVideo ? ' active' : ''}`}
+          onClick={() => setLockSubtitleVideo((l) => !l)}
+          title={`Kunci Sinkronisasi Subtitle & Video Utama: ${lockSubtitleVideo ? 'Aktif (🔗 Terkunci)' : 'Nonaktif (🔓 Terpisah)'}`}
+          aria-pressed={lockSubtitleVideo}
+          style={lockSubtitleVideo ? { borderColor: '#10B981', color: '#10B981', background: 'rgba(16, 185, 129, 0.15)' } : {}}
+        >
+          {lockSubtitleVideo ? '🔗 Kunci Video+Sub' : '🔓 Kunci Lepas'}
+        </button>
+        <span className="timeline-a11y-hint" aria-live="polite">
+          {lockSubtitleVideo ? 'Kunci Subtitle dan Video aktif' : 'Kunci Subtitle dan Video nonaktif'}
+        </span>
         <span
           style={{
             marginLeft: 'auto',
@@ -966,20 +1302,30 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
           }}
         >
 
-          {/* ── TRACK 1: Hook ────────────────────────────────────────────── */}
+          {/* ── TRACK 1: Hook & Outro ────────────────────────────────────── */}
           {renderTrackRow(
-            <>⚡ Hook<br />Intro</>,
+            <>⚡ Hook<br />& Outro</>,
             <>
               {enableHookIntro && (
                 <div
-                  className={`timeline-block${selectedBlockId === '__hook__' ? ' selected' : ''}`}
+                  className={`timeline-block${hookDrag ? ' dragging' : ''}${selectedBlockId === '__hook__' ? ' selected' : ''}`}
                   style={{
-                    ...blockStyle('0%', secToPercent(hookDurationSec), '#3282B8', { cursor: 'pointer' }),
+                    ...blockStyle(secToPercent(hookStartSec), secToPercent(hookDurationSec), '#3282B8', {
+                      cursor: hookDrag ? 'grabbing' : 'grab',
+                      paddingLeft: '12px',
+                      paddingRight: '12px',
+                    }),
                     ...selectedOutline('__hook__'),
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    seekToBlock('__hook__', 0);
+                    seekToBlock('__hook__', hookStartSec);
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation();
+                    setSelectedBlockId('__hook__');
+                    setHookDrag({ id: '__hook__', type: 'move', startMouseX: e.clientX, startSec: hookStartSec, startDuration: hookDurationSec, timelineDurationSec: durationSec });
                   }}
                   onMouseEnter={(e) =>
                     setTooltip({
@@ -995,19 +1341,87 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                   }
                   onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
                 >
-                  ⚡ Hook
+                  {/* Left resize handle */}
+                  <div
+                    title="Drag untuk sesuaikan durasi hook"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      width: '8px',
+                      height: '100%',
+                      cursor: 'col-resize',
+                      background: 'rgba(255,255,255,0.25)',
+                      borderRight: '1px solid rgba(255,255,255,0.45)',
+                      borderRadius: '4px 0 0 4px',
+                      zIndex: 3,
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      setSelectedBlockId('__hook__');
+                      setHookDrag({
+                        id: '__hook__',
+                        type: 'resize-left',
+                        startMouseX: e.clientX,
+                        startSec: hookStartSec,
+                        startDuration: hookDurationSec,
+                        timelineDurationSec: durationSec,
+                      });
+                    }}
+                  />
+                  ⚡ Hook ({hookDurationSec.toFixed(1)}s)
+                  {/* Right resize handle */}
+                  <div
+                    title="Drag untuk potong / sesuaikan durasi hook"
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 0,
+                      width: '8px',
+                      height: '100%',
+                      cursor: 'col-resize',
+                      background: 'rgba(255,255,255,0.25)',
+                      borderLeft: '1px solid rgba(255,255,255,0.45)',
+                      borderRadius: '0 4px 4px 0',
+                      zIndex: 3,
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      setSelectedBlockId('__hook__');
+                      setHookDrag({
+                        id: '__hook__',
+                        type: 'resize-right',
+                        startMouseX: e.clientX,
+                        startSec: hookStartSec,
+                        startDuration: hookDurationSec,
+                        timelineDurationSec: durationSec,
+                      });
+                    }}
+                  />
                 </div>
               )}
               {enableOutro && outputMode === 'reel' && (
-              <div
-                  className={`timeline-block${selectedBlockId === '__outro__' ? ' selected' : ''}`}
+                <div
+                  className={`timeline-block${outroDrag ? ' dragging' : ''}${selectedBlockId === '__outro__' ? ' selected' : ''}`}
                   style={{
-                    ...blockStyle(secToPercent(outroStart), secToPercent(outroDurationSec), '#EC4899', { cursor: 'pointer' }),
+                    ...blockStyle(secToPercent(outroStart), secToPercent(outroDurationSec), '#EC4899', {
+                      cursor: outroDrag ? 'grabbing' : 'grab',
+                      paddingLeft: '12px',
+                      paddingRight: '12px',
+                    }),
                     ...selectedOutline('__outro__'),
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
                     seekToBlock('__outro__', outroStart);
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation();
+                    setSelectedBlockId('__outro__');
+                    setOutroDrag({ id: '__outro__', type: 'move', startMouseX: e.clientX, startSec: outroStart, startDuration: outroDurationSec, timelineDurationSec: durationSec });
                   }}
                   onMouseEnter={(e) =>
                     setTooltip({
@@ -1015,7 +1429,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                       x: e.clientX,
                       y: e.clientY,
                       label: '🏁 Outro CTA',
-                      duration: formatTimecode(outroDurationSec),
+                      duration: `${formatTimecode(outroStart)} → ${formatTimecode(outroStart + outroDurationSec)} (${formatTimecode(outroDurationSec)})`,
                     })
                   }
                   onMouseMove={(e) =>
@@ -1023,7 +1437,65 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                   }
                   onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
                 >
-                  🏁 Outro
+                  {/* Left resize handle */}
+                  <div
+                    title="Drag untuk potong / sesuaikan titik mulai outro"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      width: '8px',
+                      height: '100%',
+                      cursor: 'col-resize',
+                      background: 'rgba(255,255,255,0.25)',
+                      borderRight: '1px solid rgba(255,255,255,0.45)',
+                      borderRadius: '4px 0 0 4px',
+                      zIndex: 3,
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      setSelectedBlockId('__outro__');
+                      setOutroDrag({
+                        id: '__outro__',
+                        type: 'resize-left',
+                        startMouseX: e.clientX,
+                        startSec: outroStart,
+                        startDuration: outroDurationSec,
+                        timelineDurationSec: durationSec,
+                      });
+                    }}
+                  />
+                  🏁 Outro ({outroDurationSec.toFixed(1)}s)
+                  {/* Right resize handle */}
+                  <div
+                    title="Drag untuk sesuaikan durasi akhir outro"
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 0,
+                      width: '8px',
+                      height: '100%',
+                      cursor: 'col-resize',
+                      background: 'rgba(255,255,255,0.25)',
+                      borderLeft: '1px solid rgba(255,255,255,0.45)',
+                      borderRadius: '0 4px 4px 0',
+                      zIndex: 3,
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      setSelectedBlockId('__outro__');
+                      setOutroDrag({
+                        id: '__outro__',
+                        type: 'resize-right',
+                        startMouseX: e.clientX,
+                        startSec: outroStart,
+                        startDuration: outroDurationSec,
+                        timelineDurationSec: durationSec,
+                      });
+                    }}
+                  />
                 </div>
               )}
             </>,
@@ -1036,9 +1508,14 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
           {renderTrackRow(
             <>💬 Subtitle</>,
             <div
-              className={`timeline-block${selectedBlockId === '__subtitle__' ? ' selected' : ''}`}
+              className={`timeline-block${(subtitleDrag || (lockSubtitleVideo && videoDrag)) ? ' dragging' : ''}${selectedBlockId === '__subtitle__' ? ' selected' : ''}`}
               style={{
-                ...blockStyle(subtitleLeft, subtitleWidth, 'rgba(50,130,184,0.55)', { cursor: 'pointer', justifyContent: 'flex-start' }),
+                ...blockStyle(subtitleLeft, subtitleWidth, 'rgba(50,130,184,0.55)', {
+                  cursor: subtitleDrag ? 'grabbing' : 'grab',
+                  justifyContent: 'flex-start',
+                  paddingLeft: '14px',
+                  paddingRight: '14px',
+                }),
                 ...selectedOutline('__subtitle__'),
               }}
               role="button"
@@ -1049,29 +1526,203 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                 e.stopPropagation();
                 seekToBlock('__subtitle__', subtitleStart);
               }}
-              onMouseEnter={(e) => setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: '💬 Subtitle Karaoke', duration: formatTimecode(subtitleEnd - subtitleStart) })}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                setSubtitleDrag({
+                  id: '__subtitle__',
+                  type: 'move',
+                  startMouseX: e.clientX,
+                  startSec: subtitleStart,
+                  startDuration: subtitleDur,
+                });
+              }}
+              onMouseEnter={(e) => setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: lockSubtitleVideo ? '💬 Subtitle Karaoke 🔗 (Terkunci dengan Video Utama)' : '💬 Subtitle Karaoke', duration: `${formatTimecode(subtitleStart)} → ${formatTimecode(subtitleEnd)} (${formatTimecode(subtitleDur)})` })}
               onMouseMove={(e) => setTooltip((t) => ({ ...t, x: e.clientX, y: e.clientY }))}
               onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
             >
+              {/* Left resize handle (shrink/expand from start) */}
+              <div
+                title="Drag untuk potong / ubah titik awal subtitle"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: '8px',
+                  height: '100%',
+                  cursor: 'col-resize',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderRight: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '4px 0 0 4px',
+                  zIndex: 3,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setSubtitleDrag({
+                    id: '__subtitle__',
+                    type: 'resize-left',
+                    startMouseX: e.clientX,
+                    startSec: subtitleStart,
+                    startDuration: subtitleDur,
+                    startTrimFrontSec: videoTrimFrontSec ?? 0,
+                  });
+                }}
+              />
               💬 Subtitle Karaoke
+              {lockSubtitleVideo && (
+                <span style={{ opacity: 0.8, fontSize: '9.5px', marginLeft: '4px' }} title="Terkunci dengan Video Utama">
+                  🔗
+                </span>
+              )}
+              {/* Right resize handle (extend/shrink from end) */}
+              <div
+                title="Drag untuk potong / ubah titik akhir subtitle"
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  width: '8px',
+                  height: '100%',
+                  cursor: 'col-resize',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderLeft: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '0 4px 4px 0',
+                  zIndex: 3,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setSubtitleDrag({
+                    id: '__subtitle__',
+                    type: 'resize',
+                    startMouseX: e.clientX,
+                    startSec: subtitleStart,
+                    startDuration: subtitleDur,
+                  });
+                }}
+              />
             </div>,
             false,
             'subtitle',
+            <button
+              type="button"
+              className={`timeline-track-toggle${lockSubtitleVideo ? ' active' : ''}`}
+              aria-label={lockSubtitleVideo ? 'Buka kunci dengan video utama' : 'Kunci bersama video utama'}
+              aria-pressed={lockSubtitleVideo}
+              title={lockSubtitleVideo ? '🔗 Terkunci dengan Video Utama (Klik untuk melepas)' : '🔓 Terpisah dari Video Utama (Klik untuk mengunci)'}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setLockSubtitleVideo((l) => !l)}
+              style={{
+                fontSize: '10px',
+                color: lockSubtitleVideo ? '#10B981' : 'var(--text-sub)',
+                background: lockSubtitleVideo ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                border: `1px solid ${lockSubtitleVideo ? 'rgba(16, 185, 129, 0.5)' : 'var(--border)'}`,
+                borderRadius: '4px',
+                padding: '0 4px',
+                cursor: 'pointer',
+                lineHeight: '16px',
+                height: '18px',
+              }}
+            >
+              {lockSubtitleVideo ? '🔗' : '🔓'}
+            </button>,
           )}
 
           {/* ── TRACK: Outro ─────────────────────────────────────────────── */}
           {enableOutro && outputMode === 'narration' && renderTrackRow(
             <>🏁 Outro</>,
             <div
-              className={`timeline-block${selectedBlockId === '__outro__' ? ' selected' : ''}`}
-              style={{ ...blockStyle(secToPercent(outroStart), secToPercent(outroDurationSec), '#EC4899', { cursor: 'pointer' }), ...selectedOutline('__outro__') }}
+              className={`timeline-block${outroDrag ? ' dragging' : ''}${selectedBlockId === '__outro__' ? ' selected' : ''}`}
+              style={{
+                ...blockStyle(secToPercent(outroStart), secToPercent(outroDurationSec), '#EC4899', {
+                  cursor: outroDrag ? 'grabbing' : 'grab',
+                  paddingLeft: '12px',
+                  paddingRight: '12px',
+                }),
+                ...selectedOutline('__outro__'),
+              }}
               role="button"
               tabIndex={0}
               aria-label={`Outro CTA, durasi ${formatTimecode(outroDurationSec)}`}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seekToBlock('__outro__', outroStart); } }}
               onClick={(e) => { e.stopPropagation(); seekToBlock('__outro__', outroStart); }}
+              onMouseDown={(e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+                setSelectedBlockId('__outro__');
+                setOutroDrag({ id: '__outro__', type: 'move', startMouseX: e.clientX, startSec: outroStart, startDuration: outroDurationSec, timelineDurationSec: durationSec });
+              }}
+              onMouseEnter={(e) =>
+                setTooltip({
+                  visible: true,
+                  x: e.clientX,
+                  y: e.clientY,
+                  label: '🏁 Outro CTA',
+                  duration: `${formatTimecode(outroStart)} → ${formatTimecode(outroStart + outroDurationSec)} (${formatTimecode(outroDurationSec)})`,
+                })
+              }
+              onMouseMove={(e) =>
+                setTooltip((t) => ({ ...t, x: e.clientX, y: e.clientY }))
+              }
+              onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
             >
-              🏁 Outro CTA
+              {/* Left resize handle */}
+              <div
+                title="Drag untuk potong / sesuaikan titik mulai outro"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: '8px',
+                  height: '100%',
+                  cursor: 'col-resize',
+                  background: 'rgba(255,255,255,0.25)',
+                  borderRight: '1px solid rgba(255,255,255,0.45)',
+                  borderRadius: '4px 0 0 4px',
+                  zIndex: 3,
+                }}
+                onMouseDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.stopPropagation();
+                  setSelectedBlockId('__outro__');
+                  setOutroDrag({
+                    id: '__outro__',
+                    type: 'resize-left',
+                    startMouseX: e.clientX,
+                    startSec: outroStart,
+                    startDuration: outroDurationSec,
+                    timelineDurationSec: durationSec,
+                  });
+                }}
+              />
+              🏁 Outro CTA ({outroDurationSec.toFixed(1)}s)
+              {/* Right resize handle */}
+              <div
+                title="Drag untuk sesuaikan durasi akhir outro"
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  width: '8px',
+                  height: '100%',
+                  cursor: 'col-resize',
+                  background: 'rgba(255,255,255,0.25)',
+                  borderLeft: '1px solid rgba(255,255,255,0.45)',
+                  borderRadius: '0 4px 4px 0',
+                  zIndex: 3,
+                }}
+                onMouseDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.stopPropagation();
+                  setSelectedBlockId('__outro__');
+                  setOutroDrag({
+                    id: '__outro__',
+                    type: 'resize-right',
+                    startMouseX: e.clientX,
+                    startSec: outroStart,
+                    startDuration: outroDurationSec,
+                    timelineDurationSec: durationSec,
+                  });
+                }}
+              />
             </div>,
             false,
             'outro',
@@ -1366,25 +2017,42 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
           {renderTrackRow(
             <>🎥 Video<br />Utama</>,
             <div
-              className={`timeline-block${selectedBlockId === '__video__' ? ' selected' : ''}`}
+              className={`timeline-block${(videoDrag || (lockSubtitleVideo && subtitleDrag)) ? ' dragging' : ''}${selectedBlockId === '__video__' ? ' selected' : ''}`}
               role="button"
               tabIndex={0}
-              aria-label={`Track video utama, mulai ${formatTimecode(videoStart)}, durasi ${formatTimecode(durationSec - videoStart)}, volume ${sourceVolume ?? 100} persen`}
+              aria-label={`Track video utama, mulai ${formatTimecode(videoStart)}, durasi ${formatTimecode(videoDur)}, volume ${sourceVolume ?? 100} persen`}
               style={{
-                ...blockStyle(videoLeft, videoWidth, '#10B981', { cursor: 'pointer', justifyContent: 'flex-start' }),
+                ...blockStyle(videoLeft, videoWidth, '#10B981', {
+                  cursor: videoDrag ? 'grabbing' : 'grab',
+                  justifyContent: 'flex-start',
+                  paddingLeft: '14px',
+                  paddingRight: '14px',
+                }),
                 ...selectedOutline('__video__'),
               }}
               onClick={(e) => {
                 e.stopPropagation();
                 seekToBlock('__video__', videoStart);
               }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                setVideoDrag({
+                  id: '__video__',
+                  type: 'move',
+                  startMouseX: e.clientX,
+                  startSec: videoStart,
+                  startDuration: videoDur,
+                });
+              }}
               onMouseEnter={(e) =>
                 setTooltip({
                   visible: true,
                   x: e.clientX,
                   y: e.clientY,
-                  label: outputMode === 'narration' ? `🎥 Video Klip Utama (Ducking Vol: ${sourceVolume ?? 25}%)` : `🎥 Video Klip Utama (Vol: ${sourceVolume ?? 100}%)`,
-                  duration: formatTimecode(durationSec),
+                  label: lockSubtitleVideo
+                    ? (outputMode === 'narration' ? `🎥 Video Klip Utama 🔗 (Terkunci dengan Subtitle, Ducking: ${sourceVolume ?? 25}%)` : `🎥 Video Klip Utama 🔗 (Terkunci dengan Subtitle, Vol: ${sourceVolume ?? 100}%)`)
+                    : (outputMode === 'narration' ? `🎥 Video Klip Utama (Ducking Vol: ${sourceVolume ?? 25}%)` : `🎥 Video Klip Utama (Vol: ${sourceVolume ?? 100}%)`),
+                  duration: `${formatTimecode(videoStart)} → ${formatTimecode(videoStart + videoDur)} (${formatTimecode(videoDur)})`,
                 })
               }
               onMouseMove={(e) =>
@@ -1392,16 +2060,95 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
               }
               onMouseLeave={() => setTooltip((t) => ({ ...t, visible: false }))}
             >
+              {/* Left resize handle (shrink/expand from start) */}
+              <div
+                title="Drag untuk potong / ubah titik awal video"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: '8px',
+                  height: '100%',
+                  cursor: 'col-resize',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderRight: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '4px 0 0 4px',
+                  zIndex: 3,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setVideoDrag({
+                    id: '__video__',
+                    type: 'resize-left',
+                    startMouseX: e.clientX,
+                    startSec: videoStart,
+                    startDuration: videoDur,
+                    startTrimFrontSec: videoTrimFrontSec ?? 0,
+                  });
+                }}
+              />
               🎥 Video Klip Utama
+              {lockSubtitleVideo && (
+                <span style={{ opacity: 0.85, fontSize: '9.5px', marginLeft: '4px' }} title="Terkunci dengan Subtitle">
+                  🔗
+                </span>
+              )}
               {sourceVolume !== undefined && (
                 <span style={{ opacity: 0.85, fontSize: '9px', marginLeft: '6px' }}>
                   {outputMode === 'narration' ? `(Ducking: ${sourceVolume}%)` : `(Vol: ${sourceVolume}%)`}
                 </span>
               )}
-
+              {/* Right resize handle (extend/shrink from end) */}
+              <div
+                title="Drag untuk potong / ubah titik akhir video"
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  width: '8px',
+                  height: '100%',
+                  cursor: 'col-resize',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderLeft: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '0 4px 4px 0',
+                  zIndex: 3,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setVideoDrag({
+                    id: '__video__',
+                    type: 'resize',
+                    startMouseX: e.clientX,
+                    startSec: videoStart,
+                    startDuration: videoDur,
+                  });
+                }}
+              />
             </div>,
             false,
             'video',
+            <button
+              type="button"
+              className={`timeline-track-toggle${lockSubtitleVideo ? ' active' : ''}`}
+              aria-label={lockSubtitleVideo ? 'Buka kunci dengan subtitle' : 'Kunci bersama subtitle'}
+              aria-pressed={lockSubtitleVideo}
+              title={lockSubtitleVideo ? '🔗 Terkunci dengan Subtitle (Klik untuk melepas)' : '🔓 Terpisah dari Subtitle (Klik untuk mengunci)'}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setLockSubtitleVideo((l) => !l)}
+              style={{
+                fontSize: '10px',
+                color: lockSubtitleVideo ? '#10B981' : 'var(--text-sub)',
+                background: lockSubtitleVideo ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                border: `1px solid ${lockSubtitleVideo ? 'rgba(16, 185, 129, 0.5)' : 'var(--border)'}`,
+                borderRadius: '4px',
+                padding: '0 4px',
+                cursor: 'pointer',
+                lineHeight: '16px',
+                height: '18px',
+              }}
+            >
+              {lockSubtitleVideo ? '🔗' : '🔓'}
+            </button>,
           )}
 
           {/* ── TRACK: AI Narration Voice (when in narration mode) ─────────── */}

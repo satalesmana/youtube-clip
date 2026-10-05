@@ -16,7 +16,7 @@ import type { VisualPreset } from '../visual-preset/index';
 import { HookDecoration } from '../decorations/HookDecoration';
 import { HighlightWord } from './highlightUtil';
 import { HookTagPill, type BadgePresetId } from './HookTagPill';
-import { getHeadlineLayout } from './layoutHelper';
+import { getHeadlineLayout, resolveCardBackdropStyle, type HookCardBackdrop } from './layoutHelper';
 
 const MAX_WORDS = 10;
 
@@ -26,6 +26,7 @@ interface WordCascadeRendererProps {
   tag?: string;
   badgePresetId?: BadgePresetId;
   badgeColor?: string;
+  backdrop?: HookCardBackdrop;
   highlightWords?: string[];
   visualPreset: VisualPreset;
   durationFrames?: number;
@@ -37,6 +38,7 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
   tag,
   badgePresetId,
   badgeColor,
+  backdrop,
   highlightWords,
   visualPreset,
   durationFrames,
@@ -77,9 +79,9 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
   const fitted = fitText({
     text: tokens.join(' '),
     fontFamily: font,
-    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.80 : 0.88),
+    withinWidth: width * (visualPreset.layout === 'split-proof' ? 0.70 : 0.76),
   });
-  const baseHeadlineSize = Math.max(42, Math.min(70, Math.round(fitted.fontSize)));
+  const baseHeadlineSize = Math.max(38, Math.min(64, Math.round(fitted.fontSize)));
   const headlineSize = Math.round(baseHeadlineSize * layoutStyle.fontSizeFactor);
   const strokeWidth = isOpportunityGlow ? 2 : Math.max(3, Math.round(headlineSize / 10));
   // Phase 2: Micro-Life (Sustained hold with subtle floating bob & scale breathing)
@@ -93,16 +95,25 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
   const finalTranslateY = microLife.translateY + exit.translateY;
   const finalScale = microLife.scale * exit.scale;
 
+  const containerStyle = layoutStyle.containerStyle;
+
+  const cardBackdropStyle = resolveCardBackdropStyle(
+    backdrop ?? 'cinematic-banner',
+    theme,
+    width,
+    layoutStyle.cardStyle,
+  );
+
   return (
     <AbsoluteFill
       style={{
-        ...layoutStyle.containerStyle,
+        ...containerStyle,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
-          ...layoutStyle.cardStyle,
+          ...cardBackdropStyle,
           transform: `translateY(${finalTranslateY}px) scale(${finalScale})`,
           opacity: exit.opacity,
           display: 'flex',
@@ -110,8 +121,6 @@ export const WordCascadeRenderer: React.FC<WordCascadeRendererProps> = ({
           alignItems: layoutStyle.alignItems,
           textAlign: layoutStyle.textAlign,
           gap: 12,
-          borderRadius: 24,
-          background: layoutStyle.background || 'radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0) 85%)',
         }}
       >
         {/* Tag pill */}

@@ -907,6 +907,7 @@ export class TransformController {
         hookLayout: request.hookLayout,
         hookAnimation: request.hookAnimation,
         hookTypography: request.hookTypography,
+        hookBackdrop: request.hookBackdrop,
       };
       videoPlan = await this.deps.videoPlanService.buildPlan(planInput);
     } catch (err) {
@@ -979,8 +980,9 @@ export class TransformController {
     // trims the source video to it (the Remotion engine already gets the same
     // window through the plan's scene sources). Without a hook, keep the
     // legacy full-video behaviour untouched.
+    const hookDur = Math.max(0.5, Math.min(15, Number(request.hookDuration ?? 3.5)));
     const hookRange = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
-      ? { start: request.sourceRange.start, end: request.sourceRange.end }
+      ? { start: request.sourceRange.start, end: Math.min(request.sourceRange.end, request.sourceRange.start + hookDur) }
       : undefined;
     const autoStyle = (request.genre === 'sports' || request.genre === 'match-highlight')
       ? 'sports'
@@ -993,11 +995,17 @@ export class TransformController {
       request.subtitleSize,
       brolls,
       {
+        enableHookIntro: request.enableHookIntro,
+        hookStartSec: request.hookStartSec,
+        hookDurationSec: request.hookDuration,
+        hookTitle: request.hookTitle || request.customHook,
+        hookTag: request.hookTag,
         enableIntroOutro: request.enableIntroOutro,
         outroPreset: request.outroPreset,
         outroCtaText: request.outroCtaText,
         outroButtonText: request.outroButtonText,
         outroDuration: request.outroDuration,
+        outroStartSec: request.outroStartSec,
         outroChannelName: request.outroChannelName,
         outroLogoUrl: request.outroLogoUrl,
       },
@@ -1060,15 +1068,23 @@ export class TransformController {
     // nothing is ever repeated when joined. When the hook's styled final
     // intro file exists, it is used verbatim (WYSIWYG) and the anti-repeat
     // guard still applies to the clips that follow.
-    const intro = request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
+    const isHookActive = request.enableHookIntro !== false && Boolean(
+      (request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start) ||
+      request.customHook ||
+      request.hookTitle ||
+      request.hookPreviewPath
+    );
+
+    const introDur = Math.max(0.5, Math.min(15, Number(request.hookDuration ?? 3.5)));
+    const intro = isHookActive && request.sourceRange?.end && request.sourceRange.end > request.sourceRange.start
       ? {
           start: request.sourceRange.start,
-          end: Math.min(request.sourceRange.end, request.sourceRange.start + 3.5),
+          end: Math.min(request.sourceRange.end, request.sourceRange.start + introDur),
         }
       : undefined;
     // Check whether the styled hook intro file (from a previous render) is
-    // still accessible on disk. If the user explicitly chose a visual preset or
-    // custom hook headline/tag in Step 3, re-render fresh so user presets are honored.
+    // still accessible on disk. If the user explicitly chose a visual preset,
+    // custom hook headline/tag, or modified hook duration in Step 3, re-render fresh so user presets are honored.
     let hookIntroFile: string | undefined;
     const isCustomizedHook = Boolean(
       request.customHook ||
@@ -1079,9 +1095,10 @@ export class TransformController {
       request.hookAnimation ||
       request.hookTypography ||
       request.hookBadgePreset ||
-      request.hookBadgeColor
+      request.hookBadgeColor ||
+      request.hookDuration
     );
-    if (!isCustomizedHook && request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
+    if (isHookActive && !isCustomizedHook && request.hookPreviewPath && request.hookPreviewPath.endsWith('.mp4')) {
       const { access } = await import('node:fs/promises');
       hookIntroFile = await access(request.hookPreviewPath)
         .then(() => request.hookPreviewPath)
@@ -1091,7 +1108,7 @@ export class TransformController {
     // When no pre-rendered hook file is available on disk, but the user has
     // configured a hook intro (via request.hookTitle / request.customHook) and an
     // intro range exists, render the styled Remotion intro on-demand here in Step 3.
-    if (!hookIntroFile && intro && (request.hookTitle || request.customHook) && this.deps.styledHookPreviewService) {
+    if (isHookActive && !hookIntroFile && intro && (request.hookTitle || request.customHook) && this.deps.styledHookPreviewService) {
       try {
         const headlineText = (request.hookTitle || request.customHook || '').trim();
         const styled = await this.deps.styledHookPreviewService.render({
@@ -1127,6 +1144,8 @@ export class TransformController {
 
     const segments = planReelSegments({
       intro,
+      introStartSec: request.hookStartSec,
+      timelineOffsetSec: request.timelineOffsetSec,
       clips: request.selectedClips.map((clip) => ({ start: clip.start, end: clip.end })),
     });
     if (segments.length === 0) {
@@ -1178,19 +1197,29 @@ export class TransformController {
     let reelBrolls: Array<BrollPlacement[] | undefined> | undefined;
     if (brolls && brolls.length > 0) {
       reelBrolls = composeSegments.map((seg) => {
-        if (seg.filePath) return undefined;
-        const matched = brolls.filter((b) => b.cue.start < seg.end && b.cue.end > seg.start);
+        if (seg.filePath || seg.kind === 'gap') return undefined;
+        const segDuration = Math.max(0.5, seg.end - seg.start);
+        const matched = brolls.filter((b) => {
+          const bStart = b.cue.start;
+          const bEnd = b.cue.end;
+          // Support both absolute timestamps (bStart >= seg.start) and relative timestamps (0 <= bStart < segDuration)
+          const isAbsolute = bStart >= seg.start - 0.5 && bStart < seg.end + 0.5;
+          const isRelative = bStart < segDuration && bEnd > 0;
+          return isAbsolute || isRelative;
+        });
         return matched.length > 0 ? matched : undefined;
       });
     }
 
     const transcript = await this.loadTranscriptForVideoId(videoId);
 
+    const isOutroActive = request.enableIntroOutro !== false && (request.enableIntroOutro === true || Boolean(request.outroPreset));
+
     this.emit('render');
     let reel: { path: string; durationSeconds: number; sizeBytes: number };
 
     if (this.deps.reelRemotionService) {
-      logger.info({ videoId, jobId }, 'Composing reel via Remotion with original transcript subtitles');
+      logger.info({ videoId, jobId, isOutroActive }, 'Composing reel via Remotion with original transcript subtitles');
       reel = await this.deps.reelRemotionService.compose({
         videoPath,
         segments: composeSegments,
@@ -1205,6 +1234,15 @@ export class TransformController {
         themeSeed: `${videoId}:${request.subtitleStyle || request.style || 'default'}`,
         channelName: request.channel?.name,
         autoReframe: request.autoReframe === true,
+        aspectRatio: request.aspectRatio,
+        enableIntroOutro: isOutroActive,
+        outroPreset: request.outroPreset,
+        outroCtaText: request.outroCtaText,
+        outroButtonText: request.outroButtonText,
+        outroDuration: request.outroDuration,
+        outroStartSec: request.outroStartSec,
+        outroChannelName: request.outroChannelName?.trim() || request.channel?.name,
+        outroLogoUrl: request.outroLogoUrl || request.channel?.logo,
       });
     } else {
       // Fallback: FFmpeg ASS burn-in
@@ -1221,11 +1259,64 @@ export class TransformController {
         }));
       }
 
+      let outroSegment: ReelSegment | undefined;
+      if (isOutroActive) {
+        try {
+          const compositionsDir = join(process.cwd(), 'compositions', 'studio');
+          const remotionBin = join(
+            compositionsDir,
+            'node_modules',
+            '.bin',
+            process.platform === 'win32' ? 'remotion.cmd' : 'remotion',
+          );
+          const rawOutroPath = join(outputDir, `outro-${jobId}.mp4`);
+          const propsPath = join(outputDir, `outro-props-${jobId}.json`);
+          const outroDuration = Math.max(1, Math.min(10, Number(request.outroDuration ?? 3)));
+          await (await import('node:fs/promises')).writeFile(
+            propsPath,
+            JSON.stringify({
+              channelName: request.outroChannelName?.trim() || request.channel?.name || 'kreator',
+              handle: request.outroChannelName?.trim() || request.channel?.name,
+              ctaText: request.outroCtaText,
+              buttonText: request.outroButtonText,
+              creatorLogoUrl: request.outroLogoUrl || request.channel?.logo,
+              durationSeconds: outroDuration,
+              themeSeed: `${videoId}:outro`,
+              outroPreset: request.outroPreset ?? 'creator-glass',
+            }, null, 2),
+            'utf-8',
+          );
+          const { runCommand } = await import('../utils/exec.js');
+          await runCommand(
+            remotionBin,
+            [
+              'render',
+              join(compositionsDir, 'src', 'index.tsx'),
+              'OutroCardShort',
+              rawOutroPath,
+              `--props=${propsPath}`,
+              '--concurrency=50%',
+              '--image-format=jpeg',
+              '--log=error',
+            ],
+            { cwd: compositionsDir },
+          );
+          outroSegment = {
+            start: 0,
+            end: outroDuration,
+            filePath: rawOutroPath,
+          };
+        } catch (outroErr) {
+          logger.warn({ outroErr }, 'Failed to render outro card for FFmpeg fallback reel');
+        }
+      }
+
       reel = await this.deps.reelComposer!.compose({
         videoPath,
         segments: composeSegments,
         subtitles,
         brolls: reelBrolls,
+        outroSegment,
         outputDir,
         fileName: 'reel',
       });
@@ -1258,6 +1349,7 @@ export class TransformController {
       reel: {
         clipCount: segments.filter((s) => s.kind === 'clip').length,
         hasIntro: Boolean(intro),
+        hasOutro: isOutroActive,
         /** True when the styled hook intro file was used verbatim (WYSIWYG). */
         usedHookIntro: Boolean(hookIntroFile),
         /**
@@ -1476,11 +1568,17 @@ export class TransformController {
     subtitleSize?: 'sm' | 'md' | 'lg' | 'xl',
     brolls?: BrollPlacement[],
     outroOptions?: {
+      enableHookIntro?: boolean;
+      hookStartSec?: number;
+      hookDurationSec?: number;
+      hookTitle?: string;
+      hookTag?: string;
       enableIntroOutro?: boolean;
       outroPreset?: string;
       outroCtaText?: string;
       outroButtonText?: string;
       outroDuration?: number;
+      outroStartSec?: number;
       outroChannelName?: string;
       outroLogoUrl?: string;
     },
@@ -1560,11 +1658,17 @@ export class TransformController {
       audioMode: audioOptions?.audioMode,
       sourceAudioVolume: audioOptions?.sourceAudioVolume,
       brolls: compositionBrolls,
+      enableHookIntro: outroOptions?.enableHookIntro,
+      hookStartSec: outroOptions?.hookStartSec,
+      hookDurationSec: outroOptions?.hookDurationSec,
+      hookTitle: outroOptions?.hookTitle,
+      hookTag: outroOptions?.hookTag,
       enableIntroOutro: outroOptions?.enableIntroOutro,
       outroPreset: outroOptions?.outroPreset,
       outroCtaText: outroOptions?.outroCtaText,
       outroButtonText: outroOptions?.outroButtonText,
       outroDuration: outroOptions?.outroDuration,
+      outroStartSec: outroOptions?.outroStartSec,
       outroChannelName: outroOptions?.outroChannelName?.trim() || channel?.name,
       outroLogoUrl: outroOptions?.outroLogoUrl || channel?.logo,
       autoReframe: audioOptions?.autoReframe === true,

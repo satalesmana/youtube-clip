@@ -74,6 +74,12 @@ export interface StyledHookPreviewInput {
   typography?: TypographyVariant;
   badgePresetId?: BadgePresetId;
   badgeColor?: string;
+  hookBackdrop?:
+    | 'cinematic-banner'
+    | 'frosted-glass'
+    | 'solid-dark'
+    | 'neon-glow'
+    | 'minimal-shadow';
   /**
    * Legacy flat hook style string from the LLM pipeline.
    * Used only as a last-resort fallback via adaptLegacyHookStyle().
@@ -152,6 +158,7 @@ export class StyledHookPreviewService {
         ...(input.typography ? { typography: input.typography } : {}),
         ...(input.badgePresetId ? { badgePresetId: input.badgePresetId } : {}),
         ...(input.badgeColor ? { badgeColor: input.badgeColor } : {}),
+        ...(input.hookBackdrop ? { hookBackdrop: input.hookBackdrop, backdrop: input.hookBackdrop } : {}),
       },
       sourceVideoPath: stagedVideoPath,
       sourceStart: input.start,

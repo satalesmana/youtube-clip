@@ -168,7 +168,7 @@ test('Outro CTA Style Presets Suite', async (t) => {
     // Outro.tsx creator-glass must use signature cyan #00F2FE and match preview default CTA
     assert.match(outroSource, /cardBorderTop:\s*'3\.5px solid #00F2FE'/, 'creator-glass must use fixed cyan top border');
     assert.match(outroSource, /#00F2FE 0%,\s*#4FACFE 100%/, 'creator-glass button must use cyan-blue gradient');
-    assert.match(outroSource, /defaultCta:\s*'Suka konten ini\? Ikuti untuk update harian!'/, 'creator-glass default CTA must match preview');
+    assert.match(outroSource, /defaultCta:\s*'Ikuti untuk tips berikutnya\.'/, 'creator-glass default CTA must match preview');
 
     // Remotion Engine must write outroChannelName
     assert.match(engineSource, /outroChannelName:\s*assets\.outroChannelName\s*\|\|\s*assets\.channelName/, 'Engine must forward outroChannelName in props.json');
@@ -176,6 +176,18 @@ test('Outro CTA Style Presets Suite', async (t) => {
     // Frontend hook must compute effective outro options
     assert.match(hookSource, /effectiveOutroPreset\s*=\s*resolveClientOutroPreset\(outroPreset\)/, 'Hook must resolve effective outro preset');
     assert.match(hookSource, /effectiveChannelName\s*=/, 'Hook must resolve effective channel name');
+  });
+
+  await t.test('8. Dual Coexistence: RemotionStudioComposition keeps subtitles synchronized with speech during outro CTA', () => {
+    const compositionPath = resolve(process.cwd(), 'client/src/components/editor/RemotionStudioComposition.tsx');
+    const compositionSource = readFileSync(compositionPath, 'utf-8');
+
+    // showSubtitles must use dual-presence strategy (preserving activeCaption during outro instead of blanket !isOutroActive)
+    assert.match(
+      compositionSource,
+      /showSubtitles\s*=\s*[\s\S]*?\(hasRealCaptions\s*\?\s*Boolean\(activeCaption\)\s*:\s*!isOutroActive\)/,
+      'showSubtitles must allow active captions during outro CTA',
+    );
   });
 });
 
